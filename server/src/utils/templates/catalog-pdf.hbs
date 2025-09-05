@@ -1,0 +1,120 @@
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{title}}</title>
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; } body { font-family:
+      -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+      'Ubuntu', 'Cantarell', sans-serif; line-height: 1.5; color: #000;
+      background: #fff; font-size: 14px; } /* HEADER */ .header { padding: 40px
+      20px 20px; text-align: center; margin-bottom: 40px; border-bottom: 1px
+      solid #eee; } .logo { max-height: 70px; margin-bottom: 15px; } .header h1
+      { font-size: 2.2rem; font-weight: 700; color: #000; } /* CATEGORY */
+      .category { margin: 0 20px 40px 20px; } .category-header { font-weight:
+      700; font-size: 1.6rem; margin-bottom: 20px; border-bottom: 2px solid
+      #000; padding-bottom: 5px; page-break-after: avoid; } /* SUBCATEGORY */
+      .subcategory { margin: 20px 0; } .subcategory-header { font-weight: 600;
+      font-size: 1.2rem; margin-bottom: 12px; color: #333; page-break-after:
+      avoid; } /* PRODUCT LIST */ .products-list { display: flex;
+      flex-direction: column; } .product-row { display: flex; align-items:
+      flex-start; border-bottom: 1px solid #ddd; padding: 20px 0; gap: 20px; /*
+      Permite cortar entre productos si no entra uno completo */
+      page-break-inside: auto; } .product-row:last-child { border-bottom: none;
+      } /* IMAGE */ .product-image { width: 280px; height: 200px; object-fit:
+      cover; border: 1px solid #ccc; border-radius: 4px; background: #f9f9f9;
+      flex-shrink: 0; page-break-inside: avoid; /* nunca cortar la imagen */ }
+      /* DETAILS */ .product-details { flex: 1; display: flex; flex-direction:
+      column; justify-content: center; } .product-model { font-size: 1.5rem;
+      font-weight: 600; margin-bottom: 8px; color: #000; } .product-sku {
+      font-size: 0.9rem; color: #666; margin-bottom: 8px; font-family:
+      monospace; } .product-size { font-size: 0.9rem; color: #444;
+      margin-bottom: 8px; } .product-price { font-size: 1.2rem; color: #000;
+      font-weight: 600; margin-bottom: 8px; } /* VARIANTS */ .variants-inline { display: flex;
+      flex-direction: column; gap: 8px; margin-top: auto; } .variant-item { 
+      display: flex; align-items: center; gap: 8px; } .variant-color { width:
+      14px; height: 14px; border-radius: 50%; border: 1px solid #ccc; flex-shrink: 0; } 
+      .variant-name { font-size: 0.9rem; color: #444; min-width: 80px; } 
+      .variant-price { font-size: 0.9rem; color: #000; font-weight: 500; } /* EMPTY
+      STATE */ .no-products { text-align: center; padding: 60px 20px; color:
+      #555; } .no-products h3 { font-size: 1.4rem; margin-bottom: 8px; color:
+      #000; } /* PRINT */ @media print { body { font-size: 11px; margin: 10mm;
+      color: #000; } .header { padding: 20px 10px; margin-bottom: 20px; }
+      .category { margin: 0 0 20px 0; page-break-before: auto; } .subcategory {
+      margin: 8px 0; } .product-row { padding: 12px 0; page-break-inside: auto;
+      } .product-image { width: 220px; height: 160px; } .variant-item { gap: 6px; } 
+      .variant-color { width: 12px; height: 12px; } .variant-name, .variant-price { font-size: 0.8rem; } }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      {{#if logoUrl}}
+        <img src="{{logoUrl}}" alt="Logo" class="logo" />
+      {{/if}}
+      <h1>Catálogo de Productos</h1>
+    </div>
+
+    {{#if hasCategories}}
+      {{#each categories}}
+        {{#each subcategories}}
+        <div class="category">
+          <div class="category-header">{{../title}}</div>
+
+            <div class="subcategory">
+              <div class="subcategory-header">{{title}}</div>
+
+              {{#if products.length}}
+                <div class="products-list">
+                  {{#each products}}
+                    <div class="product-row">
+                      <img
+                        src="{{primaryImage}}"
+                        alt="{{productModel}}"
+                        class="product-image"
+                      />
+                      <div class="product-details">
+                        <div class="product-model">{{productModel}}</div>
+                        <div class="product-sku">{{sku}}</div>
+                        {{#if size}}
+                          <div class="product-size">{{size}}</div>
+                        {{/if}}
+                        {{#if variants.length}}
+                          {{#if (eq variants.length 1)}}
+                            <div class="product-price">{{formatCurrency variants.[0].priceUSD}}</div>
+                          {{else}}
+                            {{#if (eq (minPrice variants) (maxPrice variants))}}
+                              <div class="product-price">{{formatCurrency (minPrice variants)}}</div>
+                            {{else}}
+                              <div class="product-price">{{formatCurrency (minPrice variants)}} - {{formatCurrency (maxPrice variants)}}</div>
+                            {{/if}}
+                          {{/if}}
+                          <div class="variants-inline">
+                            {{#each variants}}
+                              <div class="variant-item">
+                                <div
+                                  class="variant-color"
+                                  style="background-color: {{color.hex}};"
+                                ></div>
+                                <span class="variant-name">{{color.name}}</span>
+                                <span class="variant-price">{{formatCurrency priceUSD}}</span>
+                              </div>
+                            {{/each}}
+                          </div>
+                        {{/if}}
+                      </div>
+                    </div>
+                  {{/each}}
+                </div>
+              {{/if}}
+            </div>
+          </div>
+        {{/each}}
+      {{/each}}
+    {{else}}
+      <div class="no-products">
+        <h3>No se encontraron productos</h3>
+        <p>No hay productos disponibles con los filtros seleccionados.</p>
+      </div>
+    {{/if}}
+  </body>
+</html>
