@@ -1,0 +1,46 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@font-face {
+  font-family: "Jost";
+  src: url("/fonts/Jost-VF.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@layer base {
+  body {
+    background-color: #ffffff;
+    font-family: "Jost", sans-serif;
+  }
+}
+
+.underline-animate {
+  position: relative;
+  overflow: hidden;
+}
+.underline-animate::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0%;
+  height: 2px;
+  background: #000;
+  transition: width 0.3s ease;
+}
+.underline-animate:hover::after {
+  width: 100%;
+}
+
+.underline-animate-gray::after {
+  background: #888888;
+}
+
+.underline-animate-active::after {
+  width: 100% !important;
+}
+
+.no-underline {
+  text-decoration: none !important;
+}

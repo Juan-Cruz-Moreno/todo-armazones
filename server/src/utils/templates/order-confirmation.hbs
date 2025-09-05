@@ -1,0 +1,81 @@
+<div style="text-align: center; margin-bottom: 20px;">
+  <img src="{{logoUrl}}" alt="Todo Armazones Argentina" style="height: 48px;">
+</div>
+<h2>¡Gracias por tu compra!</h2>
+<p>Hola {{user.displayName}},</p>
+<p>Tu pedido
+  <b>#{{orderNumber}}</b>
+  ha sido recibido y está siendo procesado.</p>
+<p><b>Resumen de tu orden:</b></p>
+<ul>
+  <li><b>Fecha:</b> {{createdAtFormatted}}</li>
+  <li><b>Método de envío:</b>
+    {{shippingMethodLabel}}
+    {{#if isParcelCompany}}
+      ({{shippingAddress.shippingCompany}})
+      {{#if shippingAddress.declaredShippingAmount}}
+        - Monto declarado envío:
+        {{shippingAddress.declaredShippingAmount}}
+      {{/if}}
+    {{/if}}
+    {{#if isMotorcycle}}
+      {{#if shippingAddress.deliveryWindow}}
+        - Franja horaria:
+        {{shippingAddress.deliveryWindow}}
+      {{/if}}
+    {{/if}}
+  </li>
+  <li><b>Método de pago:</b> {{paymentMethodLabel}}</li>
+</ul>
+<p><b>Dirección de envío:</b><br />
+  {{shippingAddress.firstName}}
+  {{shippingAddress.lastName}},<br />
+  {{shippingAddress.streetAddress}},
+  {{shippingAddress.city}},
+  {{shippingAddress.state}},
+  {{shippingAddress.postalCode}}<br />
+  Tel:
+  {{shippingAddress.phoneNumber}}<br />
+  DNI:
+  {{shippingAddress.dni}}
+</p>
+<table
+  border="1"
+  cellpadding="6"
+  cellspacing="0"
+  style="border-collapse:collapse; width:100%;"
+>
+  <thead>
+    <tr>
+      <th>Producto</th>
+      <th>Cantidad</th>
+      <th>Precio USD</th>
+      <th>Subtotal USD</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each items}}
+      <tr>
+        <td>{{productVariant.product.productModel}}
+          ({{productVariant.product.sku}}) -
+          {{productVariant.colorName}}</td>
+        <td>{{quantity}}</td>
+        <td>{{priceUSDAtPurchaseFormatted}}</td>
+        <td>{{subTotalFormatted}}</td>
+      </tr>
+    {{/each}}
+    {{#if showBankTransferExpense}}
+      <tr>
+        <td colspan="3" style="text-align:right;"><b>Gasto por transferencia
+            bancaria:</b></td>
+        <td>{{bankTransferExpenseFormatted}}</td>
+      </tr>
+    {{/if}}
+    <tr>
+      <td colspan="3" style="text-align:right;"><b>Total:</b></td>
+      <td>{{totalAmountFormatted}}</td>
+    </tr>
+  </tbody>
+</table>
+<p>Adjuntamos el comprobante en PDF.<br />
+  ¡Gracias por confiar en Todo Armazones Argentina!</p>
