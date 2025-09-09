@@ -1,0 +1,94 @@
+---
+import { Image } from "astro:assets";
+import logo from "../assets/logo-todo-armazones.png";
+---
+
+<footer class="bg-[#ffffff] text-[#333333]">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-8">
+      <!-- Primera columna: Imagen y texto -->
+      <div class="flex flex-col items-center md:items-start">
+        <Image src={logo} alt="Todo Armazones Logo" class="w-60 h-auto mb-4" />
+        <p class="text-center md:text-left text-sm">
+          Pioneros en ofrecer productos de calidad y al mejor precio del
+          mercado.
+        </p>
+      </div>
+
+      <!-- Segunda columna: LA EMPRESA -->
+      <div>
+        <h3 class="font-bold text-lg mb-4">LA EMPRESA</h3>
+        <ul class="space-y-2">
+          <li><a href="#" class="underline-animate">Quienes somos</a></li>
+          <li>
+            <a href="#" class="underline-animate">Política de privacidad</a>
+          </li>
+          <li>
+            <a href="#" class="underline-animate">Botón de arrepentimiento</a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Tercera columna: TIENDA -->
+      <div>
+        <h3 class="font-bold text-lg mb-4">TIENDA</h3>
+        <ul class="space-y-2">
+          <li><a href="#" class="underline-animate">Contacto</a></li>
+          <li>
+            <a href="#" class="underline-animate">Política de devolución</a>
+          </li>
+          <li><a href="#" class="underline-animate">Política de envíos</a></li>
+        </ul>
+      </div>
+
+      <!-- Cuarta columna: INFO -->
+      <div>
+        <h3 class="font-bold text-lg mb-4">INFO</h3>
+        <ul class="space-y-2">
+          <li class="flex items-center gap-2">
+            <Image
+              src="/icons/email.svg"
+              alt="Email icon"
+              width={12}
+              height={12}
+              class="w-5 h-5"
+            />
+            <a
+              href="mailto:info@todoarmazonesarg.com"
+              target="_blank"
+              class="underline-animate">info@todoarmazonesarg.com</a
+            >
+          </li>
+          <li class="flex items-center gap-2">
+            <Image
+              src="/icons/instagram.svg"
+              alt="Instagram icon"
+              width={12}
+              height={12}
+              class="w-5 h-5"
+            />
+            <a
+              href="https://instagram.com/todoarmazonesarg"
+              target="_blank"
+              class="underline-animate">@todoarmazonesarg</a
+            >
+          </li>
+          <li class="flex items-center gap-2">
+            <Image
+              src="/icons/whatsapp.svg"
+              alt="WhatsApp icon"
+              width={12}
+              height={12}
+              class="w-5 h-5"
+            />
+            <a
+              href="https://wa.me/5491136448293"
+              target="_blank"
+              class="underline-animate">+54 9 11 3644-8293</a
+            >
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</footer>

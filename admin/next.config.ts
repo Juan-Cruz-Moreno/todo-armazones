@@ -14,7 +14,17 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "api.juancruzmoreno.dev",
         pathname: "/uploads/**",
-      }
+      },
+      {
+        protocol: "https",
+        hostname: "api.todoarmazonesarg.com",
+        pathname: "/uploads/**",
+      },
+      {
+        protocol: "http",
+        hostname: "api.todoarmazonesarg.com",
+        pathname: "/uploads/**",
+      },
     ],
   },
 };

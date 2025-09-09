@@ -1,0 +1,109 @@
+---
+import { Image } from "astro:assets";
+import heroImg from "../assets/hero.jpg";
+---
+
+<div class="hero h-screen flex items-center justify-center relative px-0 -mx-4 sm:-mx-6 lg:-mx-8">
+  <Image
+    src={heroImg}
+    alt=""
+    class="absolute inset-0 w-full h-full object-cover z-0"
+    loading="eager"
+    fetchpriority="high"
+  />
+  <div class="absolute inset-0 bg-black/25 z-10"></div>
+  <div class="text-center text-white p-4 sm:p-8 rounded-lg relative z-20">
+  <h1 class="text-2xl sm:text-5xl lg:text-6xl font-semibold mb-4 font-jost leading-snug sm:leading-tight tracking-tight">
+      <span class="block">Venta mayorista de armazones</span>
+      <span class="block">y anteojos de sol</span>
+    </h1>
+  <p class="hidden lg:block text-xl mb-6">
+      Proveedores Mayoristas de insumos ópticos, todo lo que necesitas para tus
+      clientes en un solo lugar
+    </p>
+    <button
+      id="hero-cta"
+      type="button"
+      aria-label="Ir a categorías"
+      class="button-sweep rounded-none px-4 py-2 flex items-center font-semibold mx-auto"
+      ><span>TIENDA</span>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="32"
+        height="32"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="0.5"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        class="lucide lucide-arrow-right-icon lucide-arrow-right w-8 h-8 ml-2"
+      >
+        <path d="M5 12h14"></path>
+        <path d="m12 5 7 7-7 7"></path>
+      </svg></button
+    >
+  </div>
+</div>
+
+<!-- Este script es cliente puro y no necesita procesamiento por Astro; marcarlo explícitamente como inline
+  silencia la advertencia que sugiere el uso de `is:inline`. -->
+<script type="module" is:inline>
+  // Duración configurable del scroll en milisegundos. Aumenta para hacerlo más lento.
+  const SCROLL_DURATION = 800;
+
+  const easeInOutQuad = (t) => (t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t);
+
+  function animateScrollTo(targetY, duration = SCROLL_DURATION) {
+    const startY = window.scrollY || window.pageYOffset;
+    const diff = targetY - startY;
+    let startTimestamp = null;
+
+    return new Promise((resolve) => {
+      function step(timestamp) {
+        if (startTimestamp === null) startTimestamp = timestamp;
+        const elapsed = timestamp - startTimestamp;
+        const progress = Math.min(1, elapsed / duration);
+        const eased = easeInOutQuad(progress);
+        window.scrollTo(0, Math.round(startY + diff * eased));
+        if (progress < 1) {
+          requestAnimationFrame(step);
+        } else {
+          resolve();
+        }
+      }
+      requestAnimationFrame(step);
+    });
+  }
+
+  // Delegated click handler: robust detection when clicks land on text nodes
+  document.addEventListener('click', (e) => {
+    const clicked = e.target;
+    const btn = (clicked instanceof Element) && clicked.closest('#hero-cta');
+    if (!btn) return;
+    e.preventDefault();
+
+    const target = document.getElementById('categorias');
+    if (!target) return;
+
+    // Respect user's reduced-motion preference
+    const prefersReduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      target.scrollIntoView({ behavior: 'auto' });
+      if (target instanceof HTMLElement) {
+        target.tabIndex = -1;
+        target.focus({ preventScroll: true });
+      }
+      return;
+    }
+
+    const rect = target.getBoundingClientRect();
+    const targetY = window.scrollY + rect.top;
+    animateScrollTo(targetY, SCROLL_DURATION).then(() => {
+      if (target instanceof HTMLElement) {
+        target.tabIndex = -1; // make focusable if not already
+        target.focus({ preventScroll: true });
+      }
+    });
+  });
+</script>

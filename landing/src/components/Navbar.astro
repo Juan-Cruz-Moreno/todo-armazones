@@ -1,0 +1,496 @@
+---
+import { Image } from "astro:assets";
+import logo from "../assets/logo-todo-armazones.png";
+---
+
+<nav class="bg-[#ffffff] text-[#000000] relative z-50">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between py-4">
+      <div class="flex items-center">
+        <Image src={logo} alt="Logo Todo Armazones" class="h-14 w-auto mr-8" loading={"eager"} />
+        <!-- Desktop Menu -->
+        <ul class="hidden md:flex space-x-4">
+          <li><a href="/" class="underline-animate">Inicio</a></li>
+          <li>
+            <a href="/nosotros" class="underline-animate">Nosotros</a>
+          </li>
+          <li>
+            <a href="#categorias" class="underline-animate">Tienda</a>
+          </li>
+          <li>
+            <a href="/tienda/catalogo" class="underline-animate">Catalogo</a>
+          </li>
+        </ul>
+      </div>
+
+      <!-- Mobile Menu Button -->
+      <button
+        id="mobile-menu-button"
+        class="md:hidden p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
+        aria-label="Abrir menú"
+      >
+        <img src="/icons/hamburger.svg" alt="Menu" class="w-6 h-6" />
+      </button>
+    </div>
+  </div>
+
+  <!-- Mobile Drawer Overlay -->
+  <div
+    id="mobile-overlay"
+    class="fixed inset-0 bg-black/50 z-40 pointer-events-none"
+    style="opacity: 0;"
+  >
+  </div>
+
+  <!-- Mobile Drawer -->
+  <div
+    id="mobile-drawer"
+    class="fixed top-0 left-0 h-full w-full bg-white z-50 flex flex-col"
+    style="transform: translateX(100%);"
+  >
+    <!-- Close Button - Positioned absolutely in top right -->
+    <button
+      id="close-drawer-button"
+      class="absolute top-6 right-6 p-2 rounded-md hover:bg-gray-100 transition-colors duration-200"
+      aria-label="Cerrar menú"
+    >
+      <img src="/icons/x.svg" alt="Cerrar menú" class="w-6 h-6" />
+    </button>
+
+    <!-- Content Container - Centered -->
+    <div class="flex-1 flex flex-col items-center justify-center px-6">
+      <!-- Logo -->
+      <div class="mb-8">
+        <Image src={logo} alt="Logo Todo Armazones" class="h-12 w-auto" />
+      </div>
+
+      <!-- Navigation Links -->
+      <nav>
+        <ul class="space-y-4 text-center">
+          <!-- Hombres Dropdown -->
+          <li class="dropdown-item">
+            <button
+              class="dropdown-toggle py-3 px-4 text-xl font-medium text-gray-800 hover:text-gray-600 transition-colors duration-200 w-full flex items-center justify-center gap-2"
+              data-dropdown="hombres"
+            >
+              Hombres
+              <svg
+                class="dropdown-arrow w-4 h-4 transform transition-transform duration-200"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div
+              class="dropdown-content overflow-hidden"
+              style="max-height: 0;"
+            >
+              <ul class="py-2 space-y-2">
+                <li>
+                  <a
+                    href="/tienda/categorias/hombres/anteojos-de-sol-polarizados"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Anteojos De Sol
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/tienda/categorias/hombres/armazon-de-receta"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Armazón De Receta
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/tienda/categorias/hombres/clip-on"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Clip On
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Mujeres Dropdown -->
+          <li class="dropdown-item">
+            <button
+              class="dropdown-toggle py-3 px-4 text-xl font-medium text-gray-800 hover:text-gray-600 transition-colors duration-200 w-full flex items-center justify-center gap-2"
+              data-dropdown="mujeres"
+            >
+              Mujeres
+              <svg
+                class="dropdown-arrow w-4 h-4 transform transition-transform duration-200"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div
+              class="dropdown-content overflow-hidden"
+              style="max-height: 0;"
+            >
+              <ul class="py-2 space-y-2">
+                <li>
+                  <a
+                    href="/tienda/categorias/mujeres/anteojos-de-sol-polarizados"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Anteojos De Sol
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/tienda/categorias/mujeres/armazon-de-receta"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Armazón De Receta
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/tienda/categorias/mujeres/clip-on"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Clip On
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Niños Dropdown -->
+          <li class="dropdown-item">
+            <button
+              class="dropdown-toggle py-3 px-4 text-xl font-medium text-gray-800 hover:text-gray-600 transition-colors duration-200 w-full flex items-center justify-center gap-2"
+              data-dropdown="ninos"
+            >
+              Niños
+              <svg
+                class="dropdown-arrow w-4 h-4 transform transition-transform duration-200"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"></path>
+              </svg>
+            </button>
+            <div
+              class="dropdown-content overflow-hidden"
+              style="max-height: 0;"
+            >
+              <ul class="py-2 space-y-2">
+                <li>
+                  <a
+                    href="/tienda/categorias/ninos/anteojos-de-sol-polarizados"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Anteojos De Sol Polarizados
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/tienda/categorias/ninos/armazon-de-receta"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Armazón De Receta
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/tienda/categorias/ninos/clip-on"
+                    class="block py-2 px-4 text-lg text-gray-600 hover:text-gray-800 transition-colors duration-200"
+                  >
+                    Clip On
+                  </a>
+                </li>
+              </ul>
+            </div>
+          </li>
+
+          <!-- Catálogo Link -->
+          <li>
+            <a
+              href="/tienda/catalogo"
+              class="block py-3 px-4 text-xl font-medium text-gray-800 hover:text-gray-600 transition-colors duration-200"
+            >
+              Catálogo
+            </a>
+          </li>
+        </ul>
+      </nav>
+    </div>
+  </div>
+</nav>
+
+<script>
+  import { animate } from "motion";
+
+  class MobileNavbar {
+    private isOpen = false;
+    private mobileButton!: HTMLElement | null;
+    private closeButton!: HTMLElement | null;
+    private drawer!: HTMLElement | null;
+    private overlay!: HTMLElement | null;
+    private dropdownStates: Map<string, boolean> = new Map();
+
+    constructor() {
+      this.init();
+    }
+
+    private init() {
+      this.mobileButton = document.getElementById("mobile-menu-button");
+      this.closeButton = document.getElementById("close-drawer-button");
+      this.drawer = document.getElementById("mobile-drawer");
+      this.overlay = document.getElementById("mobile-overlay");
+
+      console.log("MobileNavbar initialized:", {
+        mobileButton: !!this.mobileButton,
+        closeButton: !!this.closeButton,
+        drawer: !!this.drawer,
+        overlay: !!this.overlay,
+      });
+
+      this.setupEventListeners();
+    }
+
+    private setupEventListeners() {
+      this.mobileButton?.addEventListener("click", () => this.toggleDrawer());
+      this.closeButton?.addEventListener("click", () => this.closeDrawer());
+      this.overlay?.addEventListener("click", () => this.closeDrawer());
+
+      // Close drawer on escape key
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape" && this.isOpen) {
+          this.closeDrawer();
+        }
+      });
+
+      // Setup dropdown toggles
+      const dropdownToggles = this.drawer?.querySelectorAll(".dropdown-toggle");
+      dropdownToggles?.forEach((toggle) => {
+        toggle.addEventListener("click", (e) => {
+          e.preventDefault();
+          const dropdownId = (toggle as HTMLElement).dataset.dropdown;
+          if (dropdownId) {
+            this.toggleDropdown(dropdownId);
+          }
+        });
+      });
+
+      // Close drawer when clicking on dropdown links (but not dropdown toggles)
+      const navLinks = this.drawer?.querySelectorAll(
+        ".dropdown-content a, nav > ul > li > a"
+      );
+      navLinks?.forEach((link) => {
+        link.addEventListener("click", () => this.closeDrawer());
+      });
+    }
+
+    private toggleDrawer() {
+      if (this.isOpen) {
+        this.closeDrawer();
+      } else {
+        this.openDrawer();
+      }
+    }
+
+    private async openDrawer() {
+      if (!this.drawer || !this.overlay) {
+        console.error("Drawer or overlay not found!");
+        return;
+      }
+
+      console.log("Opening drawer...");
+      this.isOpen = true;
+
+      // Show overlay and drawer
+      this.overlay.style.pointerEvents = "auto";
+
+      // Prevent body scroll
+      document.body.style.overflow = "hidden";
+
+      try {
+        // Animate drawer and overlay simultaneously
+        await Promise.all([
+          animate(this.overlay, { opacity: 1 }, { duration: 0.3 }).finished,
+          animate(
+            this.drawer,
+            { transform: "translateX(0%)" },
+            { duration: 0.3 }
+          ).finished,
+        ]);
+        console.log("Drawer opened successfully");
+      } catch (error) {
+        console.error("Error opening drawer:", error);
+      }
+    }
+
+    private async closeDrawer() {
+      if (!this.drawer || !this.overlay) return;
+
+      this.isOpen = false;
+
+      // Close all dropdowns when closing drawer
+      this.closeAllDropdowns();
+
+      // Animate drawer and overlay out
+      await Promise.all([
+        animate(
+          this.drawer,
+          { transform: "translateX(100%)" },
+          { duration: 0.3 }
+        ).finished,
+        animate(this.overlay, { opacity: 0 }, { duration: 0.3 }).finished,
+      ]);
+
+      // Hide overlay and restore body scroll
+      this.overlay.style.pointerEvents = "none";
+      document.body.style.overflow = "";
+    }
+
+    private async toggleDropdown(dropdownId: string) {
+      const isOpen = this.dropdownStates.get(dropdownId) || false;
+      const dropdownContent = this.drawer?.querySelector(
+        `[data-dropdown="${dropdownId}"]`
+      )?.nextElementSibling as HTMLElement;
+      const dropdownArrow = this.drawer?.querySelector(
+        `[data-dropdown="${dropdownId}"] .dropdown-arrow`
+      ) as HTMLElement;
+
+      if (!dropdownContent || !dropdownArrow) return;
+
+      if (isOpen) {
+        // Close dropdown
+        await Promise.all([
+          animate(dropdownContent, { maxHeight: "0px" }, { duration: 0.3 })
+            .finished,
+          animate(dropdownArrow, { rotate: "0deg" }, { duration: 0.3 })
+            .finished,
+        ]);
+        this.dropdownStates.set(dropdownId, false);
+      } else {
+        // Close other dropdowns first
+        await this.closeOtherDropdowns(dropdownId);
+
+        // Open dropdown
+        const fullHeight = dropdownContent.scrollHeight;
+        await Promise.all([
+          animate(
+            dropdownContent,
+            { maxHeight: `${fullHeight}px` },
+            { duration: 0.3 }
+          ).finished,
+          animate(dropdownArrow, { rotate: "180deg" }, { duration: 0.3 })
+            .finished,
+        ]);
+        this.dropdownStates.set(dropdownId, true);
+      }
+    }
+
+    private async closeOtherDropdowns(exceptId: string) {
+      const promises: Promise<any>[] = [];
+
+      this.dropdownStates.forEach((isOpen, dropdownId) => {
+        if (isOpen && dropdownId !== exceptId) {
+          const dropdownContent = this.drawer?.querySelector(
+            `[data-dropdown="${dropdownId}"]`
+          )?.nextElementSibling as HTMLElement;
+          const dropdownArrow = this.drawer?.querySelector(
+            `[data-dropdown="${dropdownId}"] .dropdown-arrow`
+          ) as HTMLElement;
+
+          if (dropdownContent && dropdownArrow) {
+            promises.push(
+              Promise.all([
+                animate(
+                  dropdownContent,
+                  { maxHeight: "0px" },
+                  { duration: 0.3 }
+                ).finished,
+                animate(dropdownArrow, { rotate: "0deg" }, { duration: 0.3 })
+                  .finished,
+              ])
+            );
+            this.dropdownStates.set(dropdownId, false);
+          }
+        }
+      });
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
+    }
+
+    private async closeAllDropdowns() {
+      const promises: Promise<any>[] = [];
+
+      this.dropdownStates.forEach((isOpen, dropdownId) => {
+        if (isOpen) {
+          const dropdownContent = this.drawer?.querySelector(
+            `[data-dropdown="${dropdownId}"]`
+          )?.nextElementSibling as HTMLElement;
+          const dropdownArrow = this.drawer?.querySelector(
+            `[data-dropdown="${dropdownId}"] .dropdown-arrow`
+          ) as HTMLElement;
+
+          if (dropdownContent && dropdownArrow) {
+            promises.push(
+              Promise.all([
+                animate(
+                  dropdownContent,
+                  { maxHeight: "0px" },
+                  { duration: 0.2 }
+                ).finished,
+                animate(dropdownArrow, { rotate: "0deg" }, { duration: 0.2 })
+                  .finished,
+              ])
+            );
+          }
+        }
+      });
+
+      this.dropdownStates.clear();
+
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
+    }
+  }
+
+  // Initialize immediately since we're in a script tag in the component
+  const initNavbar = () => {
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+      new MobileNavbar();
+    }, 100);
+  };
+
+  // Initialize when DOM is loaded
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initNavbar);
+  } else {
+    initNavbar();
+  }
+
+  // Re-initialize on navigation (for SPA-like behavior)
+  document.addEventListener("astro:page-load", initNavbar);
+</script>

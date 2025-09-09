@@ -1,0 +1,141 @@
+---
+import { Image } from "astro:assets";
+import womenCategory from "../assets/women-category.jpg";
+import menCategory from "../assets/men-category.jpg";
+import kidsCategory from "../assets/kids-category.jpg";
+---
+
+<section id="categorias" class="py-16">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-12">
+      <h2 class="text-3xl font-bold text-gray-900 mb-4">
+        Productos de óptica <span>para toda la familia</span>
+      </h2>
+    </div>
+
+    <div class="flex flex-col md:flex-row justify-center items-center gap-2.5">
+      <!-- Card 1: Mujer -->
+      <div
+        class="relative max-w-sm w-full h-96 overflow-hidden"
+      >
+        <Image
+          src={womenCategory}
+          alt="Categoría Mujer"
+          class="w-full h-full object-cover"
+        />
+        <div class="absolute inset-0 bg-black/25 flex flex-col justify-end p-6">
+          <div class="text-center">
+            <a
+              href="/tienda/categorias/mujeres"
+              class="text-white text-2xl font-bold mb-4 block"
+            >
+              Mujeres
+            </a>
+            <div class="space-y-2">
+              <a
+                href="/tienda/categorias/mujeres/armazon-de-receta"
+                class="block text-white text-sm"
+              >
+                Armazones Receta
+              </a>
+              <a
+                href="/tienda/categorias/mujeres/clip-on"
+                class="block text-white text-sm"
+              >
+                Clip on
+              </a>
+              <a
+                href="/tienda/categorias/mujeres/anteojos-de-sol-polarizados"
+                class="block text-white text-sm"
+              >
+                Lentes de sol
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 2: Hombre -->
+      <div
+        class="relative max-w-sm w-full h-96 overflow-hidden"
+      >
+        <Image
+          src={menCategory}
+          alt="Categoría Hombre"
+          class="w-full h-full object-cover"
+        />
+        <div class="absolute inset-0 bg-black/25 flex flex-col justify-end p-6">
+          <div class="text-center">
+            <a
+              href="/tienda/categorias/hombres"
+              class="text-white text-2xl font-bold mb-4 block"
+            >
+              Hombres
+            </a>
+            <div class="space-y-2">
+              <a
+                href="/tienda/categorias/hombres/armazon-de-receta"
+                class="block text-white text-sm"
+              >
+                Armazones Receta
+              </a>
+              <a
+                href="/tienda/categorias/hombres/clip-on"
+                class="block text-white text-sm"
+              >
+                Clip on
+              </a>
+              <a
+                href="/tienda/categorias/hombres/anteojos-de-sol-polarizados"
+                class="block text-white text-sm"
+              >
+                Lentes de sol
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 3: Kids -->
+      <div
+        class="relative max-w-sm w-full h-96 overflow-hidden"
+      >
+        <Image
+          src={kidsCategory}
+          alt="Categoría Kids"
+          class="w-full h-full object-cover"
+        />
+        <div class="absolute inset-0 bg-black/25 flex flex-col justify-end p-6">
+          <div class="text-center">
+            <a
+              href="/kids"
+              class="text-white text-2xl font-bold mb-4 block"
+            >
+              Niños
+            </a>
+            <div class="space-y-2">
+              <a
+                href="/tienda/categorias/ninos/armazon-de-receta"
+                class="block text-white text-sm"
+              >
+                Armazones Receta
+              </a>
+              <a
+                href="/tienda/categorias/ninos/clip-on"
+                class="block text-white text-sm"
+              >
+                Clip on
+              </a>
+              <a
+                href="/tienda/categorias/ninos/anteojos-de-sol-polarizados"
+                class="block text-white text-sm"
+              >
+                Lentes de sol
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>

@@ -1,0 +1,114 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,100..1000;1,9..40,1000&display=swap');
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Jost";
+  src: url("/fonts/Jost-VF.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+@layer base {
+  body {
+    font-family: 'DM Sans', sans-serif;
+  }
+}
+
+.underline-animate {
+  position: relative;
+  text-decoration: none;
+}
+
+.underline-animate::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: black;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.underline-animate:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.button-sweep {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  color: #000000;
+  transition: color 0.3s ease;
+}
+
+.button-sweep span {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes arrow-appear {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.button-sweep svg {
+  position: relative;
+  z-index: 1;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.button-sweep:hover svg {
+  animation: arrow-appear 0.4s ease;
+}
+
+.button-sweep::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: #69727d;
+  transition: left 0.3s ease;
+}
+
+.button-sweep:hover {
+  color: #ffffff;
+}
+
+.button-sweep:hover::before {
+  left: 0;
+}
+
+/* Dark variant for buttons that should start at #444444 and sweep to a darker shade on hover */
+.button-sweep.button-dark {
+  background: #444444;
+  color: #ffffff;
+}
+
+.button-sweep.button-dark::before {
+  /* slightly darker sweep color */
+  background: #222222;
+}
+
+/* Utility class to apply the Jost variable font to headings or other elements */
+.font-jost {
+  font-family: "Jost", 'DM Sans', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}

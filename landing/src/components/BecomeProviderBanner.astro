@@ -1,0 +1,86 @@
+---
+import { Image } from "astro:assets";
+import becomeProviderImg1 from "../assets/become-provider-1.jpg";
+import becomeProviderImg2 from "../assets/become-provider-2.jpg";
+
+export interface Props {
+  // accept either an imported image module or a string URL
+  src1?: any;
+  src2?: any;
+  alt1?: string;
+  alt2?: string;
+  href?: string;
+}
+
+const {
+  src1 = becomeProviderImg1,
+  src2 = becomeProviderImg2,
+  alt1 = "Banner imagen 1",
+  alt2 = "Banner imagen 2",
+  href = "contacto",
+} = Astro.props as Props;
+---
+
+<section
+  class="w-full py-8"
+>
+  <div class="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+  <div class="rounded-lg overflow-hidden p-6 sm:p-8">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6 items-center">
+          <!-- Left: 1/4 -->
+          <div class="lg:col-span-1">
+            <h2 class="text-xl font-semibold text-gray-900 sm:text-2xl">
+              <span class="block">¿Querés vender</span>
+              <span class="block text-indigo-600">nuestros productos?</span>
+            </h2>
+
+            <p class="mt-3 text-gray-600">
+              Contamos con cientos de productos para que tu optica siempre este
+              a la vanguardia
+            </p>
+
+            <div class="mt-4">
+              <a
+                href={href}
+                role="button"
+                aria-label="sumanos como provedor"
+                class="button-sweep button-dark rounded-none px-4 py-2 flex items-center font-semibold mx-auto"
+              >
+                <span>SUMANOS COMO PROVEEDOR</span>
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="0.5"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="lucide lucide-arrow-right-icon lucide-arrow-right w-8 h-8 ml-2"
+                >
+                  <path d="M5 12h14"></path>
+                  <path d="m12 5 7 7-7 7"></path>
+                </svg>
+              </a>
+            </div>
+          </div>
+
+          <!-- Right: 3/4 -> two images -->
+          <div class="lg:col-span-3">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <Image
+                src={src1}
+                alt={alt1}
+              />
+              <Image
+                src={src2}
+                alt={alt2}
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
