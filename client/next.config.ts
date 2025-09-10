@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // Serve the app under the subpath `/tienda`.
-  // This makes Next.js generate routes and static assets prefixed with `/tienda`.
-  basePath: "/tienda",
   allowedDevOrigins: ["http://localhost:3000"],
   images: {
     remotePatterns: [
