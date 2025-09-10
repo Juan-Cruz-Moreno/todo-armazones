@@ -8,7 +8,8 @@ import { createUserByAdmin } from "@/redux/slices/userSlice";
 const SKELETON_COUNT = 10;
 
 const CustomersPage = () => {
-  const { users, nextCursor, loading, error, loadUsers, createUser } = useUsers();
+  const { users, nextCursor, loading, error, loadUsers, createUser } =
+    useUsers();
   const observer = useRef<IntersectionObserver | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -91,7 +92,7 @@ const CustomersPage = () => {
     if (createUserByAdmin.fulfilled.match(action)) {
       handleCloseCreate();
     } else {
-      setFormError(action.payload as string || "No se pudo crear el usuario");
+      setFormError((action.payload as string) || "No se pudo crear el usuario");
     }
   };
 
@@ -119,7 +120,10 @@ const CustomersPage = () => {
         Lista de clientes
       </h1>
       <div className="mb-4 flex justify-end">
-        <button onClick={handleOpenCreate} className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none">
+        <button
+          onClick={handleOpenCreate}
+          className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none"
+        >
           Crear cliente
         </button>
       </div>
@@ -131,6 +135,7 @@ const CustomersPage = () => {
               <th>#</th>
               <th>Email</th>
               <th>Último acceso</th>
+              <th>Fecha de creación</th>
             </tr>
           </thead>
           <tbody className="text-[#222222]">
@@ -170,6 +175,15 @@ const CustomersPage = () => {
                           })
                         : ""}
                     </td>
+                    <td>
+                      {user.createdAt
+                        ? new Date(user.createdAt).toLocaleString("es-AR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit",
+                          })
+                        : ""}
+                    </td>
                   </tr>
                 );
               }
@@ -185,6 +199,15 @@ const CustomersPage = () => {
                           year: "2-digit",
                           hour: "2-digit",
                           minute: "2-digit",
+                        })
+                      : ""}
+                  </td>
+                  <td>
+                    {user.createdAt
+                      ? new Date(user.createdAt).toLocaleString("es-AR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "2-digit",
                         })
                       : ""}
                   </td>
@@ -261,7 +284,9 @@ const CustomersPage = () => {
       <dialog className={`modal ${isCreateOpen ? "modal-open" : ""}`}>
         <div className="modal-box w-full max-w-md rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] p-0 max-h-[90vh] overflow-y-auto">
           <div className="sticky top-0 bg-[#FFFFFF] border-b border-[#e1e1e1] flex justify-between items-center h-12 z-30">
-            <h3 className="font-bold text-lg text-[#111111] m-0 px-4">Crear cliente</h3>
+            <h3 className="font-bold text-lg text-[#111111] m-0 px-4">
+              Crear cliente
+            </h3>
             <button
               className="btn btn-sm bg-transparent text-[#333333] hover:text-[#111111] shadow-none h-full w-12 border-l border-[#e1e1e1] border-t-0 border-r-0 border-b-0 m-0"
               onClick={handleCloseCreate}
@@ -274,40 +299,98 @@ const CustomersPage = () => {
           <div className="p-4">
             <form onSubmit={handleSubmitCreate} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#111111] mb-1">Email</label>
-                <input type="email" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                <label className="block text-sm font-medium text-[#111111] mb-1">
+                  Email
+                </label>
+                <input
+                  type="email"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#111111] mb-1">Contraseña</label>
-                <input type="password" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <label className="block text-sm font-medium text-[#111111] mb-1">
+                  Contraseña
+                </label>
+                <input
+                  type="password"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#111111] mb-1">Nombre a mostrar (opcional)</label>
-                <input type="text" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+                <label className="block text-sm font-medium text-[#111111] mb-1">
+                  Nombre a mostrar (opcional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-1">Nombre (opcional)</label>
-                  <input type="text" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                  <label className="block text-sm font-medium text-[#111111] mb-1">
+                    Nombre (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-1">Apellido (opcional)</label>
-                  <input type="text" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                  <label className="block text-sm font-medium text-[#111111] mb-1">
+                    Apellido (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                  />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-1">DNI (opcional)</label>
-                  <input type="text" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={dni} onChange={(e) => setDni(e.target.value)} />
+                  <label className="block text-sm font-medium text-[#111111] mb-1">
+                    DNI (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={dni}
+                    onChange={(e) => setDni(e.target.value)}
+                  />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-[#111111] mb-1">CUIT (opcional)</label>
-                  <input type="text" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={cuit} onChange={(e) => setCuit(e.target.value)} />
+                  <label className="block text-sm font-medium text-[#111111] mb-1">
+                    CUIT (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={cuit}
+                    onChange={(e) => setCuit(e.target.value)}
+                  />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-[#111111] mb-1">Teléfono (opcional)</label>
-                <input type="text" className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <label className="block text-sm font-medium text-[#111111] mb-1">
+                  Teléfono (opcional)
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                />
               </div>
               {formError && (
                 <div className="text-error text-sm">{formError}</div>
@@ -332,7 +415,11 @@ const CustomersPage = () => {
             </form>
           </div>
         </div>
-        <form method="dialog" className="modal-backdrop" onClick={handleCloseCreate}>
+        <form
+          method="dialog"
+          className="modal-backdrop"
+          onClick={handleCloseCreate}
+        >
           <button>close</button>
         </form>
       </dialog>
