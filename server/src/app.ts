@@ -1,18 +1,18 @@
-import express, { Application } from 'express';
-import helmet from 'helmet';
-import cors from 'cors';
-import expressWinston from 'express-winston';
-import cookieParser from 'cookie-parser';
+import express, { Application } from "express";
+import helmet from "helmet";
+import cors from "cors";
+import expressWinston from "express-winston";
+import cookieParser from "cookie-parser";
 
-import logger from '@config/logger';
-import session from 'express-session';
-import { RedisStore } from 'connect-redis';
-import redisClient from '@config/redis';
-import env from '@config/env';
-import mainRoutes from '@routes/index';
-import { errorHandler } from '@middlewares/errorHandler';
+import logger from "@config/logger";
+import session from "express-session";
+import { RedisStore } from "connect-redis";
+import redisClient from "@config/redis";
+import env from "@config/env";
+import mainRoutes from "@routes/index";
+import { errorHandler } from "@middlewares/errorHandler";
 
-import path from 'path';
+import path from "path";
 
 const app: Application = express();
 
@@ -21,9 +21,15 @@ app.use(helmet());
 app.use(
   cors({
     // Allow all origins
-    origin: ['https://juancruzmoreno.dev', 'https://admin.juancruzmoreno.dev', 'http://localhost:3000', 'http://localhost:3001'],
+    origin: [
+      "https://todoarmazonesarg.com",
+      "https://tienda.todoarmazonesarg.com",
+      "https://admin.todoarmazonesarg.com",
+      "http://localhost:3000",
+      "http://localhost:3001",
+    ],
     credentials: true,
-  }),
+  })
 );
 
 // 2. Logging Middleware
@@ -31,10 +37,10 @@ app.use(
   expressWinston.logger({
     winstonInstance: logger,
     meta: true, // Incluye meta información sobre la solicitud
-    msg: 'HTTP {{req.method}} {{req.url}}',
+    msg: "HTTP {{req.method}} {{req.url}}",
     expressFormat: true, // Usa el formato de Express para los logs
     colorize: false,
-  }),
+  })
 );
 
 // 3. Body Parsing Middleware
@@ -51,30 +57,30 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: env.NODE_ENV === 'production', // Solo en producción
-      sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax', // Configuración para cookies en producción
+      secure: env.NODE_ENV === "production", // Solo en producción
+      sameSite: env.NODE_ENV === "production" ? "none" : "lax", // Configuración para cookies en producción
       maxAge: 1000 * 60 * 60 * 24, // 1 día
     },
-  }),
+  })
 );
 
 // Servir archivos estáticos de /uploads
-const uploadsPath = path.join(process.cwd(), 'uploads');
+const uploadsPath = path.join(process.cwd(), "uploads");
 app.use(
-  '/uploads',
+  "/uploads",
   express.static(uploadsPath, {
-    maxAge: '1d', // Cache por 1 día
+    maxAge: "1d", // Cache por 1 día
     setHeaders: (res) => {
       // Agregar headers CORS para las imágenes
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET');
-      res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.setHeader("Access-Control-Allow-Methods", "GET");
+      res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
     },
-  }),
+  })
 );
 
 // 5. Routes Middleware
-app.use('/', mainRoutes);
+app.use("/", mainRoutes);
 
 // 6. Error Handling Middleware
 app.use(errorHandler);
