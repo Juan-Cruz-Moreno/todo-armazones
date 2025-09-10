@@ -75,7 +75,7 @@ export class CatalogService {
   }
 
   /**
-   * Convierte ruta/imagen relativa a URL absoluta usando SERVER_URL.
+   * Convierte ruta/imagen relativa a URL absoluta usando el prefijo fijo.
    * Devuelve placeholder si no hay imagen.
    */
   private getAbsoluteImageUrl(imageUrl?: string): string {
@@ -83,8 +83,9 @@ export class CatalogService {
       return 'https://via.placeholder.com/300x200/f3f4f6/6b7280?text=Sin+Imagen';
     }
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
-    if (imageUrl.startsWith('/')) return `${env.SERVER_URL}${imageUrl}`;
-    return `${env.SERVER_URL}/uploads/${imageUrl}`;
+    // Para rutas relativas, quitar '/' inicial si existe y agregar prefijo
+    const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
+    return `https://api.todoarmazonesarg.com/${cleanUrl}`;
   }
 
   /**
