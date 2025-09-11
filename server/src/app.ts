@@ -25,6 +25,8 @@ app.use(
       'https://todoarmazonesarg.com',
       'https://tienda.todoarmazonesarg.com',
       'https://admin.todoarmazonesarg.com',
+      'https://todo-armazones.vercel.app/',
+      'https://todo-armazones-client.vercel.app/',
       'http://localhost:3000',
       'http://localhost:3001',
     ],
