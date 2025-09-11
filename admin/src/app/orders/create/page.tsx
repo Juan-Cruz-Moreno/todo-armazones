@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useUsers } from "@/hooks/useUsers";
 import { useProducts } from "@/hooks/useProducts";
 import useOrders from "@/hooks/useOrders";
-import { ShippingMethod, PaymentMethod } from "@/enums/order.enum";
+import { ShippingMethod, PaymentMethod, DeliveryType } from "@/enums/order.enum";
 import type { IUser } from "@/interfaces/user";
 import type { Product, ProductVariant } from "@/interfaces/product";
 import type { CreateOrderAdminPayload } from "@/redux/slices/orderSlice";
+import { debounce } from "@/utils/debounce";
 
 const initialAddress = {
   firstName: "",
@@ -16,6 +17,7 @@ const initialAddress = {
   email: "",
   phoneNumber: "",
   dni: "",
+  cuit: "",
   streetAddress: "",
   city: "",
   state: "",
@@ -23,6 +25,7 @@ const initialAddress = {
   deliveryWindow: "",
   declaredShippingAmount: "",
   shippingCompany: "",
+  pickupPointAddress: "",
 };
 
 function CreateOrderPage() {
@@ -31,22 +34,37 @@ function CreateOrderPage() {
   const [successMsg, setSuccessMsg] = useState<string>("");
   const [userIdError, setUserIdError] = useState<string>("");
 
-  // User search state
-  const [userEmail, setUserEmail] = useState("");
+  // User search state (cambiado a búsqueda flexible)
+  const [userQuery, setUserQuery] = useState("");
   const [selectedUser, setSelectedUser] = useState<IUser | null>(null);
   const {
-    userByEmail,
-    loading: loadingUserByEmail,
-    error: errorUserByEmail,
-    findUserByEmail,
+    searchResults: userSearchResults,
+    searchNextCursor,
+    searchLoading: loadingUserSearch,
+    searchError: errorUserSearch,
+    searchUsersByQuery,
+    clearSearch,
   } = useUsers();
 
+  // Ref para el último elemento de la lista (para paginación por scroll)
+  const lastUserRef = useRef<HTMLDivElement | null>(null);
+
   // Product search state
-  const [productQuery, setProductQuery] = useState("");
-  const { searchProducts, searchResults, searchLoading } = useProducts();
+  const { searchProducts, searchResults, searchLoading, clearSearchResults } = useProducts();
   const [selectedProducts, setSelectedProducts] = useState<
     Array<{ variant: ProductVariant; product: Product; quantity: number }>
   >([]);
+
+  // Estados para el modal de añadir items
+  const [addItemsModal, setAddItemsModal] = useState<{
+    isOpen: boolean;
+    productQuery: string;
+    quantities: Record<string, number>; // variantId -> quantity
+  }>({
+    isOpen: false,
+    productQuery: "",
+    quantities: {},
+  });
 
   // Address and order details
   const [address, setAddress] = useState<typeof initialAddress>({
@@ -58,31 +76,77 @@ function CreateOrderPage() {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>(
     PaymentMethod.BankTransfer
   );
+  const [deliveryType, setDeliveryType] = useState<DeliveryType>(
+    DeliveryType.HomeDelivery
+  );
   const [createdAt, setCreatedAt] = useState("");
   const [allowViewInvoice, setAllowViewInvoice] = useState(false);
-  const handleUserSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (userEmail) findUserByEmail(userEmail);
+
+  const handleSelectUser = (user: IUser) => {
+    setSelectedUser(user);
+    // Auto-completar campos de dirección con información del usuario
+    setAddress((prev) => ({
+      ...prev,
+      firstName: user.firstName || "",
+      lastName: user.lastName || "",
+      email: user.email || "",
+      dni: user.dni || "",
+      cuit: user.cuit || "",
+      phoneNumber: user.phone || "",
+    }));
+    // Limpiar búsqueda
+    clearSearch();
+    setUserQuery("");
   };
 
-  const handleSelectUser = () => {
-    if (userByEmail) {
-      setSelectedUser(userByEmail);
-      // Auto-completar campos de dirección con información del usuario
-      setAddress((prev) => ({
-        ...prev,
-        firstName: userByEmail.firstName || "",
-        lastName: userByEmail.lastName || "",
-        email: userByEmail.email || "",
-        dni: userByEmail.dni || "",
-        phoneNumber: userByEmail.phone || "",
-      }));
+  // Funciones para manejar el modal de añadir items
+  const handleOpenAddItemsModal = () => {
+    setAddItemsModal({ isOpen: true, productQuery: "", quantities: {} });
+  };
+
+  const handleCloseAddItemsModal = () => {
+    setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
+    clearSearchResults();
+  };
+
+  const handleAddItemsSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (addItemsModal.productQuery) {
+      searchProducts(addItemsModal.productQuery);
     }
   };
 
-  const handleProductSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (productQuery) searchProducts(productQuery);
+  // Función para actualizar la cantidad de una variante en el modal
+  const handleVariantQuantityChange = (variantId: string, quantity: number) => {
+    setAddItemsModal((prev) => ({
+      ...prev,
+      quantities: {
+        ...prev.quantities,
+        [variantId]: Math.max(1, quantity),
+      },
+    }));
+  };
+
+  // Función para agregar variante con cantidad desde el modal
+  const handleAddVariantWithQuantity = async (variant: ProductVariant, product: Product) => {
+    const quantity = addItemsModal.quantities[variant.id] || 1;
+    handleAddVariant(variant, product);
+    // Actualizar la cantidad en el state de selectedProducts
+    setSelectedProducts((prev) => 
+      prev.map((item) => 
+        item.variant.id === variant.id 
+          ? { ...item, quantity: quantity }
+          : item
+      )
+    );
+    // Resetear la cantidad de esa variante específica a 1
+    setAddItemsModal((prev) => ({
+      ...prev,
+      quantities: {
+        ...prev.quantities,
+        [variant.id]: 1,
+      },
+    }));
   };
 
   const handleAddVariant = (variant: ProductVariant, product: Product) => {
@@ -133,7 +197,10 @@ function CreateOrderPage() {
         quantity: v.quantity,
       })),
       shippingMethod,
-      shippingAddress: address,
+      shippingAddress: {
+        ...address,
+        deliveryType,
+      },
       paymentMethod,
       ...(address.deliveryWindow && { deliveryWindow: address.deliveryWindow }),
       ...(address.declaredShippingAmount && {
@@ -153,8 +220,9 @@ function CreateOrderPage() {
         setAddress(initialAddress);
         setCreatedAt("");
         setAllowViewInvoice(false);
-        setUserEmail("");
-        setProductQuery("");
+        setDeliveryType(DeliveryType.HomeDelivery);
+        setUserQuery("");
+        setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
       },
       (err) => {
         setSuccessMsg("");
@@ -162,6 +230,63 @@ function CreateOrderPage() {
       }
     );
   };
+
+  // Función para cargar más resultados (debounced)
+  const loadMoreUsers = useCallback(
+    debounce(() => {
+      if (searchNextCursor && !loadingUserSearch && userQuery.trim()) {
+        searchUsersByQuery(userQuery.trim(), "firstName,lastName,displayName,email", 20, searchNextCursor);
+      }
+    }, 300),
+    [searchNextCursor, loadingUserSearch, userQuery, searchUsersByQuery]
+  );
+
+  // useEffect para configurar IntersectionObserver
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          loadMoreUsers();
+        }
+      },
+      { threshold: 1.0 }
+    );
+
+    if (lastUserRef.current) {
+      observer.observe(lastUserRef.current);
+    }
+
+    return () => {
+      if (lastUserRef.current) {
+        observer.unobserve(lastUserRef.current);
+      }
+    };
+  }, [loadMoreUsers]);
+
+  // Limpiar ref cuando cambie la búsqueda o se seleccione usuario
+  useEffect(() => {
+    lastUserRef.current = null;
+  }, [userQuery, selectedUser]);
+
+  // useEffect para búsqueda automática con debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (userQuery.trim()) {
+        searchUsersByQuery(userQuery.trim(), "firstName,lastName,displayName,email", 20);
+      } else {
+        clearSearch();
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [userQuery, searchUsersByQuery, clearSearch]);
+
+  // Reset delivery type to HomeDelivery when shipping method changes to Motorcycle
+  useEffect(() => {
+    if (shippingMethod === ShippingMethod.Motorcycle) {
+      setDeliveryType(DeliveryType.HomeDelivery);
+    }
+  }, [shippingMethod]);
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] pt-4 pb-10 px-4">
@@ -171,135 +296,76 @@ function CreateOrderPage() {
           <h2 className="text-2xl font-bold mb-4 text-[#111111]">
             CREAR ORDEN
           </h2>
-          {/* Buscar usuario por email */}
+          {/* Buscar usuario por query flexible */}
           <div className="mb-2">
             <label className="block mb-1 text-sm" style={{ color: "#7A7A7A" }}>
-              Buscar usuario por email *
+              Buscar usuario *
             </label>
-            <div className="flex gap-2">
-              <input
-                type="email"
-                placeholder="Email del usuario"
-                value={userEmail}
-                onChange={(e) => setUserEmail(e.target.value)}
-                className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                style={{ borderColor: "#e1e1e1" }}
-                required
-              />
-              <button
-                type="button"
-                className="btn rounded-none shadow-none border-none h-12 px-4 text-white bg-[#222222]"
-                onClick={handleUserSearch}
-              >
-                Buscar
-              </button>
-            </div>
-            {loadingUserByEmail && (
-              <div className="text-[#222222] mt-1">Buscando usuario...</div>
+            <input
+              type="text"
+              placeholder="Buscar usuario..."
+              value={userQuery}
+              onChange={(e) => setUserQuery(e.target.value)}
+              className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+              style={{ borderColor: "#e1e1e1" }}
+            />
+            {loadingUserSearch && (
+              <div className="text-[#222222] mt-1">Buscando usuarios...</div>
             )}
-            {errorUserByEmail && (
+            {errorUserSearch && (
               <div className="text-red-500 text-sm mt-1">
-                {errorUserByEmail}
+                {errorUserSearch}
               </div>
             )}
-            {userByEmail && !selectedUser && (
-              <div className="mt-2 p-2 border rounded bg-[#f5f5f5] flex items-center justify-between">
-                <span className="text-[#222222]">
-                  {userByEmail.displayName} ({userByEmail.email})
-                </span>
-                <button
-                  className="btn btn-sm text-white bg-[#388e3c] border-[#388e3c] rounded-none"
-                  onClick={handleSelectUser}
-                >
-                  Seleccionar
-                </button>
+            {userSearchResults.length > 0 && !selectedUser && (
+              <div className="mt-2 max-h-40 overflow-y-auto border rounded bg-[#f5f5f5]">
+                {userSearchResults.map((user, index) => (
+                  <div
+                    key={user.id}
+                    ref={index === userSearchResults.length - 1 ? lastUserRef : null}
+                    className="p-2 border-b last:border-b-0 flex justify-between items-center"
+                  >
+                    <span className="text-[#222222]">{user.displayName} ({user.email})</span>
+                    <button
+                      type="button"
+                      className="btn btn-sm bg-[#222222] text-white rounded-none"
+                      onClick={() => handleSelectUser(user)}
+                    >
+                      Seleccionar
+                    </button>
+                  </div>
+                ))}
+                {loadingUserSearch && searchNextCursor && (
+                  <div className="p-2 text-center text-[#222222]">Cargando más...</div>
+                )}
               </div>
             )}
             {selectedUser && (
               <div className="mt-2 p-2 border rounded bg-[#e8f5e9] flex items-center justify-between">
-                <span className="text-[#222222]">
-                  Usuario seleccionado: {selectedUser.displayName} (
-                  {selectedUser.email})
-                </span>
+                <span className="text-[#222222]">Seleccionado: {selectedUser.displayName} ({selectedUser.email})</span>
                 <button
-                  className="btn btn-sm text-white bg-[#d32f2f] border-[#d32f2f] rounded-none"
-                  onClick={() => {
-                    setSelectedUser(null);
-                    // Restablecer campos auto-completados del usuario
-                    setAddress((prev) => ({
-                      ...prev,
-                      firstName: "",
-                      lastName: "",
-                      email: "",
-                      dni: "",
-                      phoneNumber: "",
-                    }));
-                  }}
+                  type="button"
+                  className="btn btn-sm bg-red-500 text-white rounded-none"
+                  onClick={() => setSelectedUser(null)}
                 >
-                  Quitar
+                  Cambiar
                 </button>
               </div>
             )}
           </div>
 
-          {/* Buscar y agregar productos/variantes */}
+          {/* Botón para abrir modal de productos */}
           <div className="mb-2">
             <label className="block mb-1 text-sm" style={{ color: "#7A7A7A" }}>
-              Buscar producto o SKU *
+              Productos de la orden *
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                placeholder="Buscar producto o SKU"
-                value={productQuery}
-                onChange={(e) => setProductQuery(e.target.value)}
-                className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                style={{ borderColor: "#e1e1e1" }}
-              />
-              <button
-                type="button"
-                className="btn rounded-none shadow-none border-none h-12 px-4 text-white bg-[#222222]"
-                onClick={handleProductSearch}
-              >
-                Buscar
-              </button>
-            </div>
-            {searchLoading && (
-              <div className="text-[#222222] mt-1">Buscando productos...</div>
-            )}
-            {searchResults.length > 0 && (
-              <div className="mt-2">
-                <div className="font-semibold mb-1 text-[#222222]">
-                  Resultados:
-                </div>
-                <ul className="space-y-1">
-                  {searchResults.map((product) => (
-                    <li
-                      key={product.id}
-                      className="border rounded p-2 bg-white"
-                    >
-                      <div className="font-medium text-[#222222]">
-                        {product.productModel} ({product.sku})
-                      </div>
-                      <div className="flex flex-wrap gap-2 mt-1">
-                        {product.variants.map((variant) => (
-                          <button
-                            key={variant.id}
-                            className="btn btn-xs btn-outline text-[#222222] border-[#bdbdbd] bg-white rounded-none"
-                            onClick={() => handleAddVariant(variant, product)}
-                            disabled={selectedProducts.some(
-                              (v) => v.variant.id === variant.id
-                            )}
-                          >
-                            {variant.color.name} (Stock: {variant.stock})
-                          </button>
-                        ))}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
+            <button
+              type="button"
+              onClick={handleOpenAddItemsModal}
+              className="btn rounded-none shadow-none border-none h-12 px-6 w-full transition-colors duration-300 ease-in-out text-white bg-[#222222] hover:bg-[#111111]"
+            >
+              Agregar productos
+            </button>
           </div>
 
           {/* Lista de variantes seleccionadas */}
@@ -341,165 +407,9 @@ function CreateOrderPage() {
             </div>
           )}
 
-          {/* Formulario de dirección y detalles de envío */}
-          <div className="grid grid-cols-2 gap-4">
-            {[
-              "firstName",
-              "lastName",
-              "email",
-              "phoneNumber",
-              "dni",
-              "streetAddress",
-              "city",
-              "state",
-              "postalCode",
-              "companyName",
-            ].map((name) => (
-              <div
-                key={name}
-                className={
-                  name === "email" || name === "streetAddress"
-                    ? "col-span-2"
-                    : ""
-                }
-              >
-                <label
-                  htmlFor={name}
-                  className="block mb-1 text-sm"
-                  style={{ color: "#7A7A7A" }}
-                >
-                  {name === "firstName"
-                    ? "Nombre *"
-                    : name === "lastName"
-                    ? "Apellidos *"
-                    : name === "email"
-                    ? "Email *"
-                    : name === "phoneNumber"
-                    ? "Teléfono *"
-                    : name === "dni"
-                    ? "DNI *"
-                    : name === "streetAddress"
-                    ? "Dirección *"
-                    : name === "city"
-                    ? "Ciudad *"
-                    : name === "state"
-                    ? "Provincia *"
-                    : name === "postalCode"
-                    ? "Código Postal *"
-                    : name === "companyName"
-                    ? "Nombre de Empresa (opcional)"
-                    : name}
-                </label>
-                <input
-                  id={name}
-                  type={name === "email" ? "email" : "text"}
-                  value={address[name as keyof typeof address]}
-                  onChange={handleAddressChange}
-                  name={name}
-                  className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                  style={{ borderColor: "#e1e1e1" }}
-                  required={!["companyName"].includes(name)}
-                />
-              </div>
-            ))}
-          </div>
-          {/* Métodos de envío y pago */}
+          {/* Métodos de pago, envío y tipo de entrega */}
           <div className="flex flex-col gap-4 mt-4">
-            <div>
-              <label className="block text-sm text-[#7A7A7A] mb-2">
-                Método de envío *
-              </label>
-              <div className="flex flex-col gap-2">
-                {[ShippingMethod.Motorcycle, ShippingMethod.ParcelCompany].map(
-                  (method) => {
-                    return (
-                      <label
-                        key={method}
-                        className={`flex items-center gap-2 cursor-pointer`}
-                      >
-                        <input
-                          type="radio"
-                          name="shippingMethod"
-                          value={method}
-                          checked={shippingMethod === method}
-                          onChange={() => setShippingMethod(method)}
-                          className="radio border-[#e1e1e1] checked:bg-[#222222]"
-                        />
-                        <span className="text-[#222222] text-sm">
-                          {method === ShippingMethod.Motorcycle
-                            ? "Moto"
-                            : "Transporte/Empresa de encomienda"}
-                          <span className="text-xs text-[#7A7A7A]">
-                            {" "}
-                            (Costo de envío extra a cargo del Cliente)
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  }
-                )}
-              </div>
-            </div>
-            {shippingMethod === ShippingMethod.Motorcycle && (
-              <div className="col-span-2">
-                <label
-                  htmlFor="deliveryWindow"
-                  className="block mb-1 text-sm"
-                  style={{ color: "#7A7A7A" }}
-                >
-                  Franja horaria (opcional)
-                </label>
-                <input
-                  id="deliveryWindow"
-                  type="text"
-                  name="deliveryWindow"
-                  value={address.deliveryWindow}
-                  onChange={handleAddressChange}
-                  className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                  style={{ borderColor: "#e1e1e1" }}
-                />
-              </div>
-            )}
-            {shippingMethod === ShippingMethod.ParcelCompany && (
-              <>
-                <div className="col-span-2">
-                  <label
-                    htmlFor="shippingCompany"
-                    className="block mb-1 text-sm"
-                    style={{ color: "#7A7A7A" }}
-                  >
-                    Transporte / Empresa de encomienda *
-                  </label>
-                  <input
-                    id="shippingCompany"
-                    type="text"
-                    name="shippingCompany"
-                    value={address.shippingCompany}
-                    onChange={handleAddressChange}
-                    className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                    style={{ borderColor: "#e1e1e1" }}
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label
-                    htmlFor="declaredShippingAmount"
-                    className="block mb-1 text-sm"
-                    style={{ color: "#7A7A7A" }}
-                  >
-                    Valor declarado (opcional)
-                  </label>
-                  <input
-                    id="declaredShippingAmount"
-                    type="text"
-                    name="declaredShippingAmount"
-                    value={address.declaredShippingAmount}
-                    onChange={handleAddressChange}
-                    className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                    style={{ borderColor: "#e1e1e1" }}
-                  />
-                </div>
-              </>
-            )}
+            {/* Método de pago */}
             <div>
               <label className="block text-sm text-[#7A7A7A] mb-2">
                 Método de pago *
@@ -535,6 +445,272 @@ function CreateOrderPage() {
                 )}
               </div>
             </div>
+
+            {/* Método de envío */}
+            <div>
+              <label className="block text-sm text-[#7A7A7A] mb-2">
+                Método de envío *
+              </label>
+              <div className="flex flex-col gap-2">
+                {[ShippingMethod.Motorcycle, ShippingMethod.ParcelCompany].map(
+                  (method) => {
+                    return (
+                      <label
+                        key={method}
+                        className={`flex items-center gap-2 cursor-pointer`}
+                      >
+                        <input
+                          type="radio"
+                          name="shippingMethod"
+                          value={method}
+                          checked={shippingMethod === method}
+                          onChange={() => setShippingMethod(method)}
+                          className="radio border-[#e1e1e1] checked:bg-[#222222]"
+                        />
+                        <span className="text-[#222222] text-sm">
+                          {method === ShippingMethod.Motorcycle
+                            ? "Moto"
+                            : "Transporte/Empresa de encomienda"}
+                          <span className="text-xs text-[#7A7A7A]">
+                            {" "}
+                            (Costo de envío extra a cargo del Cliente)
+                          </span>
+                        </span>
+                      </label>
+                    );
+                  }
+                )}
+              </div>
+            </div>
+
+            {/* Tipo de entrega (solo para ParcelCompany) */}
+            {shippingMethod === ShippingMethod.ParcelCompany && (
+              <div>
+                <label className="block text-sm text-[#7A7A7A] mb-2">
+                  Tipo de entrega *
+                </label>
+                <div className="flex flex-col gap-2">
+                  {[DeliveryType.HomeDelivery, DeliveryType.PickupPoint].map(
+                    (type) => (
+                      <label
+                        key={type}
+                        className="flex items-center gap-2 cursor-pointer"
+                      >
+                        <input
+                          type="radio"
+                          name="deliveryType"
+                          value={type}
+                          checked={deliveryType === type}
+                          onChange={() => setDeliveryType(type)}
+                          className="radio border-[#e1e1e1] checked:bg-[#222222]"
+                        />
+                        <span className="text-[#222222] text-sm">
+                          {type === DeliveryType.HomeDelivery
+                            ? "Entrega a domicilio"
+                            : "Retiro en punto de entrega"}
+                        </span>
+                      </label>
+                    )
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Campos específicos de transporte */}
+            {shippingMethod === ShippingMethod.ParcelCompany && (
+              <>
+                <div>
+                  <label
+                    htmlFor="shippingCompany"
+                    className="block mb-1 text-sm"
+                    style={{ color: "#7A7A7A" }}
+                  >
+                    Transporte / Empresa de encomienda *
+                  </label>
+                  <input
+                    id="shippingCompany"
+                    type="text"
+                    name="shippingCompany"
+                    value={address.shippingCompany}
+                    onChange={handleAddressChange}
+                    className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                    style={{ borderColor: "#e1e1e1" }}
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="declaredShippingAmount"
+                    className="block mb-1 text-sm"
+                    style={{ color: "#7A7A7A" }}
+                  >
+                    Valor declarado (opcional)
+                  </label>
+                  <input
+                    id="declaredShippingAmount"
+                    type="text"
+                    name="declaredShippingAmount"
+                    value={address.declaredShippingAmount}
+                    onChange={handleAddressChange}
+                    className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                    style={{ borderColor: "#e1e1e1" }}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* Franja horaria */}
+            <div>
+              <label
+                htmlFor="deliveryWindow"
+                className="block mb-1 text-sm"
+                style={{ color: "#7A7A7A" }}
+              >
+                Franja horaria (opcional)
+              </label>
+              <input
+                id="deliveryWindow"
+                type="text"
+                name="deliveryWindow"
+                value={address.deliveryWindow}
+                onChange={handleAddressChange}
+                className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                style={{ borderColor: "#e1e1e1" }}
+                placeholder="Ej: 11:00 - 16:00"
+              />
+            </div>
+          </div>
+
+          {/* Formulario de dirección y datos personales */}
+          <div className="grid grid-cols-2 gap-4">
+            {[
+              "firstName",
+              "lastName",
+              "email",
+              "phoneNumber",
+              "dni",
+              "cuit",
+            ].map((name) => (
+              <div
+                key={name}
+                className={
+                  name === "email"
+                    ? "col-span-2"
+                    : ""
+                }
+              >
+                <label
+                  htmlFor={name}
+                  className="block mb-1 text-sm"
+                  style={{ color: "#7A7A7A" }}
+                >
+                  {name === "firstName"
+                    ? "Nombre *"
+                    : name === "lastName"
+                    ? "Apellidos *"
+                    : name === "email"
+                    ? "Email *"
+                    : name === "phoneNumber"
+                    ? "Teléfono *"
+                    : name === "dni"
+                    ? "DNI *"
+                    : name === "cuit"
+                    ? "CUIT (opcional)"
+                    : name}
+                </label>
+                <input
+                  id={name}
+                  type={name === "email" ? "email" : "text"}
+                  value={address[name as keyof typeof address]}
+                  onChange={handleAddressChange}
+                  name={name}
+                  className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                  style={{ borderColor: "#e1e1e1" }}
+                  required={!["companyName", "cuit"].includes(name)}
+                />
+              </div>
+            ))}
+
+            {/* Campo de dirección (solo para entrega a domicilio) */}
+            {(shippingMethod !== ShippingMethod.ParcelCompany ||
+              deliveryType === DeliveryType.HomeDelivery) && (
+              <div className="col-span-2">
+                <label
+                  htmlFor="streetAddress"
+                  className="block mb-1 text-sm"
+                  style={{ color: "#7A7A7A" }}
+                >
+                  Dirección *
+                </label>
+                <input
+                  id="streetAddress"
+                  type="text"
+                  value={address.streetAddress}
+                  onChange={handleAddressChange}
+                  name="streetAddress"
+                  className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                  style={{ borderColor: "#e1e1e1" }}
+                />
+              </div>
+            )}
+
+            {/* Campo de punto de retiro (solo para pickup point) */}
+            {shippingMethod === ShippingMethod.ParcelCompany &&
+              deliveryType === DeliveryType.PickupPoint && (
+                <div className="col-span-2">
+                  <label
+                    htmlFor="pickupPointAddress"
+                    className="block mb-1 text-sm"
+                    style={{ color: "#7A7A7A" }}
+                  >
+                    Dirección del punto de retiro *
+                  </label>
+                  <input
+                    id="pickupPointAddress"
+                    type="text"
+                    value={address.pickupPointAddress}
+                    onChange={handleAddressChange}
+                    name="pickupPointAddress"
+                    className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                    style={{ borderColor: "#e1e1e1" }}
+                    placeholder="Ej: Sucursal Correo Argentino - Av. Corrientes 500"
+                  />
+                </div>
+              )}
+
+            {[
+              "city",
+              "state",
+              "postalCode",
+              "companyName",
+            ].map((name) => (
+              <div key={name}>
+                <label
+                  htmlFor={name}
+                  className="block mb-1 text-sm"
+                  style={{ color: "#7A7A7A" }}
+                >
+                  {name === "city"
+                    ? "Ciudad *"
+                    : name === "state"
+                    ? "Provincia *"
+                    : name === "postalCode"
+                    ? "Código Postal *"
+                    : name === "companyName"
+                    ? "Nombre de Empresa (opcional)"
+                    : name}
+                </label>
+                <input
+                  id={name}
+                  type="text"
+                  value={address[name as keyof typeof address]}
+                  onChange={handleAddressChange}
+                  name={name}
+                  className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                  style={{ borderColor: "#e1e1e1" }}
+                  required={!["companyName"].includes(name)}
+                />
+              </div>
+            ))}
           </div>
           <div>
             <label className="block mb-1 text-[#222222]">
@@ -580,6 +756,294 @@ function CreateOrderPage() {
         </form>
         {/* Columna 2: Resumen de la orden (opcional, puedes agregar un resumen similar al checkout si lo deseas) */}
       </div>
+
+      {/* Modal de Añadir Items */}
+      {addItemsModal.isOpen && (
+        <dialog className="modal modal-open">
+          <div className="modal-box w-full max-w-4xl rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] p-0 max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-[#FFFFFF] border-b border-[#e1e1e1] flex justify-between items-center h-12 z-30">
+              <h3 className="font-bold text-lg text-[#111111] m-0 px-4">
+                Añadir Productos a la Orden
+              </h3>
+              <button
+                className="btn btn-sm bg-transparent text-[#333333] hover:text-[#111111] shadow-none h-full w-12 border-l border-[#e1e1e1] border-t-0 border-r-0 border-b-0 m-0"
+                onClick={handleCloseAddItemsModal}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6">
+              {/* Formulario de búsqueda */}
+              <form onSubmit={handleAddItemsSearch} className="mb-6">
+                <label className="block text-sm text-[#7A7A7A] mb-2">
+                  Buscar producto o SKU
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Buscar producto o SKU"
+                    value={addItemsModal.productQuery}
+                    onChange={(e) =>
+                      setAddItemsModal((prev) => ({
+                        ...prev,
+                        productQuery: e.target.value,
+                      }))
+                    }
+                    className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                    style={{ borderColor: "#e1e1e1" }}
+                  />
+                  <button
+                    type="submit"
+                    className="btn rounded-none shadow-none border-none h-12 px-4 text-white bg-[#222222] hover:bg-[#111111]"
+                  >
+                    Buscar
+                  </button>
+                  <button
+                    type="button"
+                    className="btn rounded-none shadow-none border-none h-12 px-4 text-[#222222] bg-[#e0e0e0] hover:bg-[#d0d0d0]"
+                    onClick={() => {
+                      setAddItemsModal((prev) => ({
+                        ...prev,
+                        productQuery: "",
+                      }));
+                      clearSearchResults();
+                    }}
+                  >
+                    Limpiar
+                  </button>
+                </div>
+                {addItemsModal.productQuery && (
+                  <p className="text-xs text-[#7A7A7A] mt-2">
+                    Buscando: &quot;{addItemsModal.productQuery}&quot;
+                  </p>
+                )}
+              </form>
+
+              {/* Productos actualmente en la orden */}
+              {selectedProducts.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="text-sm font-semibold text-[#111111] mb-3">
+                    Productos actuales en la orden:
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedProducts.map((item) => (
+                      <div
+                        key={item.variant.id}
+                        className="flex items-center justify-between p-2 bg-white border border-green-200 rounded-none"
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div
+                            className="w-4 h-4 rounded-full border border-gray-300"
+                            style={{
+                              backgroundColor: item.variant.color.hex,
+                            }}
+                          />
+                          <div className="flex-1">
+                            <span className="text-sm font-medium text-[#222222]">
+                              {item.product.productModel}
+                            </span>
+                            <div className="text-xs text-[#7A7A7A]">
+                              Color: {item.variant.color.name} | SKU:{" "}
+                              {item.product.sku}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-green-700">
+                            Cantidad: {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveVariant(item.variant.id)}
+                            className="btn btn-xs text-white bg-[#d32f2f] border-[#d32f2f] rounded-none hover:bg-[#b71c1c]"
+                          >
+                            Quitar
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Resultados de búsqueda */}
+              {searchLoading && (
+                <div className="text-center py-4">
+                  <span className="loading loading-spinner loading-md"></span>
+                  <p className="text-[#7A7A7A] mt-2">Buscando productos...</p>
+                </div>
+              )}
+
+              {!searchLoading && searchResults.length > 0 && (
+                <div>
+                  <h4 className="text-sm font-semibold text-[#111111] mb-3">
+                    Resultados de búsqueda:
+                  </h4>
+                  <div className="space-y-4">
+                    {searchResults.map((product) => (
+                      <div
+                        key={product.id}
+                        className="border border-[#e1e1e1] rounded-none bg-white"
+                      >
+                        <div className="p-3 border-b border-[#e1e1e1] bg-[#f9f9f9]">
+                          <h5 className="font-semibold text-[#222222]">
+                            {product.productModel}
+                          </h5>
+                          <p className="text-sm text-[#7A7A7A]">
+                            SKU: {product.sku}
+                          </p>
+                        </div>
+                        <div className="p-3">
+                          <h6 className="text-sm font-medium text-[#222222] mb-2">
+                            Variantes disponibles:
+                          </h6>
+                          <div className="space-y-2">
+                            {product.variants.map((variant) => {
+                              const isAlreadyInOrder = selectedProducts.some(
+                                (item) => item.variant.id === variant.id
+                              );
+                              const currentQuantity =
+                                addItemsModal.quantities[variant.id] || 1;
+
+                              return (
+                                <div
+                                  key={variant.id}
+                                  className={`flex items-center justify-between p-3 border rounded-none ${
+                                    isAlreadyInOrder
+                                      ? "bg-[#f9f9f9] border-[#e1e1e1]"
+                                      : "bg-white border-[#e1e1e1]"
+                                  }`}
+                                >
+                                  {/* Información de la variante */}
+                                  <div className="flex items-center gap-3 flex-1">
+                                    <div
+                                      className="w-4 h-4 rounded-full border border-gray-300"
+                                      style={{
+                                        backgroundColor: variant.color.hex,
+                                      }}
+                                    />
+                                    <div>
+                                      <span className="text-sm font-medium text-[#222222]">
+                                        {variant.color.name}
+                                      </span>
+                                      <div className="text-xs text-[#7A7A7A]">
+                                        Stock: {variant.stock}
+                                        {isAlreadyInOrder && (
+                                          <span className="ml-2 text-green-600">
+                                            ✓ En orden
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Controles de cantidad y botón agregar */}
+                                  {!isAlreadyInOrder && (
+                                    <div className="flex items-center gap-2">
+                                      {/* Control de cantidad */}
+                                      <div className="flex items-center border border-[#e1e1e1] rounded-none">
+                                        <button
+                                          type="button"
+                                          className="px-2 py-1 text-[#222222] hover:bg-[#f9f9f9] disabled:opacity-50"
+                                          onClick={() =>
+                                            handleVariantQuantityChange(
+                                              variant.id,
+                                              currentQuantity - 1
+                                            )
+                                          }
+                                          disabled={currentQuantity <= 1}
+                                        >
+                                          -
+                                        </button>
+                                        <input
+                                          type="number"
+                                          min="1"
+                                          max={variant.stock}
+                                          value={currentQuantity}
+                                          onChange={(e) =>
+                                            handleVariantQuantityChange(
+                                              variant.id,
+                                              parseInt(e.target.value) || 1
+                                            )
+                                          }
+                                          className="w-16 px-2 py-1 text-center text-sm border-none outline-none bg-transparent"
+                                        />
+                                        <button
+                                          type="button"
+                                          className="px-2 py-1 text-[#222222] hover:bg-[#f9f9f9] disabled:opacity-50"
+                                          onClick={() =>
+                                            handleVariantQuantityChange(
+                                              variant.id,
+                                              currentQuantity + 1
+                                            )
+                                          }
+                                          disabled={
+                                            currentQuantity >= variant.stock
+                                          }
+                                        >
+                                          +
+                                        </button>
+                                      </div>
+
+                                      {/* Botón agregar */}
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm rounded-none shadow-none border border-[#222222] bg-[#222222] text-white hover:bg-[#111111] disabled:bg-gray-400 disabled:border-gray-400"
+                                        onClick={() =>
+                                          handleAddVariantWithQuantity(
+                                            variant,
+                                            product
+                                          )
+                                        }
+                                        disabled={currentQuantity > variant.stock}
+                                      >
+                                        Agregar
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {/* Indicador para variantes ya en orden */}
+                                  {isAlreadyInOrder && (
+                                    <div className="text-sm text-[#7A7A7A]">
+                                      Ya agregado
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Estado vacío */}
+              {!searchLoading &&
+                searchResults.length === 0 &&
+                addItemsModal.productQuery && (
+                  <div className="text-center py-8">
+                    <p className="text-[#7A7A7A]">
+                      No se encontraron productos para &quot;{addItemsModal.productQuery}&quot;
+                    </p>
+                  </div>
+                )}
+
+              {/* Instrucciones iniciales */}
+              {!addItemsModal.productQuery && searchResults.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-[#7A7A7A]">
+                    Usa el campo de búsqueda para encontrar productos por nombre
+                    o SKU
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        </dialog>
+      )}
     </div>
   );
 }

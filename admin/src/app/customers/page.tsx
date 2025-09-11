@@ -26,20 +26,28 @@ const CustomersPage = () => {
   // Debounced loadUsers for infinite scroll
   const debouncedFetch = useRef(
     debounce((params: { cursor?: string }) => {
-      loadUsers(10, params.cursor);
+      loadUsers(100, params.cursor);
     }, 200)
   ).current;
 
   const lastUserRef = useCallback(
-    (node: HTMLTableRowElement | null) => {
+    (node: HTMLTableRowElement | HTMLDivElement | null) => {
       if (loading) return;
       if (observer.current) observer.current.disconnect();
-      observer.current = new window.IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && nextCursor) {
-          debouncedFetch({ cursor: nextCursor });
-        }
-      });
-      if (node) observer.current.observe(node);
+      
+      if (node) {
+        observer.current = new window.IntersectionObserver(
+          (entries) => {
+            if (entries[0].isIntersecting && nextCursor && !loading) {
+              debouncedFetch({ cursor: nextCursor });
+            }
+          },
+          {
+            rootMargin: '100px' // Trigger a bit before reaching the element
+          }
+        );
+        observer.current.observe(node);
+      }
     },
     [loading, nextCursor, debouncedFetch]
   );
@@ -47,6 +55,15 @@ const CustomersPage = () => {
   useEffect(() => {
     loadUsers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Cleanup observer on unmount
+  useEffect(() => {
+    return () => {
+      if (observer.current) {
+        observer.current.disconnect();
+      }
+    };
   }, []);
 
   const resetForm = () => {
@@ -158,62 +175,32 @@ const CustomersPage = () => {
                 </td>
               </tr>
             )}
-            {users.map((user, idx) => {
-              if (idx === users.length - 1) {
-                return (
-                  <tr ref={lastUserRef} key={user.id}>
-                    <th>{idx + 1}</th>
-                    <td>{user.email}</td>
-                    <td>
-                      {user.lastLogin
-                        ? new Date(user.lastLogin).toLocaleString("es-AR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })
-                        : ""}
-                    </td>
-                    <td>
-                      {user.createdAt
-                        ? new Date(user.createdAt).toLocaleString("es-AR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            year: "2-digit",
-                          })
-                        : ""}
-                    </td>
-                  </tr>
-                );
-              }
-              return (
-                <tr key={user.id}>
-                  <th>{idx + 1}</th>
-                  <td>{user.email}</td>
-                  <td>
-                    {user.lastLogin
-                      ? new Date(user.lastLogin).toLocaleString("es-AR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })
-                      : ""}
-                  </td>
-                  <td>
-                    {user.createdAt
-                      ? new Date(user.createdAt).toLocaleString("es-AR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "2-digit",
-                        })
-                      : ""}
-                  </td>
-                </tr>
-              );
-            })}
+            {users.map((user, idx) => (
+              <tr key={user.id}>
+                <th>{idx + 1}</th>
+                <td>{user.email}</td>
+                <td>
+                  {user.lastLogin
+                    ? new Date(user.lastLogin).toLocaleString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : ""}
+                </td>
+                <td>
+                  {user.createdAt
+                    ? new Date(user.createdAt).toLocaleString("es-AR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "2-digit",
+                      })
+                    : ""}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -245,22 +232,31 @@ const CustomersPage = () => {
           {users.map((user, idx) => (
             <div
               key={user.id}
-              ref={idx === users.length - 1 ? lastUserRef : undefined}
               className="p-4 border rounded space-y-1 text-[#222222]"
             >
               <div className="font-bold text-xs">#{idx + 1}</div>
               <div>
                 <span className="font-semibold">Email:</span> {user.email}
               </div>
+              {user.lastLogin && (
+                <div>
+                  <span className="font-semibold">Último acceso:</span>{" "}
+                  {new Date(user.lastLogin).toLocaleString("es-AR", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </div>
+              )}
               <div>
-                <span className="font-semibold">Último acceso:</span>{" "}
-                {user.lastLogin
-                  ? new Date(user.lastLogin).toLocaleString("es-AR", {
+                <span className="font-semibold">Fecha de creación:</span>{" "}
+                {user.createdAt
+                  ? new Date(user.createdAt).toLocaleString("es-AR", {
                       day: "2-digit",
                       month: "2-digit",
                       year: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
                     })
                   : ""}
               </div>
@@ -268,6 +264,11 @@ const CustomersPage = () => {
           ))}
         </div>
       </div>
+
+      {/* Unified trigger element for infinite scroll - works for both desktop and mobile */}
+      {users.length > 0 && nextCursor && (
+        <div ref={lastUserRef} className="h-1 w-full" />
+      )}
       {/* Mensajes de carga y fin de lista */}
       {loading && users.length > 0 && (
         <div className="flex justify-center py-4 text-[#666666]">

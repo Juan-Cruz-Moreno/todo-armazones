@@ -13,6 +13,77 @@ export class UserService {
     const user = await User.findOne({ email });
     return user;
   }
+
+  /**
+   * Busca usuarios de manera flexible por coincidencias en campos especificados
+   * @param query La cadena de búsqueda (e.g., "Juan")
+   * @param fields Campos a buscar (opcional, por defecto: firstName, lastName, displayName)
+   * @param limit Límite de resultados (máximo 100)
+   * @param cursor Cursor para paginación
+   */
+  public async searchUsers(
+    query: string,
+    fields: string[] = ['firstName', 'lastName', 'displayName'],
+    limit: number = 10,
+    cursor?: string,
+  ): Promise<GetUsersPaginatedResponse> {
+    // Validar inputs
+    if (!query || query.trim().length === 0) {
+      throw new AppError('Search query is required', 400, 'fail', true);
+    }
+    const maxLimit = 100;
+    if (limit <= 0) {
+      throw new AppError('Limit must be greater than 0', 400, 'fail', true);
+    }
+    if (limit > maxLimit) {
+      limit = maxLimit;
+    }
+
+    // Construir query con regex para coincidencias parciales (case-insensitive)
+    const regex = new RegExp(query.trim(), 'i');
+    const searchConditions = fields.map((field) => ({ [field]: { $regex: regex } }));
+    let mongoQuery: Record<string, unknown> = { $or: searchConditions };
+
+    // Agregar cursor para paginación
+    if (cursor) {
+      try {
+        const cursorId = new Types.ObjectId(cursor);
+        mongoQuery = { ...mongoQuery, _id: { $gt: cursorId } };
+      } catch (_err) {
+        throw new AppError('Invalid cursor format', 400, 'fail', true);
+      }
+    }
+
+    // Ejecutar búsqueda con paginación
+    const users = await User.find(mongoQuery)
+      .sort({ _id: 1 })
+      .limit(limit + 1);
+
+    const hasNextPage = users.length > limit;
+    const usersToReturn = hasNextPage ? users.slice(0, limit) : users;
+
+    const result: GetUsersPaginatedResponse = {
+      users: usersToReturn.map((u) => ({
+        id: u._id.toString(),
+        email: u.email,
+        displayName: u.displayName,
+        ...(u.firstName && { firstName: u.firstName }),
+        ...(u.lastName && { lastName: u.lastName }),
+        ...(u.dni && { dni: u.dni }),
+        ...(u.cuit && { cuit: u.cuit }),
+        ...(u.phone && { phone: u.phone }),
+        role: u.role,
+        status: u.status,
+        ...(u.lastLogin && { lastLogin: u.lastLogin }),
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
+      })),
+      nextCursor: hasNextPage ? usersToReturn[usersToReturn.length - 1]._id.toString() : null,
+    };
+
+    return result;
+  }
+
   public async getUsers(limit: number = 10, cursor?: string): Promise<GetUsersPaginatedResponse> {
     // Validate and normalize inputs
     const maxLimit = 100;
@@ -45,6 +116,11 @@ export class UserService {
         id: u._id.toString(),
         email: u.email,
         displayName: u.displayName,
+        ...(u.firstName && { firstName: u.firstName }),
+        ...(u.lastName && { lastName: u.lastName }),
+        ...(u.dni && { dni: u.dni }),
+        ...(u.cuit && { cuit: u.cuit }),
+        ...(u.phone && { phone: u.phone }),
         role: u.role,
         status: u.status,
         ...(u.lastLogin && { lastLogin: u.lastLogin }),
@@ -104,7 +180,10 @@ export class UserService {
         throw new AppError('User not found', 404, 'fail', true);
       }
 
-      logger.info('User updated', { userId: userId.toString(), updatedFields: Object.keys(update) });
+      logger.info('User updated', {
+        userId: userId.toString(),
+        updatedFields: Object.keys(update),
+      });
 
       return {
         id: updatedUser._id.toString(),
@@ -126,7 +205,13 @@ export class UserService {
       if (_err instanceof AppError) throw _err;
 
       // Narrow the unknown error to a shape we can inspect without using `any`
-      const err = _err as { code?: number; keyPattern?: Record<string, unknown>; message?: string } | undefined;
+      const err = _err as
+        | {
+            code?: number;
+            keyPattern?: Record<string, unknown>;
+            message?: string;
+          }
+        | undefined;
 
       // Handle duplicate email (Mongo duplicate key) safely
       if (

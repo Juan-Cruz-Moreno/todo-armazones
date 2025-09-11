@@ -72,6 +72,40 @@ export class UserController {
       res.status(500).json(response);
     }
   };
+
+  /**
+   * Busca usuarios de manera flexible (solo admin)
+   */
+  public searchUsers = async (req: Request, res: Response): Promise<void> => {
+    const { query, fields, limit, cursor } = req.query;
+    const parsedFields = fields
+      ? (fields as string).split(',').map((f) => f.trim())
+      : ['firstName', 'lastName', 'displayName'];
+    const parsedLimit = limit ? parseInt(limit as string, 10) : 10;
+
+    try {
+      const users = await this.userService.searchUsers(query as string, parsedFields, parsedLimit, cursor as string);
+      const response: ApiResponse<typeof users> = {
+        status: 'success',
+        data: users,
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      const response: ApiResponse =
+        error instanceof Error && 'stack' in error
+          ? {
+              status: 'error',
+              message: 'Failed to search users',
+              details: { message: error.message, stack: error.stack },
+            }
+          : {
+              status: 'error',
+              message: 'Failed to search users',
+            };
+      res.status(500).json(response);
+    }
+  };
+
   /**
    * Actualiza los datos del usuario autenticado
    */

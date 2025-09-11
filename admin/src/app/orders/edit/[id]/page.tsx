@@ -11,7 +11,12 @@ import type {
   ApplyRefundPayload,
 } from "@/interfaces/order";
 import type { ProductVariant } from "@/interfaces/product";
-import { ShippingMethod, PaymentMethod, OrderStatus } from "@/enums/order.enum";
+import {
+  ShippingMethod,
+  PaymentMethod,
+  OrderStatus,
+  DeliveryType,
+} from "@/enums/order.enum";
 import { useProducts } from "@/hooks/useProducts";
 import { Trash, Edit3 } from "lucide-react";
 import { formatCurrency } from "@/utils/formatCurrency";
@@ -22,7 +27,6 @@ import StockConflictAlert from "@/components/StockConflictAlert";
 import PendingPaymentInfo from "@/components/PendingPaymentInfo";
 import { downloadOrderPDF } from "@/utils/downloadOrderPDF";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
-import { debounce } from "@/utils/debounce";
 
 const EditOrderPage = () => {
   // All hooks at the top, always called in the same order
@@ -64,7 +68,9 @@ const EditOrderPage = () => {
     useState(false);
 
   // Estado para debounce de cambios de cantidad
-  const [quantityTimeouts, setQuantityTimeouts] = useState<Record<string, NodeJS.Timeout>>({});
+  const [quantityTimeouts, setQuantityTimeouts] = useState<
+    Record<string, NodeJS.Timeout>
+  >({});
 
   // Estado para manejar errores inline
   const [errors, setErrors] = useState<
@@ -135,7 +141,9 @@ const EditOrderPage = () => {
       // Limpiar orderById en el store cuando se desmonta o cambia el id
       clearOrderById();
       // Limpiar todos los timeouts de debounce
-      Object.values(quantityTimeouts).forEach(timeout => clearTimeout(timeout));
+      Object.values(quantityTimeouts).forEach((timeout) =>
+        clearTimeout(timeout)
+      );
       setQuantityTimeouts({});
     };
   }, [id, getOrderById, clearOrderById]);
@@ -170,6 +178,26 @@ const EditOrderPage = () => {
       clearStockInfo();
     }
   }, [form?.id, form?.orderStatus, checkStockAvailability, clearStockInfo]);
+
+  // Reset delivery type to HomeDelivery when shipping method changes to Motorcycle
+  useEffect(() => {
+    if (
+      form?.shippingMethod === ShippingMethod.Motorcycle &&
+      form?.shippingAddress?.deliveryType === DeliveryType.PickupPoint
+    ) {
+      setForm((prev) =>
+        prev
+          ? {
+              ...prev,
+              shippingAddress: {
+                ...prev.shippingAddress,
+                deliveryType: DeliveryType.HomeDelivery,
+              },
+            }
+          : prev
+      );
+    }
+  }, [form?.shippingMethod]);
 
   // Funciones helper para manejar errores
   const addError = (
@@ -251,6 +279,25 @@ const EditOrderPage = () => {
         ? {
             ...prev,
             shippingAddress: { ...prev.shippingAddress, [name]: value },
+          }
+        : prev
+    );
+  };
+
+  // Handler para cambios en deliveryType
+  const handleDeliveryTypeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    const newDeliveryType = value as DeliveryType;
+
+    // Actualizar estado local inmediatamente para mostrar/ocultar campos
+    setForm((prev) =>
+      prev
+        ? {
+            ...prev,
+            shippingAddress: {
+              ...prev.shippingAddress,
+              deliveryType: newDeliveryType,
+            },
           }
         : prev
     );
@@ -511,15 +558,15 @@ const EditOrderPage = () => {
     }
 
     // Actualizar estado local inmediatamente para mejor UX
-    setForm(prev => {
+    setForm((prev) => {
       if (!prev) return prev;
       return {
         ...prev,
-        items: prev.items.map(item =>
+        items: prev.items.map((item) =>
           item.productVariant.id === variantId
             ? { ...item, quantity: newQuantity }
             : item
-        )
+        ),
       };
     });
 
@@ -551,21 +598,21 @@ const EditOrderPage = () => {
           `Error al actualizar la cantidad: ${error || "Error desconocido"}`
         );
         // Revertir el cambio local en caso de error
-        setForm(prev => {
+        setForm((prev) => {
           if (!prev) return prev;
           return {
             ...prev,
-            items: prev.items.map(item =>
+            items: prev.items.map((item) =>
               item.productVariant.id === variantId
                 ? { ...item, quantity: currentItem.quantity }
                 : item
-            )
+            ),
           };
         });
       } finally {
         setItemOperationLoading(null);
         // Limpiar el timeout del estado
-        setQuantityTimeouts(prev => {
+        setQuantityTimeouts((prev) => {
           const newTimeouts = { ...prev };
           delete newTimeouts[variantId];
           return newTimeouts;
@@ -575,7 +622,7 @@ const EditOrderPage = () => {
 
     // Crear nuevo timeout con debounce de 800ms
     const timeout = setTimeout(updateQuantity, 800);
-    setQuantityTimeouts(prev => ({ ...prev, [variantId]: timeout }));
+    setQuantityTimeouts((prev) => ({ ...prev, [variantId]: timeout }));
   };
 
   // Abrir modal de edición de precios
@@ -649,6 +696,11 @@ const EditOrderPage = () => {
     const hasShippingMethodChanges =
       form.shippingMethod !== originalForm.shippingMethod;
 
+    // Verificar cambios en deliveryType
+    const hasDeliveryTypeChanges =
+      form.shippingAddress.deliveryType !==
+      originalForm.shippingAddress.deliveryType;
+
     // Verificar cambios en deliveryWindow y declaredShippingAmount
     const hasDeliveryChanges =
       form.shippingAddress.deliveryWindow !==
@@ -665,6 +717,7 @@ const EditOrderPage = () => {
       form.shippingAddress.phoneNumber !==
         originalForm.shippingAddress.phoneNumber ||
       form.shippingAddress.dni !== originalForm.shippingAddress.dni ||
+      form.shippingAddress.cuit !== originalForm.shippingAddress.cuit ||
       form.shippingAddress.streetAddress !==
         originalForm.shippingAddress.streetAddress ||
       form.shippingAddress.city !== originalForm.shippingAddress.city ||
@@ -674,11 +727,14 @@ const EditOrderPage = () => {
       form.shippingAddress.companyName !==
         originalForm.shippingAddress.companyName ||
       form.shippingAddress.shippingCompany !==
-        originalForm.shippingAddress.shippingCompany;
+        originalForm.shippingAddress.shippingCompany ||
+      form.shippingAddress.pickupPointAddress !==
+        originalForm.shippingAddress.pickupPointAddress;
 
     return (
       hasCreatedAtChanges ||
       hasShippingMethodChanges ||
+      hasDeliveryTypeChanges ||
       hasDeliveryChanges ||
       hasAddressChanges
     );
@@ -688,6 +744,19 @@ const EditOrderPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form || !originalForm || isSubmitting) return;
+
+    // Validar que los campos requeridos estén completos según el tipo de entrega
+    if (form.shippingAddress.deliveryType === DeliveryType.HomeDelivery) {
+      if (!form.shippingAddress.streetAddress?.trim()) {
+        addError("Debe completar la dirección para entrega a domicilio");
+        return;
+      }
+    } else if (form.shippingAddress.deliveryType === DeliveryType.PickupPoint) {
+      if (!form.shippingAddress.pickupPointAddress?.trim()) {
+        addError("Debe completar la dirección del punto de retiro");
+        return;
+      }
+    }
 
     setIsSubmitting(true);
 
@@ -707,6 +776,40 @@ const EditOrderPage = () => {
       // Verificar cambios en shippingMethod
       if (form.shippingMethod !== originalForm.shippingMethod) {
         updatePayload.shippingMethod = form.shippingMethod;
+        hasChanges = true;
+      }
+
+      // Verificar cambios en deliveryType
+      if (
+        form.shippingAddress.deliveryType !==
+        originalForm.shippingAddress.deliveryType
+      ) {
+        // Cuando cambia el deliveryType, siempre enviar la shippingAddress completa
+        // para asegurar que los campos requeridos estén incluidos
+        // Limpiar campos vacíos antes de enviar al backend
+        const cleanedShippingAddress = { ...form.shippingAddress };
+        
+        // Convertir campos opcionales vacíos a undefined para que no se guarden como strings vacías
+        if (cleanedShippingAddress.cuit === "") {
+          cleanedShippingAddress.cuit = undefined;
+        }
+        if (cleanedShippingAddress.companyName === "") {
+          cleanedShippingAddress.companyName = undefined;
+        }
+        if (cleanedShippingAddress.shippingCompany === "") {
+          cleanedShippingAddress.shippingCompany = undefined;
+        }
+        if (cleanedShippingAddress.declaredShippingAmount === "") {
+          cleanedShippingAddress.declaredShippingAmount = undefined;
+        }
+        if (cleanedShippingAddress.deliveryWindow === "") {
+          cleanedShippingAddress.deliveryWindow = undefined;
+        }
+        if (cleanedShippingAddress.pickupPointAddress === "") {
+          cleanedShippingAddress.pickupPointAddress = undefined;
+        }
+        
+        updatePayload.shippingAddress = cleanedShippingAddress;
         hasChanges = true;
       }
 
@@ -734,7 +837,7 @@ const EditOrderPage = () => {
         }
       }
 
-      // Verificar cambios en la dirección completa
+      // Verificar cambios en la dirección completa (solo si no se envió ya por deliveryType)
       const hasAddressChanges =
         form.shippingAddress.firstName !==
           originalForm.shippingAddress.firstName ||
@@ -744,6 +847,7 @@ const EditOrderPage = () => {
         form.shippingAddress.phoneNumber !==
           originalForm.shippingAddress.phoneNumber ||
         form.shippingAddress.dni !== originalForm.shippingAddress.dni ||
+        form.shippingAddress.cuit !== originalForm.shippingAddress.cuit ||
         form.shippingAddress.streetAddress !==
           originalForm.shippingAddress.streetAddress ||
         form.shippingAddress.city !== originalForm.shippingAddress.city ||
@@ -753,10 +857,39 @@ const EditOrderPage = () => {
         form.shippingAddress.companyName !==
           originalForm.shippingAddress.companyName ||
         form.shippingAddress.shippingCompany !==
-          originalForm.shippingAddress.shippingCompany;
+          originalForm.shippingAddress.shippingCompany ||
+        form.shippingAddress.pickupPointAddress !==
+          originalForm.shippingAddress.pickupPointAddress;
 
-      if (hasAddressChanges) {
-        updatePayload.shippingAddress = form.shippingAddress;
+      // Solo enviar shippingAddress si hay cambios y no se envió ya por deliveryType
+      const hasDeliveryTypeChanges =
+        form.shippingAddress.deliveryType !==
+        originalForm.shippingAddress.deliveryType;
+      if (hasAddressChanges && !hasDeliveryTypeChanges) {
+        // Limpiar campos vacíos antes de enviar al backend
+        const cleanedShippingAddress = { ...form.shippingAddress };
+        
+        // Convertir campos opcionales vacíos a undefined para que no se guarden como strings vacías
+        if (cleanedShippingAddress.cuit === "") {
+          cleanedShippingAddress.cuit = undefined;
+        }
+        if (cleanedShippingAddress.companyName === "") {
+          cleanedShippingAddress.companyName = undefined;
+        }
+        if (cleanedShippingAddress.shippingCompany === "") {
+          cleanedShippingAddress.shippingCompany = undefined;
+        }
+        if (cleanedShippingAddress.declaredShippingAmount === "") {
+          cleanedShippingAddress.declaredShippingAmount = undefined;
+        }
+        if (cleanedShippingAddress.deliveryWindow === "") {
+          cleanedShippingAddress.deliveryWindow = undefined;
+        }
+        if (cleanedShippingAddress.pickupPointAddress === "") {
+          cleanedShippingAddress.pickupPointAddress = undefined;
+        }
+        
+        updatePayload.shippingAddress = cleanedShippingAddress;
         hasChanges = true;
       }
 
@@ -1151,107 +1284,10 @@ const EditOrderPage = () => {
                     )}
                   </label>
                 </div>
-                {/* Dirección de envío */}
-                <div className="grid grid-cols-2 gap-4">
-                  {[
-                    "firstName",
-                    "lastName",
-                    "email",
-                    "phoneNumber",
-                    "dni",
-                    "streetAddress",
-                    "city",
-                    "state",
-                    "postalCode",
-                    "companyName",
-                  ].map((name) => (
-                    <div
-                      key={name}
-                      className={
-                        name === "email" || name === "streetAddress"
-                          ? "col-span-2"
-                          : ""
-                      }
-                    >
-                      <label
-                        htmlFor={name}
-                        className="block mb-1 text-sm"
-                        style={{ color: "#7A7A7A" }}
-                      >
-                        {name === "firstName"
-                          ? "Nombre *"
-                          : name === "lastName"
-                          ? "Apellidos *"
-                          : name === "email"
-                          ? "Email *"
-                          : name === "phoneNumber"
-                          ? "Teléfono *"
-                          : name === "dni"
-                          ? "DNI *"
-                          : name === "streetAddress"
-                          ? "Dirección *"
-                          : name === "city"
-                          ? "Ciudad *"
-                          : name === "state"
-                          ? "Provincia *"
-                          : name === "postalCode"
-                          ? "Código Postal *"
-                          : name === "companyName"
-                          ? "Nombre de Empresa (opcional)"
-                          : name}
-                      </label>
-                      <input
-                        id={name}
-                        type={name === "email" ? "email" : "text"}
-                        value={
-                          form.shippingAddress[name as keyof ShippingAddress] ||
-                          ""
-                        }
-                        onChange={handleAddressChange}
-                        name={name}
-                        className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                        style={{ borderColor: "#e1e1e1" }}
-                        required={!["companyName"].includes(name)}
-                      />
-                    </div>
-                  ))}
-                </div>
-                {/* Métodos de envío y pago */}
+
+                {/* Métodos de pago, envío y tipo de entrega */}
                 <div className="flex flex-col gap-4 mt-4">
-                  <div>
-                    <label className="block text-sm text-[#7A7A7A] mb-2">
-                      Método de envío *
-                    </label>
-                    <div className="flex flex-col gap-2">
-                      {[
-                        ShippingMethod.Motorcycle,
-                        ShippingMethod.ParcelCompany,
-                      ].map((method) => (
-                        <label
-                          key={method}
-                          className="flex items-center gap-2 cursor-pointer"
-                        >
-                          <input
-                            type="radio"
-                            name="shippingMethod"
-                            value={method}
-                            checked={form.shippingMethod === method}
-                            onChange={handleFieldChange}
-                            className="radio border-[#e1e1e1] checked:bg-[#222222]"
-                          />
-                          <span className="text-[#222222] text-sm">
-                            {method === ShippingMethod.Motorcycle
-                              ? "Moto"
-                              : "Transporte/Empresa de encomienda"}
-                            <span className="text-xs text-[#7A7A7A]">
-                              {" "}
-                              (Costo de envío extra a cargo del Cliente)
-                            </span>
-                          </span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
+                  {/* Método de pago */}
                   <div>
                     <label className="block text-sm text-[#7A7A7A] mb-2">
                       Método de pago *
@@ -1292,37 +1328,263 @@ const EditOrderPage = () => {
                       ))}
                     </div>
                   </div>
-                </div>
-                {/* Campos de entrega */}
-                <div className="flex flex-col gap-4 mt-4">
+
+                  {/* Método de envío */}
                   <div>
                     <label className="block text-sm text-[#7A7A7A] mb-2">
-                      Ventana de entrega (opcional)
+                      Método de envío *
+                    </label>
+                    <div className="flex flex-col gap-2">
+                      {[
+                        ShippingMethod.Motorcycle,
+                        ShippingMethod.ParcelCompany,
+                      ].map((method) => (
+                        <label
+                          key={method}
+                          className="flex items-center gap-2 cursor-pointer"
+                        >
+                          <input
+                            type="radio"
+                            name="shippingMethod"
+                            value={method}
+                            checked={form.shippingMethod === method}
+                            onChange={handleFieldChange}
+                            className="radio border-[#e1e1e1] checked:bg-[#222222]"
+                          />
+                          <span className="text-[#222222] text-sm">
+                            {method === ShippingMethod.Motorcycle
+                              ? "Moto"
+                              : "Transporte/Empresa de encomienda"}
+                            <span className="text-xs text-[#7A7A7A]">
+                              {" "}
+                              (Costo de envío extra a cargo del Cliente)
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Tipo de entrega (solo para ParcelCompany) */}
+                  {form.shippingMethod === ShippingMethod.ParcelCompany && (
+                    <div>
+                      <label className="block text-sm text-[#7A7A7A] mb-2">
+                        Tipo de entrega *
+                      </label>
+                      <div className="flex flex-col gap-2">
+                        {[
+                          DeliveryType.HomeDelivery,
+                          DeliveryType.PickupPoint,
+                        ].map((type) => (
+                          <label
+                            key={type}
+                            className="flex items-center gap-2 cursor-pointer"
+                          >
+                            <input
+                              type="radio"
+                              name="deliveryType"
+                              value={type}
+                              checked={
+                                form.shippingAddress.deliveryType === type
+                              }
+                              onChange={handleDeliveryTypeChange}
+                              className="radio border-[#e1e1e1] checked:bg-[#222222]"
+                            />
+                            <span className="text-[#222222] text-sm">
+                              {type === DeliveryType.HomeDelivery
+                                ? "Entrega a domicilio"
+                                : "Retiro en punto de entrega"}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Campos específicos de transporte */}
+                  {form.shippingMethod === ShippingMethod.ParcelCompany && (
+                    <>
+                      <div>
+                        <label className="block text-sm text-[#7A7A7A] mb-2">
+                          Transporte / Empresa de encomienda *
+                        </label>
+                        <input
+                          type="text"
+                          name="shippingCompany"
+                          value={form.shippingAddress.shippingCompany || ""}
+                          onChange={handleAddressChange}
+                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          style={{ borderColor: "#e1e1e1" }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm text-[#7A7A7A] mb-2">
+                          Valor declarado (opcional)
+                        </label>
+                        <input
+                          type="text"
+                          name="declaredShippingAmount"
+                          value={
+                            form.shippingAddress.declaredShippingAmount || ""
+                          }
+                          onChange={handleAddressChange}
+                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          style={{ borderColor: "#e1e1e1" }}
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {/* Franja horaria */}
+                  <div>
+                    <label className="block text-sm text-[#7A7A7A] mb-2">
+                      Franja horaria (opcional)
                     </label>
                     <input
                       type="text"
                       name="deliveryWindow"
                       value={form.shippingAddress.deliveryWindow || ""}
-                      onChange={handleDeliveryFieldChange}
-                      placeholder="Ej: 9AM-5PM, Lunes a Viernes"
+                      onChange={handleAddressChange}
+                      placeholder="Ej: 11:00 - 16:00"
                       className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
                       style={{ borderColor: "#e1e1e1" }}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm text-[#7A7A7A] mb-2">
-                      Monto declarado de envío (opcional)
-                    </label>
-                    <input
-                      type="text"
-                      name="declaredShippingAmount"
-                      value={form.shippingAddress.declaredShippingAmount || ""}
-                      onChange={handleDeliveryFieldChange}
-                      placeholder="Ej: $50.00"
-                      className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
-                      style={{ borderColor: "#e1e1e1" }}
-                    />
-                  </div>
+                </div>
+
+                {/* Formulario de dirección y datos personales */}
+                <div className="grid grid-cols-2 gap-4">
+                  {[
+                    "firstName",
+                    "lastName",
+                    "email",
+                    "phoneNumber",
+                    "dni",
+                    "cuit",
+                  ].map((name) => (
+                    <div
+                      key={name}
+                      className={name === "email" ? "col-span-2" : ""}
+                    >
+                      <label
+                        htmlFor={name}
+                        className="block mb-1 text-sm"
+                        style={{ color: "#7A7A7A" }}
+                      >
+                        {name === "firstName"
+                          ? "Nombre *"
+                          : name === "lastName"
+                          ? "Apellidos *"
+                          : name === "email"
+                          ? "Email *"
+                          : name === "phoneNumber"
+                          ? "Teléfono *"
+                          : name === "dni"
+                          ? "DNI *"
+                          : name === "cuit"
+                          ? "CUIT (opcional)"
+                          : name}
+                      </label>
+                      <input
+                        id={name}
+                        type={name === "email" ? "email" : "text"}
+                        value={
+                          form.shippingAddress[name as keyof ShippingAddress] ||
+                          ""
+                        }
+                        onChange={handleAddressChange}
+                        name={name}
+                        className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                        style={{ borderColor: "#e1e1e1" }}
+                        required={!["companyName", "cuit"].includes(name)}
+                      />
+                    </div>
+                  ))}
+
+                  {/* Campo de dirección (solo para entrega a domicilio) */}
+                  {(form.shippingMethod !== ShippingMethod.ParcelCompany ||
+                    form.shippingAddress.deliveryType ===
+                      DeliveryType.HomeDelivery) && (
+                    <div className="col-span-2">
+                      <label
+                        htmlFor="streetAddress"
+                        className="block mb-1 text-sm"
+                        style={{ color: "#7A7A7A" }}
+                      >
+                        Dirección *
+                      </label>
+                      <input
+                        id="streetAddress"
+                        type="text"
+                        value={form.shippingAddress.streetAddress || ""}
+                        onChange={handleAddressChange}
+                        name="streetAddress"
+                        className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                        style={{ borderColor: "#e1e1e1" }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Campo de punto de retiro (solo para pickup point) */}
+                  {form.shippingMethod === ShippingMethod.ParcelCompany &&
+                    form.shippingAddress.deliveryType ===
+                      DeliveryType.PickupPoint && (
+                      <div className="col-span-2">
+                        <label
+                          htmlFor="pickupPointAddress"
+                          className="block mb-1 text-sm"
+                          style={{ color: "#7A7A7A" }}
+                        >
+                          Dirección del punto de retiro *
+                        </label>
+                        <input
+                          id="pickupPointAddress"
+                          type="text"
+                          value={form.shippingAddress.pickupPointAddress || ""}
+                          onChange={handleAddressChange}
+                          name="pickupPointAddress"
+                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          style={{ borderColor: "#e1e1e1" }}
+                          placeholder="Ej: Sucursal Correo Argentino - Av. Corrientes 500"
+                        />
+                      </div>
+                    )}
+
+                  {["city", "state", "postalCode", "companyName"].map(
+                    (name) => (
+                      <div key={name}>
+                        <label
+                          htmlFor={name}
+                          className="block mb-1 text-sm"
+                          style={{ color: "#7A7A7A" }}
+                        >
+                          {name === "city"
+                            ? "Ciudad *"
+                            : name === "state"
+                            ? "Provincia *"
+                            : name === "postalCode"
+                            ? "Código Postal *"
+                            : name === "companyName"
+                            ? "Nombre de Empresa (opcional)"
+                            : name}
+                        </label>
+                        <input
+                          id={name}
+                          type="text"
+                          value={
+                            form.shippingAddress[
+                              name as keyof ShippingAddress
+                            ] || ""
+                          }
+                          onChange={handleAddressChange}
+                          name={name}
+                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          style={{ borderColor: "#e1e1e1" }}
+                          required={!["companyName"].includes(name)}
+                        />
+                      </div>
+                    )
+                  )}
                 </div>
                 {/* Lista de variantes seleccionadas */}
                 {form.items.length > 0 && (
@@ -1355,9 +1617,12 @@ const EditOrderPage = () => {
                                   {/* Imagen del producto (responsive) */}
                                   <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
                                     <Image
-                                      src={
-                                        `${process.env.NEXT_PUBLIC_API_URL}/${item.productVariant.images?.[0] || "placeholder-image.jpg"}`
-                                      }
+                                      src={`${
+                                        process.env.NEXT_PUBLIC_API_URL
+                                      }/${
+                                        item.productVariant.images?.[0] ||
+                                        "placeholder-image.jpg"
+                                      }`}
                                       alt={`${
                                         item.productVariant.product.productModel
                                       } - ${
@@ -1399,11 +1664,7 @@ const EditOrderPage = () => {
                                 </div>
                               </td>
                               <td>
-                                {formatCurrency(
-                                  item.cogsUSD,
-                                  "en-US",
-                                  "USD"
-                                )}
+                                {formatCurrency(item.cogsUSD, "en-US", "USD")}
                               </td>
                               <td>
                                 {formatCurrency(
@@ -1434,7 +1695,11 @@ const EditOrderPage = () => {
                                 {formatCurrency(item.subTotal, "en-US", "USD")}
                               </td>
                               <td>
-                                {formatCurrency(item.contributionMarginUSD, "en-US", "USD")}
+                                {formatCurrency(
+                                  item.contributionMarginUSD,
+                                  "en-US",
+                                  "USD"
+                                )}
                               </td>
                               <td>
                                 <div className="flex gap-2">
@@ -1563,7 +1828,12 @@ const EditOrderPage = () => {
                         Reembolso:
                       </span>
                       <span className="text-sm text-[#A00000]">
-                        -{formatCurrency(form.refund.appliedAmount, "en-US", "USD")}
+                        -
+                        {formatCurrency(
+                          form.refund.appliedAmount,
+                          "en-US",
+                          "USD"
+                        )}
                       </span>
                     </div>
                   )}
@@ -1572,11 +1842,7 @@ const EditOrderPage = () => {
                       Cost of Goods:
                     </span>
                     <span className="text-sm text-[#222222]">
-                      {formatCurrency(
-                        form.totalCogsUSD,
-                        "en-US",
-                        "USD"
-                      )}
+                      {formatCurrency(form.totalCogsUSD, "en-US", "USD")}
                     </span>
                   </div>
                   <div className="flex justify-between items-center mt-2">
@@ -1584,7 +1850,11 @@ const EditOrderPage = () => {
                       Contribución Marginal:
                     </span>
                     <span className="text-sm text-[#222222]">
-                      {formatCurrency(form.totalContributionMarginUSD, "en-US", "USD")}
+                      {formatCurrency(
+                        form.totalContributionMarginUSD,
+                        "en-US",
+                        "USD"
+                      )}
                     </span>
                   </div>
                 </div>
@@ -1930,9 +2200,9 @@ const EditOrderPage = () => {
                           {/* Imagen del producto */}
                           <div className="flex-shrink-0 w-16 h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
                             <Image
-                              src={
-                                `${process.env.NEXT_PUBLIC_API_URL}/${product.thumbnail || "placeholder-image.jpg"}`
-                              }
+                              src={`${process.env.NEXT_PUBLIC_API_URL}/${
+                                product.thumbnail || "placeholder-image.jpg"
+                              }`}
                               alt={product.productModel}
                               width={64}
                               height={64}
@@ -2096,7 +2366,8 @@ const EditOrderPage = () => {
                 addItemsModal.productQuery && (
                   <div className="text-center py-8">
                     <p className="text-[#7A7A7A]">
-                      No se encontraron productos para &quot;{addItemsModal.productQuery}&quot;
+                      No se encontraron productos para &quot;
+                      {addItemsModal.productQuery}&quot;
                     </p>
                   </div>
                 )}

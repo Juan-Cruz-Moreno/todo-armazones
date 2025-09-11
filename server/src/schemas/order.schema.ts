@@ -14,7 +14,7 @@ const baseAddressSchema = z.object({
     .string()
     .min(1, 'El número de teléfono es obligatorio')
     .max(20, 'El número de teléfono no puede exceder los 20 caracteres'),
-  dni: z.string().min(1, 'El DNI es obligatorio').max(20, 'El DNI no puede exceder los 20 caracteres'),
+  dni: z.string().max(20, 'El DNI no puede exceder los 20 caracteres').optional(), // Cambiado a opcional para coincidir con IAddress
   cuit: z.string().optional(),
   city: z.string().min(1, 'La ciudad es obligatoria').max(50, 'La ciudad no puede exceder los 50 caracteres'),
   state: z.string().min(1, 'El estado es obligatorio').max(50, 'El estado no puede exceder los 50 caracteres'),
@@ -230,6 +230,15 @@ export const updateOrderBodySchema = z.object({
         .max(20, 'El monto declarado de envío no puede exceder los 20 caracteres')
         .optional(),
       deliveryWindow: z.string().max(50, 'La ventana de entrega no puede exceder los 50 caracteres').optional(),
+      deliveryType: z
+        .enum(Object.values(DeliveryType) as [string, ...string[]], {
+          message: 'El tipo de entrega debe ser HOME_DELIVERY o PICKUP_POINT',
+        })
+        .optional(),
+      pickupPointAddress: z
+        .string()
+        .max(100, 'La dirección del punto de retiro no puede exceder los 100 caracteres')
+        .optional(),
     })
     .optional(),
   deliveryWindow: z.string().max(50, 'La ventana de entrega no puede exceder los 50 caracteres').optional(),

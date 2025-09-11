@@ -13,6 +13,9 @@ router.get('/', checkAdmin, userController.getUsers);
 // Solo admin puede buscar usuario por email
 router.get('/by-email', checkAdmin, userController.findUserByEmail);
 
+// Solo admin puede buscar usuarios de manera flexible
+router.get('/search', checkAdmin, userController.searchUsers);
+
 // El usuario autenticado puede actualizar sus propios datos
 router.patch('/me', checkSession, validateRequest({ body: updateUserSchema }), userController.updateUser);
 

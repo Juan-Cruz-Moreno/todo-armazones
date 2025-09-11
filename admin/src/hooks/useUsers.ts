@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload } from "@/redux/slices/userSlice";
+import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch } from "@/redux/slices/userSlice";
 
 export const useUsers = () => {
   const dispatch = useAppDispatch();
@@ -12,7 +12,13 @@ export const useUsers = () => {
     userByEmail,
     loadingUserByEmail,
     errorUserByEmail,
+    // Nuevos campos para búsqueda
+    searchResults,
+    searchNextCursor,
+    searchLoading,
+    searchError,
   } = useAppSelector((state) => state.users);
+
   const findUserByEmail = useCallback(
     (email: string) => {
       dispatch(fetchUserByEmail(email));
@@ -44,6 +50,18 @@ export const useUsers = () => {
     [dispatch]
   );
 
+  // Nuevo método para búsqueda flexible
+  const searchUsersByQuery = useCallback(
+    (query: string, fields?: string, limit?: number, cursor?: string) => {
+      dispatch(searchUsers({ query, fields, limit, cursor }));
+    },
+    [dispatch]
+  );
+
+  const clearSearch = useCallback(() => {
+    dispatch(resetSearch());
+  }, [dispatch]);
+
   return {
     users,
     nextCursor,
@@ -56,5 +74,12 @@ export const useUsers = () => {
     errorUserByEmail,
     findUserByEmail,
     createUser,
+    // Nuevos para búsqueda
+    searchResults,
+    searchNextCursor,
+    searchLoading,
+    searchError,
+    searchUsersByQuery,
+    clearSearch,
   };
 };

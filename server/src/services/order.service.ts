@@ -603,6 +603,34 @@ export class OrderService {
         throw new AppError(`El usuario con ID ${orderData.userId} no existe.`, 404, 'fail');
       }
 
+      // Verificar y actualizar el usuario si falta dni, cuit o phone
+      const { dni, cuit, phoneNumber } = orderData.shippingAddress;
+      const updateData: Partial<IUser> = {};
+
+      if (!targetUser.firstName && orderData.shippingAddress.firstName) {
+        updateData.firstName = orderData.shippingAddress.firstName;
+      }
+
+      if (!targetUser.lastName && orderData.shippingAddress.lastName) {
+        updateData.lastName = orderData.shippingAddress.lastName;
+      }
+
+      if (!targetUser.dni && dni) {
+        updateData.dni = dni;
+      }
+
+      if (!targetUser.cuit && cuit) {
+        updateData.cuit = cuit;
+      }
+
+      if (!targetUser.phone && phoneNumber) {
+        updateData.phone = phoneNumber;
+      }
+
+      if (Object.keys(updateData).length > 0) {
+        await User.findByIdAndUpdate(orderData.userId, { $set: updateData }, { session });
+      }
+
       // Validar que hay items en la orden
       if (!orderData.items || orderData.items.length === 0) {
         throw new AppError('La orden debe tener al menos un item.', 400, 'fail');
@@ -1202,6 +1230,47 @@ export class OrderService {
 
       // Actualizar dirección de envío si se proporciona
       if (updateData.shippingAddress) {
+        // Verificar y actualizar el usuario si falta dni, cuit o phone
+        const user = await User.findById(order.user).session(session);
+        if (!user) {
+          throw new AppError('Usuario no encontrado', 404, 'fail');
+        }
+
+        const { dni, cuit, phoneNumber } = updateData.shippingAddress;
+        const userUpdateData: Partial<IUser> = {};
+
+        if (!user.firstName && updateData.shippingAddress.firstName) {
+          userUpdateData.firstName = updateData.shippingAddress.firstName;
+        }
+
+        if (!user.lastName && updateData.shippingAddress.lastName) {
+          userUpdateData.lastName = updateData.shippingAddress.lastName;
+        }
+
+        if (!user.dni && dni) {
+          userUpdateData.dni = dni;
+        }
+
+        if (!user.cuit && cuit) {
+          userUpdateData.cuit = cuit;
+        }
+
+        if (!user.phone && phoneNumber) {
+          userUpdateData.phone = phoneNumber;
+        }
+
+        if (Object.keys(userUpdateData).length > 0) {
+          await User.findByIdAndUpdate(order.user, { $set: userUpdateData }, { session });
+
+          logger.info('Datos de usuario actualizados automáticamente desde dirección de envío', {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            userId: order.user.toString(),
+            updatedFields: userUpdateData,
+            updatedBy: userId?.toString(),
+          });
+        }
+
         // Crear nueva dirección con los datos actualizados
         const updatedAddress = {
           ...updateData.shippingAddress,
@@ -1210,6 +1279,55 @@ export class OrderService {
 
         const newShippingAddress = await this.createShippingAddress(updatedAddress, order.user, session);
         order.shippingAddress = newShippingAddress;
+
+        // Lógica mejorada para actualización de CUIT en la dirección
+        // Manejar casos: CUIT nuevo, CUIT diferente, CUIT eliminado
+        const addressCuit = updateData.shippingAddress.cuit;
+        const userCuit = user.cuit;
+
+        if (addressCuit !== undefined) {
+          // Si se proporciona un CUIT en la dirección (puede ser string o undefined)
+          const createdAddress = await Address.findById(newShippingAddress).session(session);
+          if (createdAddress) {
+            let shouldUpdateAddress = false;
+            let logMessage = '';
+
+            if (addressCuit === '' || addressCuit === null) {
+              // CUIT vacío - remover el campo del documento Address
+              createdAddress.set('cuit', undefined);
+              shouldUpdateAddress = true;
+              logMessage = 'CUIT removido de la dirección de envío';
+            } else if (!userCuit) {
+              // Usuario sin CUIT - el CUIT va solo en la dirección
+              createdAddress.cuit = addressCuit;
+              shouldUpdateAddress = true;
+              logMessage = 'CUIT establecido en la dirección de envío (usuario sin CUIT)';
+            } else if (addressCuit !== userCuit) {
+              // CUIT diferente al del usuario - actualizar solo la dirección
+              createdAddress.cuit = addressCuit;
+              shouldUpdateAddress = true;
+              logMessage = 'CUIT actualizado en la dirección de envío (diferente al del usuario)';
+            } else {
+              // CUIT igual al del usuario - mantener consistencia
+              createdAddress.cuit = addressCuit;
+              shouldUpdateAddress = true;
+              logMessage = 'CUIT sincronizado en la dirección de envío (igual al del usuario)';
+            }
+
+            if (shouldUpdateAddress) {
+              await createdAddress.save({ session });
+
+              logger.info(logMessage, {
+                orderId: order._id,
+                orderNumber: order.orderNumber,
+                addressId: newShippingAddress.toString(),
+                userCuit: userCuit || 'no-set',
+                addressCuit: addressCuit || 'removed',
+                updatedBy: userId?.toString(),
+              });
+            }
+          }
+        }
       }
 
       // Actualizar campos de entrega si se proporcionan
@@ -1229,7 +1347,20 @@ export class OrderService {
           if (updateData.declaredShippingAmount !== undefined) {
             currentAddress.declaredShippingAmount = updateData.declaredShippingAmount;
           }
+
           await currentAddress.save({ session });
+
+          logger.info('Dirección de envío actualizada', {
+            orderId: order._id,
+            orderNumber: order.orderNumber,
+            updatedFields: {
+              ...(updateData.deliveryWindow !== undefined && { deliveryWindow: updateData.deliveryWindow }),
+              ...(updateData.declaredShippingAmount !== undefined && {
+                declaredShippingAmount: updateData.declaredShippingAmount,
+              }),
+            },
+            updatedBy: userId?.toString(),
+          });
         }
       }
 

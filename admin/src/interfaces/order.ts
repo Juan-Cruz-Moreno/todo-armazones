@@ -72,6 +72,7 @@ export interface ShippingAddress {
   email: string;
   phoneNumber: string;
   dni: string;
+  cuit?: string;
   streetAddress: string;
   city: string;
   state: string;

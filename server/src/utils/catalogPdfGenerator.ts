@@ -57,11 +57,11 @@ export async function generateCatalogPDF(catalogData: CatalogDataDto): Promise<B
 
   // Configurar el contenido con mejor manejo de imágenes
   await page.setContent(html, {
-    waitUntil: ['networkidle0', 'domcontentloaded'],
+    waitUntil: 'domcontentloaded',
   });
 
   // Esperar un poco más para que las imágenes se carguen completamente
-  await new Promise((resolve) => setTimeout(resolve, 5000));
+  await new Promise((resolve) => setTimeout(resolve, 10000));
 
   const pdfOptions: PDFOptions = {
     format: 'A4',

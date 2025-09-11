@@ -18,6 +18,11 @@ interface UserState {
   userByEmail: IUser | null;
   loadingUserByEmail: boolean;
   errorUserByEmail: string | null;
+  // Nuevos campos para búsqueda
+  searchResults: IUser[];
+  searchNextCursor: string | null;
+  searchLoading: boolean;
+  searchError: string | null;
 }
 
 const initialState: UserState = {
@@ -28,6 +33,11 @@ const initialState: UserState = {
   userByEmail: null,
   loadingUserByEmail: false,
   errorUserByEmail: null,
+  // Inicializar nuevos campos para búsqueda
+  searchResults: [],
+  searchNextCursor: null,
+  searchLoading: false,
+  searchError: null,
 };
 
 export const fetchUsers = createAsyncThunk<
@@ -61,6 +71,28 @@ export const fetchUserByEmail = createAsyncThunk<
     });
     if (res.data.status !== "success" || !res.data.data) {
       return rejectWithValue(res.data.message || "No se encontró el usuario");
+    }
+    return res.data.data;
+  } catch (err) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
+// Nuevo thunk para búsqueda flexible de usuarios
+export const searchUsers = createAsyncThunk<
+  IGetUsersPaginatedResponse,
+  { query: string; fields?: string; limit?: number; cursor?: string },
+  { rejectValue: string }
+>("users/searchUsers", async ({ query, fields, limit = 10, cursor }, { rejectWithValue }) => {
+  try {
+    const params: { query: string; fields?: string; limit: number; cursor?: string } = { query, limit };
+    if (fields) params.fields = fields;
+    if (cursor) params.cursor = cursor;
+    const res = await axiosInstance.get<
+      ApiResponse<IGetUsersPaginatedResponse>
+    >("/users/search", { params });
+    if (res.data.status !== "success" || !res.data.data) {
+      return rejectWithValue(res.data.message || "Error al buscar usuarios");
     }
     return res.data.data;
   } catch (err) {
@@ -113,6 +145,12 @@ const userSlice = createSlice({
       state.userByEmail = null;
       state.loadingUserByEmail = false;
       state.errorUserByEmail = null;
+    },
+    resetSearch: (state) => {
+      state.searchResults = [];
+      state.searchNextCursor = null;
+      state.searchError = null;
+      state.searchLoading = false;
     },
   },
   extraReducers: (builder) => {
@@ -175,9 +213,29 @@ const userSlice = createSlice({
       .addCase(createUserByAdmin.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "No se pudo crear el usuario";
+      })
+      // searchUsers
+      .addCase(searchUsers.pending, (state) => {
+        state.searchLoading = true;
+        state.searchError = null;
+      })
+      .addCase(searchUsers.fulfilled, (state, action) => {
+        state.searchLoading = false;
+        state.searchError = null;
+        // Si es la primera página (sin cursor), reemplaza. Si no, acumula.
+        if (action.meta.arg && action.meta.arg.cursor) {
+          state.searchResults = [...state.searchResults, ...action.payload.users];
+        } else {
+          state.searchResults = action.payload.users;
+        }
+        state.searchNextCursor = action.payload.nextCursor;
+      })
+      .addCase(searchUsers.rejected, (state, action) => {
+        state.searchLoading = false;
+        state.searchError = action.payload || "Error al buscar usuarios";
       });
   },
 });
 
-export const { resetUsers } = userSlice.actions;
+export const { resetUsers, resetSearch } = userSlice.actions;
 export default userSlice.reducer;
