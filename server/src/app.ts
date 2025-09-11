@@ -21,15 +21,7 @@ app.use(helmet());
 app.use(
   cors({
     // Allow all origins
-    origin: [
-      "https://todoarmazonesarg.com",
-      // 'https://tienda.todoarmazonesarg.com',
-      "https://admin.todoarmazonesarg.com",
-      "https://todo-armazones.vercel.app/",
-      "https://todo-armazones-client.vercel.app/",
-      "http://localhost:3000",
-      "http://localhost:3001",
-    ],
+    origin: ["http://localhost:3000", "http://localhost:3001"],
     credentials: true,
   })
 );
