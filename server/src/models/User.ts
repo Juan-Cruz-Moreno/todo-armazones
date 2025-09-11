@@ -47,9 +47,7 @@ const userSchema = new Schema<IUserDocument>(
 // Creación del modelo de Mongoose
 const User = model<IUserDocument>('User', userSchema);
 
-// Agregar índices para búsquedas eficientes en campos de texto
-userSchema.index({ firstName: 'text' });
-userSchema.index({ lastName: 'text' });
-userSchema.index({ displayName: 'text' });
+// Agregar índice compuesto de texto para búsquedas eficientes en campos de nombre
+userSchema.index({ firstName: 'text', lastName: 'text', displayName: 'text' });
 
 export default User;
