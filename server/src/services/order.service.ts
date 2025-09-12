@@ -2139,7 +2139,7 @@ export class OrderService {
       const dollar = await Dollar.findOne();
       if (dollar) {
         order.totalAmountARS = order.totalAmount * dollar.value;
-        
+
         logger.info('Total ARS recalculado', {
           orderId: order._id.toString(),
           orderNumber: order.orderNumber,
