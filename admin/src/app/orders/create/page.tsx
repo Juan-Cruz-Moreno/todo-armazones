@@ -109,13 +109,6 @@ function CreateOrderPage() {
     clearSearchResults();
   };
 
-  const handleAddItemsSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (addItemsModal.productQuery) {
-      searchProducts(addItemsModal.productQuery);
-    }
-  };
-
   // Función para actualizar la cantidad de una variante en el modal
   const handleVariantQuantityChange = (variantId: string, quantity: number) => {
     setAddItemsModal((prev) => ({
@@ -172,6 +165,26 @@ function CreateOrderPage() {
     const { name, value } = e.target;
     setAddress((prev) => ({ ...prev, [name]: value }));
   };
+
+  // Auto-switch to valid payment method when shipping method changes
+  useEffect(() => {
+    if (
+      shippingMethod === ShippingMethod.ParcelCompany &&
+      paymentMethod === PaymentMethod.CashOnDelivery
+    ) {
+      setPaymentMethod(PaymentMethod.BankTransfer);
+    }
+  }, [shippingMethod, paymentMethod]);
+
+  // Auto-switch to valid shipping method when payment method changes
+  useEffect(() => {
+    if (
+      paymentMethod === PaymentMethod.CashOnDelivery &&
+      shippingMethod === ShippingMethod.ParcelCompany
+    ) {
+      setShippingMethod(ShippingMethod.Motorcycle);
+    }
+  }, [paymentMethod, shippingMethod]);
 
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
@@ -279,7 +292,20 @@ function CreateOrderPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [userQuery, searchUsersByQuery, clearSearch]);
+  }, [userQuery]); // Solo dependemos del query, no de las funciones
+
+  // useEffect para búsqueda automática de productos con debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (addItemsModal.productQuery.trim()) {
+        searchProducts(addItemsModal.productQuery.trim());
+      } else {
+        clearSearchResults();
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [addItemsModal.productQuery]); // Solo dependemos del query, no de las funciones
 
   // Reset delivery type to HomeDelivery when shipping method changes to Motorcycle
   useEffect(() => {
@@ -416,32 +442,49 @@ function CreateOrderPage() {
               </label>
               <div className="flex flex-col gap-2">
                 {[PaymentMethod.BankTransfer, PaymentMethod.CashOnDelivery].map(
-                  (method) => (
-                    <label
-                      key={method}
-                      className="flex items-center gap-2 cursor-pointer"
-                    >
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value={method}
-                        checked={paymentMethod === method}
-                        onChange={() => setPaymentMethod(method)}
-                        className="radio border-[#e1e1e1] checked:bg-[#222222]"
-                      />
-                      <span className="text-[#222222] text-sm">
-                        {method === PaymentMethod.BankTransfer
-                          ? "Transferencia / Depósito bancario"
-                          : "Efectivo contra reembolso"}
-                        {method === PaymentMethod.BankTransfer && (
-                          <span className="text-xs text-[#7A7A7A]">
-                            {" "}
-                            (4% extra)
-                          </span>
-                        )}
-                      </span>
-                    </label>
-                  )
+                  (method) => {
+                    // Deshabilitar CashOnDelivery si el shipping method es ParcelCompany
+                    const isDisabled = method === PaymentMethod.CashOnDelivery && 
+                                     shippingMethod === ShippingMethod.ParcelCompany;
+                    
+                    return (
+                      <label
+                        key={method}
+                        className={`flex items-center gap-2 cursor-pointer ${
+                          isDisabled ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value={method}
+                          checked={paymentMethod === method}
+                          onChange={() => setPaymentMethod(method)}
+                          disabled={isDisabled}
+                          className="radio border-[#e1e1e1] checked:bg-[#222222] disabled:opacity-50"
+                        />
+                        <span className={`text-sm ${
+                          isDisabled ? 'text-gray-400' : 'text-[#222222]'
+                        }`}>
+                          {method === PaymentMethod.BankTransfer
+                            ? "Transferencia / Depósito bancario"
+                            : "Efectivo contra reembolso"}
+                          {method === PaymentMethod.BankTransfer && (
+                            <span className="text-xs text-[#7A7A7A]">
+                              {" "}
+                              (4% extra)
+                            </span>
+                          )}
+                          {isDisabled && (
+                            <span className="text-xs text-red-400">
+                              {" "}
+                              (No disponible con empresa de encomienda)
+                            </span>
+                          )}
+                        </span>
+                      </label>
+                    );
+                  }
                 )}
               </div>
             </div>
@@ -454,10 +497,16 @@ function CreateOrderPage() {
               <div className="flex flex-col gap-2">
                 {[ShippingMethod.Motorcycle, ShippingMethod.ParcelCompany].map(
                   (method) => {
+                    // Deshabilitar ParcelCompany si el payment method es CashOnDelivery
+                    const isDisabled = method === ShippingMethod.ParcelCompany && 
+                                     paymentMethod === PaymentMethod.CashOnDelivery;
+                    
                     return (
                       <label
                         key={method}
-                        className={`flex items-center gap-2 cursor-pointer`}
+                        className={`flex items-center gap-2 cursor-pointer ${
+                          isDisabled ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                       >
                         <input
                           type="radio"
@@ -465,9 +514,12 @@ function CreateOrderPage() {
                           value={method}
                           checked={shippingMethod === method}
                           onChange={() => setShippingMethod(method)}
-                          className="radio border-[#e1e1e1] checked:bg-[#222222]"
+                          disabled={isDisabled}
+                          className="radio border-[#e1e1e1] checked:bg-[#222222] disabled:opacity-50"
                         />
-                        <span className="text-[#222222] text-sm">
+                        <span className={`text-sm ${
+                          isDisabled ? 'text-gray-400' : 'text-[#222222]'
+                        }`}>
                           {method === ShippingMethod.Motorcycle
                             ? "Moto"
                             : "Transporte/Empresa de encomienda"}
@@ -475,6 +527,12 @@ function CreateOrderPage() {
                             {" "}
                             (Costo de envío extra a cargo del Cliente)
                           </span>
+                          {isDisabled && (
+                            <span className="text-xs text-red-400">
+                              {" "}
+                              (No disponible con pago contra reembolso)
+                            </span>
+                          )}
                         </span>
                       </label>
                     );
@@ -774,8 +832,8 @@ function CreateOrderPage() {
             </div>
 
             <div className="p-6">
-              {/* Formulario de búsqueda */}
-              <form onSubmit={handleAddItemsSearch} className="mb-6">
+              {/* Campo de búsqueda automática */}
+              <div className="mb-6">
                 <label className="block text-sm text-[#7A7A7A] mb-2">
                   Buscar producto o SKU
                 </label>
@@ -793,12 +851,6 @@ function CreateOrderPage() {
                     className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
                     style={{ borderColor: "#e1e1e1" }}
                   />
-                  <button
-                    type="submit"
-                    className="btn rounded-none shadow-none border-none h-12 px-4 text-white bg-[#222222] hover:bg-[#111111]"
-                  >
-                    Buscar
-                  </button>
                   <button
                     type="button"
                     className="btn rounded-none shadow-none border-none h-12 px-4 text-[#222222] bg-[#e0e0e0] hover:bg-[#d0d0d0]"
@@ -818,7 +870,7 @@ function CreateOrderPage() {
                     Buscando: &quot;{addItemsModal.productQuery}&quot;
                   </p>
                 )}
-              </form>
+              </div>
 
               {/* Productos actualmente en la orden */}
               {selectedProducts.length > 0 && (

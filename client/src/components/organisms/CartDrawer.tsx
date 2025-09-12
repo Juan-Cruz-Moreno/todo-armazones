@@ -50,16 +50,22 @@ const CartDrawer: React.FC = () => {
     }
   }, [user]);
 
-  // Handlers simplificados usando el nuevo hook
+  // Handlers con protección contra múltiples requests simultáneos
   const handleIncrement = async (productVariantId: string) => {
+    // Doble protección: evitar múltiples requests si ya está en loading
+    if (getItemLoading("incrementItem", productVariantId)) return;
     await incrementItem({ productVariantId });
   };
 
   const handleDecrement = async (productVariantId: string) => {
+    // Doble protección: evitar múltiples requests si ya está en loading
+    if (getItemLoading("decrementItem", productVariantId)) return;
     await decrementItem({ productVariantId });
   };
 
   const handleRemoveItem = async (productVariantId: string) => {
+    // Doble protección: evitar múltiples requests si ya está en loading
+    if (getItemLoading("removeItem", productVariantId)) return;
     await removeItem({ productVariantId });
   };
 

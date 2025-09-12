@@ -12,15 +12,23 @@ import LoadingSpinner from "../atoms/LoadingSpinner";
 import { addItemToCart } from "@/redux/slices/cartSlice";
 import { motion } from "framer-motion";
 
+interface ProductCardProps extends Product {
+  ariaAttributes?: {
+    role?: string;
+    "aria-colindex"?: number;
+    "aria-label"?: string;
+  } & React.HTMLAttributes<HTMLDivElement>;
+}
+
 const ProductCard = ({
   slug,
   thumbnail,
   category,
   subcategory,
   productModel,
-  sku,
   variants,
-}: Product) => {
+  ariaAttributes,
+}: ProductCardProps) => {
   const { addItem, clearSpecificError, getAddItemLoading, getAddItemError } =
     useCart();
 
@@ -71,7 +79,10 @@ const ProductCard = ({
   const addError = selectedVariant ? getAddItemError(selectedVariant.id) : null;
 
   return (
-    <div className="card card-border border-[#e1e1e1] bg-white rounded-none">
+    <div 
+      className="card card-border border-[#e1e1e1] bg-white rounded-none"
+      {...ariaAttributes}
+    >
       <motion.div
         className="card-body"
         whileHover={{ scale: 1.03 }}
@@ -115,7 +126,11 @@ const ProductCard = ({
           </h2>
         </Link>
         <p className="text-xs font-bold text-gray-800">
-          {formatCurrency(selectedVariant?.priceUSD ?? variants[0]?.priceUSD, "en-US", "USD")}
+          {formatCurrency(
+            selectedVariant?.priceUSD ?? variants[0]?.priceUSD,
+            "en-US",
+            "USD"
+          )}
         </p>
         <div className="text-sm text-gray-500 flex items-center gap-2">
           {uniqueColors.map((c) => {

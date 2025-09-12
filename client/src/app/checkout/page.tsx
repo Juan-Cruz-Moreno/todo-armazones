@@ -7,7 +7,7 @@ import { addressSchema, AddressFormData } from "@/schemas/order.schema";
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrders } from "@/hooks/useOrders";
-import { CartSyncError, createOrder } from "@/redux/slices/orderSlice";
+import { CartSyncError, FinalStockVerificationError, createOrder } from "@/redux/slices/orderSlice";
 import type { CreateOrderPayload } from "@/interfaces/order";
 import { formatCurrency } from "@/utils/formatCurrency";
 import {
@@ -33,7 +33,7 @@ const CheckoutPage = () => {
     PaymentMethod.CashOnDelivery
   );
   const [deliveryType, setDeliveryType] = useState(DeliveryType.HomeDelivery);
-  const [syncError, setSyncError] = useState<CartSyncError | null>(null);
+  const [syncError, setSyncError] = useState<CartSyncError | FinalStockVerificationError | null>(null);
 
   const {
     register,
@@ -168,6 +168,16 @@ const CheckoutPage = () => {
       ) {
         setSyncError(result.payload as CartSyncError);
         fetchCart();
+      }
+      // Si el error es de tipo FinalStockVerificationError
+      else if (
+        result.payload &&
+        typeof result.payload === "object" &&
+        "code" in result.payload &&
+        result.payload.code === 'FINAL_STOCK_VERIFICATION_FAILED'
+      ) {
+        setSyncError(result.payload as FinalStockVerificationError);
+        fetchCart(); // Refresca el carrito para mostrar stock actualizado
       }
     }
   };
@@ -732,39 +742,62 @@ const CheckoutPage = () => {
       {/* Modal de sincronización de carrito */}
       <dialog id="cart_sync_modal" className="modal" ref={cartSyncModalRef}>
         <div className="modal-box bg-white text-[#111111] rounded-none">
-          <h3 className="font-bold text-lg">El carrito fue actualizado</h3>
+          <h3 className="font-bold text-lg">
+            {'changes' in (syncError || {}) ? 'El carrito fue actualizado' : 'Stock insuficiente'}
+          </h3>
           <p className="py-4">{syncError?.message}</p>
-          <ul className="py-2">
-            {syncError?.changes.map((change, idx) => {
-              const variant = change.productVariant;
-              return (
-                <li key={idx} className="mb-2 flex items-center gap-3">
-                  {variant.images?.[0] && (
-                    <Image
-                      src={
-                        variant.images[0]
-                          ? `${process.env.NEXT_PUBLIC_API_URL}/${variant.thumbnail}`
-                          : "/placeholder.png"
-                      }
-                      width={40}
-                      height={40}
-                      alt={variant.product.productModel}
-                      className="w-10 h-10 object-cover rounded-none"
-                    />
-                  )}
-                  <div>
-                    <b>
-                      {variant.product.productModel} ({variant.product.sku})
-                    </b>
-                    :&nbsp;
-                    {change.removed
-                      ? "Eliminado por falta de stock"
-                      : `Cantidad ajustada de ${change.oldQuantity} a ${change.newQuantity} (stock disponible: ${change.stock})`}
+          
+          {/* Mostrar cambios del carrito si es CartSyncError */}
+          {'changes' in (syncError || {}) && (
+            <ul className="py-2">
+              {(syncError as CartSyncError)?.changes.map((change, idx) => {
+                const variant = change.productVariant;
+                return (
+                  <li key={idx} className="mb-2 flex items-center gap-3">
+                    {variant.images?.[0] && (
+                      <Image
+                        src={
+                          variant.images[0]
+                            ? `${process.env.NEXT_PUBLIC_API_URL}/${variant.thumbnail}`
+                            : "/placeholder.png"
+                        }
+                        width={40}
+                        height={40}
+                        alt={variant.product.productModel}
+                        className="w-10 h-10 object-cover rounded-none"
+                      />
+                    )}
+                    <div>
+                      <b>
+                        {variant.product.productModel} ({variant.product.sku})
+                      </b>
+                      :&nbsp;
+                      {change.removed
+                        ? "Eliminado por falta de stock"
+                        : `Cantidad ajustada de ${change.oldQuantity} a ${change.newQuantity} (stock disponible: ${change.stock})`}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          
+          {/* Mostrar conflictos de stock si es FinalStockVerificationError */}
+          {'code' in (syncError || {}) && (syncError as FinalStockVerificationError)?.code === 'FINAL_STOCK_VERIFICATION_FAILED' && (
+            <ul className="py-2">
+              {(syncError as FinalStockVerificationError)?.stockConflicts.map((conflict, idx) => (
+                <li key={idx} className="mb-2 p-3 bg-red-50 border border-red-200 rounded">
+                  <div className="font-semibold text-red-800">
+                    {conflict.productInfo}
+                  </div>
+                  <div className="text-sm text-red-600">
+                    Solicitado: {conflict.requestedQuantity}, Disponible: {conflict.availableStock}
                   </div>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          )}
+          
           <div className="modal-action">
             <button
               className="btn rounded-none shadow-none border-none transition-colors duration-300 ease-in-out h-12 text-base px-6 w-full"

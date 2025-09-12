@@ -55,6 +55,17 @@ export class OrderController {
         return; // IMPORTANTE: retornar aquí para evitar continuar
       }
 
+      // Manejo especial para verificación final de stock
+      if (error instanceof AppError && error.details?.code === 'FINAL_STOCK_VERIFICATION_FAILED') {
+        res.status(409).json({
+          status: 'fail',
+          message: error.message,
+          code: 'FINAL_STOCK_VERIFICATION_FAILED',
+          stockConflicts: error.details.stockConflicts,
+        });
+        return;
+      }
+
       // Envolver errores desconocidos en AppError para mantener consistencia
       if (!(error instanceof AppError)) {
         return next(

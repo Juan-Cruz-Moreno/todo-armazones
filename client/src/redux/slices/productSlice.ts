@@ -44,7 +44,8 @@ export const fetchProducts = createAsyncThunk<
       query.append("subcategorySlug", params.subcategorySlug);
     if (params?.cursor) query.append("cursor", params.cursor);
     if (params?.limit) query.append("limit", params.limit.toString());
-    if (params?.inStock !== undefined) query.append("inStock", params.inStock.toString());
+    if (params?.inStock !== undefined)
+      query.append("inStock", params.inStock.toString());
 
     const url = `/products${query.toString() ? "?" + query.toString() : ""}`;
     const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(

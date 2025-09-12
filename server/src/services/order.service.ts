@@ -74,6 +74,47 @@ export class OrderService {
     return cart;
   }
 
+  // Helper: Verificación final atómica de stock dentro de transacción
+  private async verifyFinalStockAvailability(cartItems: ICartItem[], session: mongoose.ClientSession) {
+    const stockConflicts: Array<{
+      productVariantId: string;
+      requestedQuantity: number;
+      availableStock: number;
+      productInfo: string;
+    }> = [];
+
+    for (const item of cartItems) {
+      // Obtener stock actualizado dentro de la transacción
+      const productVariant = await ProductVariant.findById(item.productVariant).session(session);
+
+      if (!productVariant) {
+        throw new AppError(`El producto ${item.productVariant} ya no está disponible.`, 404, 'fail');
+      }
+
+      if (productVariant.stock < item.quantity) {
+        stockConflicts.push({
+          productVariantId: item.productVariant.toString(),
+          requestedQuantity: item.quantity,
+          availableStock: productVariant.stock,
+          productInfo: `Variante ${item.productVariant}`,
+        });
+      }
+    }
+
+    if (stockConflicts.length > 0) {
+      throw new AppError(
+        `Stock insuficiente para ${stockConflicts.length} producto(s). Actualiza tu carrito e intenta nuevamente.`,
+        409,
+        'fail',
+        true,
+        {
+          code: 'FINAL_STOCK_VERIFICATION_FAILED',
+          stockConflicts,
+        },
+      );
+    }
+  }
+
   // Helper: Crea la dirección de envío
   private async createShippingAddress(address: IAddress, userId: Types.ObjectId, session: mongoose.ClientSession) {
     const newAddress = await Address.create([{ ...address, userId }], {
@@ -478,6 +519,9 @@ export class OrderService {
 
       // Validar el carrito
       const cart = await this.getValidatedCart(userId, session);
+
+      // VERIFICACIÓN ATÓMICA FINAL DE STOCK dentro de la transacción
+      await this.verifyFinalStockAvailability(cart.items, session);
 
       // Crear dirección de envío
       const shippingAddressId = await this.createShippingAddress(orderData.shippingAddress, userId, session);
@@ -2069,7 +2113,7 @@ export class OrderService {
 
   /**
    * Recalcula todos los totales de la orden
-   * Calcula subtotal, ganancias, COGS y total final
+   * Calcula subtotal, ganancias, COGS, total final y totalAmountARS
    */
   private async recalculateOrderTotals(order: IOrderDocument): Promise<void> {
     // Calcular subtotal
@@ -2089,6 +2133,34 @@ export class OrderService {
       order.bankTransferExpense = bankTransferExpense;
     }
     order.totalAmount = totalAmount;
+
+    // Recalcular totalAmountARS con el valor actual del dólar
+    try {
+      const dollar = await Dollar.findOne();
+      if (dollar) {
+        order.totalAmountARS = order.totalAmount * dollar.value;
+        
+        logger.info('Total ARS recalculado', {
+          orderId: order._id.toString(),
+          orderNumber: order.orderNumber,
+          totalAmountUSD: order.totalAmount,
+          dollarValue: dollar.value,
+          totalAmountARS: order.totalAmountARS,
+        });
+      } else {
+        logger.warn('No se pudo recalcular totalAmountARS: valor del dólar no encontrado', {
+          orderId: order._id.toString(),
+          orderNumber: order.orderNumber,
+          totalAmountUSD: order.totalAmount,
+        });
+      }
+    } catch (error) {
+      logger.error('Error al recalcular totalAmountARS', {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        error,
+      });
+    }
   }
 
   /**

@@ -199,6 +199,19 @@ const EditOrderPage = () => {
     }
   }, [form?.shippingMethod]);
 
+  // useEffect para búsqueda automática de productos con debounce
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (addItemsModal.productQuery.trim()) {
+        searchProducts(addItemsModal.productQuery.trim());
+      } else {
+        clearSearchResults();
+      }
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [addItemsModal.productQuery]); // Solo dependemos del query, no de las funciones
+
   // Funciones helper para manejar errores
   const addError = (
     message: string,
@@ -1016,13 +1029,6 @@ const EditOrderPage = () => {
   const handleCloseAddItemsModal = () => {
     setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
     clearSearchResults();
-  };
-
-  const handleAddItemsSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (addItemsModal.productQuery) {
-      handleProductSearch(addItemsModal.productQuery);
-    }
   };
 
   // Función para actualizar la cantidad de una variante en el modal
@@ -2083,8 +2089,8 @@ const EditOrderPage = () => {
             </div>
 
             <div className="p-6">
-              {/* Formulario de búsqueda */}
-              <form onSubmit={handleAddItemsSearch} className="mb-6">
+              {/* Campo de búsqueda automática */}
+              <div className="mb-6">
                 <label className="block text-sm text-[#7A7A7A] mb-2">
                   Buscar producto o SKU
                 </label>
@@ -2102,12 +2108,6 @@ const EditOrderPage = () => {
                     className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
                     style={{ borderColor: "#e1e1e1" }}
                   />
-                  <button
-                    type="submit"
-                    className="btn rounded-none shadow-none border-none h-12 px-4 text-white bg-[#222222] hover:bg-[#111111]"
-                  >
-                    Buscar
-                  </button>
                   <button
                     type="button"
                     className="btn rounded-none shadow-none border-none h-12 px-4 text-[#222222] bg-[#e0e0e0] hover:bg-[#d0d0d0]"
@@ -2128,7 +2128,7 @@ const EditOrderPage = () => {
                     &quot;Limpiar&quot; para nueva búsqueda.
                   </p>
                 )}
-              </form>
+              </div>
 
               {/* Estado de carga */}
               {searchLoading && (

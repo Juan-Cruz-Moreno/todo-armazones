@@ -50,11 +50,22 @@ export interface CartSyncError {
   cart: import("@/interfaces/cart").Cart;
 }
 
+export interface FinalStockVerificationError {
+  message: string;
+  code: 'FINAL_STOCK_VERIFICATION_FAILED';
+  stockConflicts: Array<{
+    productVariantId: string;
+    requestedQuantity: number;
+    availableStock: number;
+    productInfo: string;
+  }>;
+}
+
 // Thunk para crear una orden
 export const createOrder = createAsyncThunk<
   Order,
   CreateOrderPayload,
-  { rejectValue: string | CartSyncError }
+  { rejectValue: string | CartSyncError | FinalStockVerificationError }
 >("orders/createOrder", async (payload, thunkAPI) => {
   try {
     const res = await axiosInstance.post<ApiResponse<Order>>(
@@ -69,10 +80,10 @@ export const createOrder = createAsyncThunk<
   } catch (error: unknown) {
     // Usar los helpers de api.ts para verificar si es un error de API
     if (isApiError(error) && error.response?.status === 409) {
-      // Error 409 es el código para CartSyncError
+      // Error 409 es el código para CartSyncError y FinalStockVerificationError
       const data = error.response.data;
       
-      // Verificar que tiene la estructura esperada del CartSyncError
+      // Verificar si es un CartSyncError (tiene changes y cart)
       if (
         'changes' in data &&
         'cart' in data &&
@@ -86,6 +97,27 @@ export const createOrder = createAsyncThunk<
           message: data.message,
           changes: data.changes as CartSyncChange[],
           cart: data.cart as import("@/interfaces/cart").Cart,
+        });
+      }
+      
+      // Verificar si es un FinalStockVerificationError (tiene code y stockConflicts)
+      if (
+        'code' in data &&
+        data.code === 'FINAL_STOCK_VERIFICATION_FAILED' &&
+        'message' in data &&
+        typeof data.message === "string" &&
+        'stockConflicts' in data &&
+        Array.isArray(data.stockConflicts)
+      ) {
+        return thunkAPI.rejectWithValue({
+          message: data.message,
+          code: 'FINAL_STOCK_VERIFICATION_FAILED' as const,
+          stockConflicts: data.stockConflicts as Array<{
+            productVariantId: string;
+            requestedQuantity: number;
+            availableStock: number;
+            productInfo: string;
+          }>,
         });
       }
     }
@@ -128,7 +160,7 @@ interface OrdersState {
   orders: Order[];
   nextCursor: string | null;
   loading: boolean;
-  error: string | null | CartSyncError;
+  error: string | null | CartSyncError | FinalStockVerificationError;
   statusFilter?: OrderStatus;
 }
 

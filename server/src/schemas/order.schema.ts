@@ -14,7 +14,7 @@ const baseAddressSchema = z.object({
     .string()
     .min(1, 'El número de teléfono es obligatorio')
     .max(20, 'El número de teléfono no puede exceder los 20 caracteres'),
-  dni: z.string().max(20, 'El DNI no puede exceder los 20 caracteres').optional(), // Cambiado a opcional para coincidir con IAddress
+  dni: z.string().min(1, 'DNI requerido').max(20, 'El DNI no puede exceder los 20 caracteres'),
   cuit: z.string().optional(),
   city: z.string().min(1, 'La ciudad es obligatoria').max(50, 'La ciudad no puede exceder los 50 caracteres'),
   state: z.string().min(1, 'El estado es obligatorio').max(50, 'El estado no puede exceder los 50 caracteres'),
