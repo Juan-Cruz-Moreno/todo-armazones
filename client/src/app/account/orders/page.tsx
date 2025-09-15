@@ -102,29 +102,82 @@ const OrdersPage = () => {
       )}
 
       {/* Filtro */}
-      <div className="flex justify-between items-center mb-4">
-        <fieldset className="fieldset">
-          <legend className="fieldset-legend text-[#666666]">
-            Filtrar por estado
-          </legend>
-          <select
-            className="select rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] px-3 py-2"
-            value={localStatusFilter}
-            onChange={(e) => {
-              setLocalStatusFilter(e.target.value as OrderStatus | "");
-            }}
-          >
-            <option value="">Todos</option>
-            <option value={OrderStatus.Processing}>Procesando</option>
-            <option value={OrderStatus.OnHold}>En espera</option>
-            <option value={OrderStatus.PendingPayment}>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span className="text-[#666666] text-sm">Filtrar por estado:</span>
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                !localStatusFilter
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter("")}
+            >
+              Todos
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                localStatusFilter === OrderStatus.Processing
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter(OrderStatus.Processing)}
+            >
+              Procesando
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                localStatusFilter === OrderStatus.OnHold
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter(OrderStatus.OnHold)}
+            >
+              En espera
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                localStatusFilter === OrderStatus.PendingPayment
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter(OrderStatus.PendingPayment)}
+            >
               Pendiente de pago
-            </option>
-            <option value={OrderStatus.Completed}>Completado</option>
-            <option value={OrderStatus.Cancelled}>Cancelado</option>
-            <option value={OrderStatus.Refunded}>Reembolsado</option>
-          </select>
-        </fieldset>
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                localStatusFilter === OrderStatus.Completed
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter(OrderStatus.Completed)}
+            >
+              Completado
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                localStatusFilter === OrderStatus.Cancelled
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter(OrderStatus.Cancelled)}
+            >
+              Cancelado
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                localStatusFilter === OrderStatus.Refunded
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setLocalStatusFilter(OrderStatus.Refunded)}
+            >
+              Reembolsado
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Tabla */}

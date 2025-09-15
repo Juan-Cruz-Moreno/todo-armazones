@@ -9,4 +9,5 @@ export interface IProduct {
   productModel: string;
   sku: string;
   size?: string;
+  description?: string;
 }

@@ -134,6 +134,7 @@ export class ProductService {
           ...(populatedProduct!.size !== undefined && {
             size: populatedProduct!.size,
           }),
+          description: populatedProduct!.description ?? '',
         };
 
         return { product: productResponse, variants: variantResponses };
@@ -281,7 +282,7 @@ export class ProductService {
       const products = await Product.find(query)
         .sort({ _id: 1 })
         .limit(limit)
-        .select('slug thumbnail primaryImage category subcategory productModel sku size')
+        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
@@ -315,6 +316,7 @@ export class ProductService {
           productModel: product.productModel,
           sku: product.sku,
           ...(product.size !== undefined && { size: product.size }),
+          description: product.description ?? '',
           variants: variantsMap.get(product._id.toString()) ?? [],
         };
       });
@@ -347,7 +349,7 @@ export class ProductService {
   }> {
     try {
       const product = await Product.findOne({ slug })
-        .select('slug thumbnail primaryImage category subcategory productModel sku size')
+        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
@@ -373,6 +375,7 @@ export class ProductService {
         productModel: product.productModel,
         sku: product.sku,
         size: product.size ?? '',
+        description: product.description ?? '',
         variants: this.mapVariants(variants as IProductVariantDocument[]),
       };
 
@@ -430,6 +433,7 @@ export class ProductService {
           productModel: product.productModel,
           sku: product.sku,
           size: product.size ?? '',
+          description: product.description ?? '',
           variants: this.mapVariants(updatedVariants),
         } as ProductListItemDto;
       });
@@ -450,16 +454,36 @@ export class ProductService {
     }
   }
 
-  public async searchProducts(q: string): Promise<SearchProductsResponseDto> {
+  public async searchProducts(q: string, inStock?: boolean): Promise<SearchProductsResponseDto> {
     try {
-      const products = await Product.find({
+      const query: FilterQuery<IProductDocument> = {
         $or: [{ productModel: { $regex: q, $options: 'i' } }, { sku: { $regex: q, $options: 'i' } }],
-      })
-        .select('slug thumbnail primaryImage category subcategory productModel sku size')
+      };
+
+      // Si se solicita filtrar por stock, obtener productos que tienen variantes con stock
+      let filteredProductIds: Types.ObjectId[] | undefined;
+      if (inStock === true) {
+        const productsWithStock = await ProductVariant.aggregate([
+          { $match: { stock: { $gt: 0 } } },
+          { $group: { _id: '$product' } },
+          { $project: { _id: 1 } },
+        ]);
+        filteredProductIds = productsWithStock.map((item) => item._id);
+
+        // Si no hay productos con stock, retornar resultado vacío
+        if (filteredProductIds.length === 0) {
+          return { products: [] };
+        }
+
+        // Agregar filtro de productos con stock al query principal
+        query._id = { $in: filteredProductIds };
+      }
+
+      const products = await Product.find(query)
+        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
-
       const productIds = products.map((p) => p._id);
 
       const variantsByProduct = await ProductVariant.find({
@@ -475,7 +499,7 @@ export class ProductService {
         variantsMap.set(productId.toString(), this.mapVariants(variants as IProductVariantDocument[]));
       }
 
-      const result: ProductListItemDto[] = products.map((product) => {
+      let result: ProductListItemDto[] = products.map((product) => {
         const categoryInfo = this.mapCategories(product.category);
         const subcategoryInfo = this.mapSubcategory(product.subcategory);
 
@@ -489,9 +513,16 @@ export class ProductService {
           productModel: product.productModel,
           sku: product.sku,
           ...(product.size !== undefined && { size: product.size }),
+          description: product.description ?? '',
           variants: variantsMap.get(product._id.toString()) ?? [],
         };
       });
+
+      // Si se solicita filtrar por stock, hacer un filtro adicional en el resultado
+      // para asegurar que solo se incluyan productos con al menos una variante con stock
+      if (inStock === true) {
+        result = result.filter((product) => product.variants.some((variant) => variant.stock > 0));
+      }
 
       return { products: result };
     } catch (error) {
@@ -526,7 +557,7 @@ export class ProductService {
 
         // 2. Encontrar todos los productos que coinciden con los criterios
         const products = await Product.find(productQuery)
-          .select('_id productModel sku category subcategory')
+          .select('_id productModel sku category subcategory description')
           .session(session)
           .lean();
 

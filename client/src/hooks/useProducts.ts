@@ -37,7 +37,7 @@ export const useProducts = () => {
       inStock?: boolean;
     }) => dispatch(fetchProducts(params)),
     fetchProductBySlug: (slug: string) => dispatch(fetchProductBySlug(slug)),
-    searchProducts: (q: string) => dispatch(searchProducts(q)),
+    searchProducts: (q: string, inStock?: boolean) => dispatch(searchProducts({ q, inStock })),
     clearProductDetail: () => dispatch(clearProductDetail()),
     clearSearchResults: () => dispatch(clearSearchResults()),
   };

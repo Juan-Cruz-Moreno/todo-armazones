@@ -9,6 +9,7 @@ export interface CreateProductRequestDto {
   productModel: string;
   sku: string;
   size?: string;
+  description?: string;
 }
 
 export interface CreateProductResponseDto {
@@ -21,6 +22,7 @@ export interface CreateProductResponseDto {
   productModel: string;
   sku: string;
   size?: string;
+  description?: string;
 }
 
 export interface UpdateProductRequestDto {
@@ -31,6 +33,7 @@ export interface UpdateProductRequestDto {
   productModel?: string;
   sku?: string;
   size?: string;
+  description?: string;
 }
 
 // export interface UpdateProductResponseDto {
@@ -69,6 +72,7 @@ export interface ProductListItemDto {
   productModel: string;
   sku: string;
   size?: string;
+  description?: string;
   variants: ProductVariantSummaryDto[];
 }
 

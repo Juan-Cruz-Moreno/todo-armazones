@@ -73,12 +73,20 @@ export const fetchProductBySlug = createAsyncThunk<Product, string>(
 );
 
 // Search products
-export const searchProducts = createAsyncThunk<Product[], string>(
+export const searchProducts = createAsyncThunk<
+  Product[],
+  { q: string; inStock?: boolean }
+>(
   "products/searchProducts",
-  async (q, { rejectWithValue }) => {
+  async ({ q, inStock }, { rejectWithValue }) => {
     try {
+      const query = new URLSearchParams();
+      query.append("q", q);
+      if (inStock !== undefined) {
+        query.append("inStock", inStock.toString());
+      }
       const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(
-        `/products/search?q=${encodeURIComponent(q)}`
+        `/products/search?${query.toString()}`
       );
       return data.data!.products;
     } catch (error: unknown) {

@@ -34,6 +34,7 @@ export interface Product {
   productModel: string;
   sku: string;
   size?: string;
+  description?: string;
   variants: ProductVariant[];
 }
 

@@ -28,6 +28,7 @@ export default function CreateProductPage() {
     productModel: "",
     sku: "",
     size: "",
+    description: "",
   });
 
   const [variants, setVariants] = useState<
@@ -43,7 +44,7 @@ export default function CreateProductPage() {
   >({});
 
   // Handlers (idénticos al modal)
-  const handleProductChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProductChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setProduct((prev) => ({
       ...prev,
@@ -166,6 +167,7 @@ export default function CreateProductPage() {
         productModel: "",
         sku: "",
         size: "",
+        description: "",
       });
       setVariants([{ ...initialVariant }]);
       setPrimaryImageFile(null);
@@ -307,14 +309,23 @@ export default function CreateProductPage() {
             onChange={handleProductChange}
             required
           />
-          <label className="text-[#7A7A7A]">Tamaño</label>
+          <label className="text-[#7A7A7A]">Calibre</label>
           <input
             className="input input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
             name="size"
-            placeholder="Tamaño"
+            placeholder="Calibre"
             value={product.size}
             onChange={handleProductChange}
             required
+          />
+          <label className="text-[#7A7A7A]">Descripción (opcional)</label>
+          <textarea
+            className="textarea textarea-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
+            name="description"
+            placeholder="Descripción del producto"
+            value={product.description}
+            onChange={handleProductChange}
+            rows={3}
           />
           <div className="divider text-[#7A7A7A]">Variantes</div>
           {variants.map((variant, idx) => (
@@ -478,6 +489,10 @@ export default function CreateProductPage() {
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Tamaño:</span>
           <span className="ml-2">{product.size}</span>
+        </div>
+        <div className="mb-2 w-full">
+          <span className="font-semibold text-[#7A7A7A]">Descripción:</span>
+          <span className="ml-2">{product.description || "No especificada"}</span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Categorías:</span>

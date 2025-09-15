@@ -325,7 +325,15 @@ export class ProductController {
         } as ApiErrorResponse);
         return;
       }
-      const result = await this.productService.searchProducts(q);
+
+      // Convertir el parámetro inStock a boolean
+      const inStockParam = req.query.inStock as string | undefined;
+      let inStock: boolean | undefined;
+      if (inStockParam !== undefined) {
+        inStock = inStockParam.toLowerCase() === 'true';
+      }
+
+      const result = await this.productService.searchProducts(q, inStock);
       res.status(200).json({
         status: 'success',
         data: result,

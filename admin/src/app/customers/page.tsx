@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useRef, useCallback, useState } from "react";
+import Link from "next/link";
 import { useUsers } from "@/hooks/useUsers";
 import { debounce } from "@/utils/debounce";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
@@ -8,7 +9,7 @@ import { createUserByAdmin } from "@/redux/slices/userSlice";
 const SKELETON_COUNT = 10;
 
 const CustomersPage = () => {
-  const { users, nextCursor, loading, error, loadUsers, createUser } =
+  const { users, nextCursor, loading, error, loadUsers, createUser, searchResults, searchNextCursor, searchLoading, searchError, searchUsersByQuery, clearSearch } =
     useUsers();
   const observer = useRef<IntersectionObserver | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -22,6 +23,7 @@ const CustomersPage = () => {
   const [dni, setDni] = useState("");
   const [cuit, setCuit] = useState("");
   const [phone, setPhone] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
   // Debounced loadUsers for infinite scroll
   const debouncedFetch = useRef(
@@ -30,16 +32,35 @@ const CustomersPage = () => {
     }, 200)
   ).current;
 
+  // Debounced search for search input
+  const debouncedSearch = useRef(
+    debounce((query: string, cursor?: string) => {
+      if (query.trim()) {
+        searchUsersByQuery(query.trim(), undefined, 100, cursor);
+      } else {
+        clearSearch();
+        loadUsers(100, cursor);
+      }
+    }, 300)
+  ).current;
+
   const lastUserRef = useCallback(
     (node: HTMLTableRowElement | HTMLDivElement | null) => {
-      if (loading) return;
+      const isSearching = searchQuery.trim() !== "";
+      const currentLoading = isSearching ? searchLoading : loading;
+      const currentCursor = isSearching ? searchNextCursor : nextCursor;
+      const currentDebouncedFetch = isSearching
+        ? (params: { cursor?: string }) => debouncedSearch(searchQuery.trim(), params.cursor)
+        : debouncedFetch;
+
+      if (currentLoading) return;
       if (observer.current) observer.current.disconnect();
       
       if (node) {
         observer.current = new window.IntersectionObserver(
           (entries) => {
-            if (entries[0].isIntersecting && nextCursor && !loading) {
-              debouncedFetch({ cursor: nextCursor });
+            if (entries[0].isIntersecting && currentCursor && !currentLoading) {
+              currentDebouncedFetch({ cursor: currentCursor });
             }
           },
           {
@@ -49,7 +70,7 @@ const CustomersPage = () => {
         observer.current.observe(node);
       }
     },
-    [loading, nextCursor, debouncedFetch]
+    [loading, nextCursor, debouncedFetch, searchQuery, searchLoading, searchNextCursor, debouncedSearch]
   );
 
   useEffect(() => {
@@ -65,6 +86,11 @@ const CustomersPage = () => {
       }
     };
   }, []);
+
+  // Handle search query changes
+  useEffect(() => {
+    debouncedSearch(searchQuery);
+  }, [searchQuery, debouncedSearch]);
 
   const resetForm = () => {
     setEmail("");
@@ -131,18 +157,34 @@ const CustomersPage = () => {
     </tr>
   );
 
+  // Determine if we're searching
+  const isSearching = searchQuery.trim() !== "";
+  const currentUsers = isSearching ? searchResults : users;
+  const currentLoading = isSearching ? searchLoading : loading;
+  const currentError = isSearching ? searchError : error;
+  const currentCursor = isSearching ? searchNextCursor : nextCursor;
+
   return (
     <div className="px-4 py-6">
-      <h1 className="text-[#111111] font-bold text-2xl mb-4">
-        Lista de clientes
-      </h1>
-      <div className="mb-4 flex justify-end">
-        <button
-          onClick={handleOpenCreate}
-          className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none"
-        >
-          Crear cliente
-        </button>
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-[#111111] font-bold text-2xl">
+          Lista de clientes
+        </h1>
+        <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
+          <input
+            type="text"
+            placeholder="Buscar clientes..."
+            className="px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF] w-full sm:w-64"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+          <button
+            onClick={handleOpenCreate}
+            className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none"
+          >
+            Crear cliente
+          </button>
+        </div>
       </div>
       {/* Tabla DaisyUI para desktop */}
       <div className="hidden md:block">
@@ -156,29 +198,36 @@ const CustomersPage = () => {
             </tr>
           </thead>
           <tbody className="text-[#222222]">
-            {loading &&
-              users.length === 0 &&
+            {currentLoading &&
+              currentUsers.length === 0 &&
               Array.from({ length: SKELETON_COUNT }).map((_, idx) => (
-                <SkeletonRow key={idx} />
+                <SkeletonRow key={`skeleton-${idx}`} />
               ))}
-            {error && (
+            {currentError && (
               <tr>
                 <td colSpan={5} className="text-center text-error">
-                  {error}
+                  {currentError}
                 </td>
               </tr>
             )}
-            {!loading && !error && users.length === 0 && (
+            {!currentLoading && !currentError && currentUsers.length === 0 && (
               <tr>
                 <td colSpan={5} className="text-center text-sm opacity-60">
-                  No hay clientes
+                  {isSearching ? "No se encontraron clientes" : "No hay clientes"}
                 </td>
               </tr>
             )}
-            {users.map((user, idx) => (
-              <tr key={user.id}>
+            {currentUsers.map((user, idx) => (
+              <tr key={`${isSearching ? 'search' : 'list'}-${user.id}-${idx}`}>
                 <th>{idx + 1}</th>
-                <td>{user.email}</td>
+                <td>
+                  <Link
+                    href={`/analytics/users/${user.id}`}
+                    className="text-[#2271B1] hover:text-[#1a5a8a] underline"
+                  >
+                    {user.email}
+                  </Link>
+                </td>
                 <td>
                   {user.lastLogin
                     ? new Date(user.lastLogin).toLocaleString("es-AR", {
@@ -207,11 +256,11 @@ const CustomersPage = () => {
       {/* Tabla mobile: una "columna" por usuario */}
       <div className="block md:hidden">
         <div className="space-y-4">
-          {loading &&
-            users.length === 0 &&
+          {currentLoading &&
+            currentUsers.length === 0 &&
             Array.from({ length: SKELETON_COUNT }).map((_, idx) => (
               <div
-                key={idx}
+                key={`skeleton-mobile-${idx}`}
                 className="p-4 border rounded animate-pulse space-y-2"
               >
                 <div className="h-4 w-4 bg-gray-200 rounded" />
@@ -219,24 +268,30 @@ const CustomersPage = () => {
                 <div className="h-4 w-32 bg-gray-200 rounded" />
               </div>
             ))}
-          {error && (
+          {currentError && (
             <div className="p-4 border rounded text-center text-error">
-              {error}
+              {currentError}
             </div>
           )}
-          {!loading && !error && users.length === 0 && (
+          {!currentLoading && !currentError && currentUsers.length === 0 && (
             <div className="p-4 border rounded text-center text-sm opacity-60">
-              No hay clientes
+              {isSearching ? "No se encontraron clientes" : "No hay clientes"}
             </div>
           )}
-          {users.map((user, idx) => (
+          {currentUsers.map((user, idx) => (
             <div
-              key={user.id}
+              key={`${isSearching ? 'search' : 'list'}-${user.id}-${idx}`}
               className="p-4 border rounded space-y-1 text-[#222222]"
             >
               <div className="font-bold text-xs">#{idx + 1}</div>
               <div>
-                <span className="font-semibold">Email:</span> {user.email}
+                <span className="font-semibold">Email:</span>{" "}
+                <Link
+                  href={`/analytics/users/${user.id}`}
+                  className="text-[#2271B1] hover:text-[#1a5a8a] underline"
+                >
+                  {user.email}
+                </Link>
               </div>
               {user.lastLogin && (
                 <div>
@@ -266,18 +321,18 @@ const CustomersPage = () => {
       </div>
 
       {/* Unified trigger element for infinite scroll - works for both desktop and mobile */}
-      {users.length > 0 && nextCursor && (
+      {currentUsers.length > 0 && currentCursor && (
         <div ref={lastUserRef} className="h-1 w-full" />
       )}
       {/* Mensajes de carga y fin de lista */}
-      {loading && users.length > 0 && (
+      {currentLoading && currentUsers.length > 0 && (
         <div className="flex justify-center py-4 text-[#666666]">
           <LoadingSpinner />
         </div>
       )}
-      {!nextCursor && !loading && users.length > 0 && (
+      {!currentCursor && !currentLoading && currentUsers.length > 0 && (
         <div className="p-4 text-center text-sm text-[#222222] opacity-60">
-          No hay más clientes.
+          {isSearching ? "No hay más resultados" : "No hay más clientes"}
         </div>
       )}
 

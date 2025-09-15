@@ -67,7 +67,7 @@ export default function Sidebar() {
         className={`fixed top-0 left-0 h-full w-64 bg-white border-none shadow-none z-40 transform transition-transform duration-300
         ${
           isOpen ? "translate-x-0" : "-translate-x-full"
-        } md:translate-x-0 md:static md:block`}
+        } md:translate-x-0 md:sticky md:top-0 md:block`}
       >
         <div className="p-6 pt-20 md:pt-6">
           {" "}

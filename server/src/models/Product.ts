@@ -22,6 +22,7 @@ const productSchema = new Schema<IProductDocument>(
     productModel: { type: String, required: true },
     sku: { type: String, required: true, unique: true },
     size: { type: String, required: false },
+    description: { type: String, required: false },
   },
   { timestamps: true },
 );

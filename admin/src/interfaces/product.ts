@@ -34,6 +34,7 @@ export interface Product {
   productModel: string;
   sku: string;
   size?: string;
+  description?: string;
   variants: ProductVariant[];
 }
 
@@ -49,6 +50,7 @@ export interface CreateProductPayload {
     productModel: string;
     sku: string;
     size?: string;
+    description?: string;
   };
   variants: Array<{
     color: ProductVariantColor;
@@ -75,6 +77,7 @@ export interface UpdateProductPayload {
     productModel?: string;
     sku?: string;
     size?: string;
+    description?: string;
   };
   variants: Array<{
     id: string; // ID de la variante
@@ -85,11 +88,9 @@ export interface UpdateProductPayload {
   }>;
   files?: {
     primaryImage?: File;
-    variantImages?: Record<string, File[]>;
+    variantImages?: Record<string, File[]>;  
   };
-}
-
-// Bulk Price Update Interfaces
+}// Bulk Price Update Interfaces
 export enum PriceUpdateType {
   FIXED_AMOUNT = 'FIXED_AMOUNT',
   PERCENTAGE = 'PERCENTAGE',

@@ -27,6 +27,7 @@ const ProductCard = ({
   subcategory,
   productModel,
   variants,
+  size,
   ariaAttributes,
 }: ProductCardProps) => {
   const { addItem, clearSpecificError, getAddItemLoading, getAddItemError } =
@@ -79,7 +80,7 @@ const ProductCard = ({
   const addError = selectedVariant ? getAddItemError(selectedVariant.id) : null;
 
   return (
-    <div 
+    <div
       className="card card-border border-[#e1e1e1] bg-white rounded-none"
       {...ariaAttributes}
     >
@@ -125,6 +126,7 @@ const ProductCard = ({
             {productModel}
           </h2>
         </Link>
+        {size && <p className="text-xs text-gray-600 font-medium">{size}</p>}
         <p className="text-xs font-bold text-gray-800">
           {formatCurrency(
             selectedVariant?.priceUSD ?? variants[0]?.priceUSD,

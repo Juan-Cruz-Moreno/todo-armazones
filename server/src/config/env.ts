@@ -28,6 +28,7 @@ const env = {
 
   EMAIL_HOST: process.env.EMAIL_HOST || 'smtp.example.com',
   EMAIL_PORT: Number(process.env.EMAIL_PORT) || 587,
+  EMAIL_SECURE: process.env.EMAIL_SECURE === 'true', // Convertir a booleano
   EMAIL_USER: process.env.EMAIL_USER || 'your_email@example.com',
   EMAIL_PASS: process.env.EMAIL_PASS || 'your_email_password',
 

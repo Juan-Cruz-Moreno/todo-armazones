@@ -30,6 +30,25 @@ const ProductPage = () => {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
 
+  // Estado para el zoom magnifier
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+
+  const handleMouseEnter = () => {
+    setIsZoomed(true);
+  };
+
+  const handleMouseLeave = () => {
+    setIsZoomed(false);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setMousePosition({ x, y });
+  };
+
   // Si no tenemos un slug en la URL, redirigimos a la página principal
   useEffect(() => {
     if (!slug) {
@@ -210,18 +229,42 @@ const ProductPage = () => {
       <div className="flex flex-col md:flex-row gap-6">
         {/* Imágenes del producto */}
         <div className="flex-1 flex justify-center items-start">
-          <Image
-            src={`${process.env.NEXT_PUBLIC_API_URL}/${imageToShow}`}
-            alt={productDetail.productModel}
-            width={400}
-            height={400}
-            className="w-full h-auto rounded-none object-contain"
-            priority
-            style={{
-              maxHeight:
-                "calc(100vh - (var(--navbar-height) + var(--breadcrumb-height)))",
-            }}
-          />
+          <div
+            className="relative cursor-crosshair w-full"
+            onMouseEnter={handleMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            onMouseMove={handleMouseMove}
+            aria-label="Imagen del producto con zoom disponible al pasar el mouse"
+          >
+            <Image
+              src={`${process.env.NEXT_PUBLIC_API_URL}/${imageToShow}`}
+              alt={productDetail.productModel}
+              width={400}
+              height={400}
+              className="w-full h-auto rounded-none object-contain"
+              priority
+              style={{
+                maxHeight: "calc(100vh - (var(--navbar-height) + var(--breadcrumb-height)))",
+              }}
+            />
+            {/* Lente del zoom */}
+            {isZoomed && (
+              <div
+                className="absolute border-2 border-gray-400 pointer-events-none bg-white bg-opacity-50 transition-opacity duration-200"
+                style={{
+                  width: 'clamp(120px, 15vw, 200px)',
+                  height: 'clamp(120px, 15vw, 200px)',
+                  left: `${mousePosition.x}%`,
+                  top: `${mousePosition.y}%`,
+                  transform: 'translate(-50%, -50%)',
+                  backgroundImage: `url(${process.env.NEXT_PUBLIC_API_URL}/${imageToShow})`,
+                  backgroundSize: '600%',
+                  backgroundPosition: `${mousePosition.x}% ${mousePosition.y}%`,
+                  backgroundRepeat: 'no-repeat',
+                }}
+              />
+            )}
+          </div>
         </div>
         {/* Detalles del producto */}
         <div className="flex-1">
@@ -235,6 +278,11 @@ const ProductPage = () => {
             <p className="font-normal text-sm text-[#555555] font-dm mb-2">
               {productDetail.size}
             </p>
+            {productDetail.description && (
+              <p className="font-normal text-sm text-[#666666] mb-4 leading-relaxed">
+                {productDetail.description}
+              </p>
+            )}
             <p className="font-normal text-sm text-[#777777] mb-2">Colores</p>
             <div className="flex items-center gap-2">
               {uniqueColors.map((c) => {

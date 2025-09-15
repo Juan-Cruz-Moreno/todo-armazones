@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import SearchIcon from "../atoms/Icon/SearchIcon";
 import { useProducts } from "@/hooks/useProducts";
@@ -6,6 +6,7 @@ import ProductCard from "../molecules/ProductCard";
 import { usePathname } from "next/navigation";
 import { useEventListener } from "@/hooks/useEventBus";
 import { searchEvents } from "@/utils/eventBus";
+import { debounce } from "../../utils/debounce";
 
 const drawerVariants = {
   hidden: { y: "-100%", opacity: 0 },
@@ -33,6 +34,21 @@ const SearchDrawer: React.FC = () => {
   const { searchResults, searchLoading, searchProducts, clearSearchResults } =
     useProducts();
 
+  // Función debounced para búsqueda automática
+  const debouncedSearch = useMemo(
+    () =>
+      debounce((q: string) => {
+        if (q.trim()) {
+          setSearching(true);
+          searchProducts(q, true);
+        } else {
+          clearSearchResults();
+          setSearching(false);
+        }
+      }, 300),
+    [searchProducts, clearSearchResults]
+  );
+
   // Escuchar eventos para abrir/cerrar el drawer
   useEventListener("search:openDrawer", () => {
     setOpen(true);
@@ -50,13 +66,8 @@ const SearchDrawer: React.FC = () => {
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!query.trim()) {
-      clearSearchResults();
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    await searchProducts(query);
+    // La búsqueda ya se hace automáticamente, pero podemos forzar si es necesario
+    debouncedSearch(query);
   };
 
   const handleClose = () => {
@@ -107,7 +118,7 @@ const SearchDrawer: React.FC = () => {
               style={{ overflow: "hidden" }}
             >
               {/* Botón cerrar */}
-              <div className="flex justify-end p-4">
+              <div className={`flex justify-end ${searching ? 'p-2' : 'p-4'}`}>
                 <button
                   className="text-black hover:text-gray-700 text-2xl"
                   onClick={() => searchEvents.closeDrawer()}
@@ -117,15 +128,17 @@ const SearchDrawer: React.FC = () => {
                 </button>
               </div>
               {/* Contenido centrado y scrollable */}
-              <div className="flex flex-col items-center justify-center px-4 py-8 h-[calc(100vh-64px)] overflow-hidden">
+              <div className={`flex flex-col items-center justify-center px-4 ${searching ? 'py-2' : 'py-8'} h-[calc(100vh-64px)] overflow-hidden`}>
                 {/* Sticky header y barra */}
-                <div className="w-full max-w-6xl sticky top-0 z-20 bg-white pb-4 pt-2 shadow-sm" style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.03)' }}>
-                  <span
-                    className="text-lg font-semibold mb-4 text-center block"
-                    style={{ color: "#111111" }}
-                  >
-                    ¿QUÉ ESTÁS BUSCANDO?
-                  </span>
+                <div className={`w-full max-w-6xl sticky top-0 z-20 bg-white shadow-sm ${searching ? 'pb-2 pt-1' : 'pb-4 pt-2'}`} style={{ boxShadow: '0 2px 8px 0 rgba(0,0,0,0.03)' }}>
+                  {!searching && (
+                    <span
+                      className="text-lg font-semibold mb-4 text-center block"
+                      style={{ color: "#111111" }}
+                    >
+                      ¿QUÉ ESTÁS BUSCANDO?
+                    </span>
+                  )}
                   <form
                     className="w-full max-w-md mx-auto"
                     onSubmit={handleSearch}
@@ -141,7 +154,11 @@ const SearchDrawer: React.FC = () => {
                           color: "#111111",
                         }}
                         value={query}
-                        onChange={(e) => setQuery(e.target.value)}
+                        onChange={(e) => {
+                          const newQuery = e.target.value;
+                          setQuery(newQuery);
+                          debouncedSearch(newQuery);
+                        }}
                         autoFocus
                       />
                       <button
@@ -175,7 +192,7 @@ const SearchDrawer: React.FC = () => {
                 {/* Resultados de búsqueda scrollable */}
                 {searching && (
                   <motion.div
-                    className="w-full max-w-6xl flex-1 mt-2 overflow-y-auto"
+                    className={`w-full max-w-6xl flex-1 ${searching ? 'mt-1' : 'mt-2'} overflow-y-auto`}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 20 }}

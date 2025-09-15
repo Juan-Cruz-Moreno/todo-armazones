@@ -139,46 +139,102 @@ const OrdersPage = () => {
 
   return (
     <div className="px-4 py-6">
-      <h1 className="text-[#111111] font-bold text-2xl mb-4">
-        Órdenes de clientes
-      </h1>
-
-      {error && <div className="p-4 text-center text-error">{error}</div>}
-
-      {/* Filtro */}
-      <div className="flex justify-between items-center mb-4">
-        <fieldset className="fieldset">
-          <legend className="fieldset-legend text-[#666666]">
-            Filtrar por estado
-          </legend>
-          <select
-            className="select rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] px-3 py-2"
-            value={statusFilter || ""}
-            onChange={(e) =>
-              setFilter(
-                e.target.value ? (e.target.value as OrderStatus) : undefined
-              )
-            }
-          >
-            <option value="">All</option>
-            <option value={OrderStatus.Processing}>Processing</option>
-            <option value={OrderStatus.OnHold}>On Hold</option>
-            <option value={OrderStatus.PendingPayment}>Pending Payment</option>
-            <option value={OrderStatus.Completed}>Completed</option>
-            <option value={OrderStatus.Cancelled}>Cancelled</option>
-            <option value={OrderStatus.Refunded}>Refunded</option>
-          </select>
-        </fieldset>
+      {/* Header con título y botón */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
+        <h1 className="text-[#111111] font-bold text-2xl">
+          Órdenes de clientes
+        </h1>
         <Link
           href="/orders/create"
-          className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none"
+          className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none self-start sm:self-auto"
         >
           Crear Orden
         </Link>
       </div>
 
+      {error && <div className="p-4 text-center text-error">{error}</div>}
+
+      {/* Filtro */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span className="text-[#666666] text-sm">Filtrar por estado:</span>
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                !statusFilter
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(undefined)}
+            >
+              Todos
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === OrderStatus.Processing
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(OrderStatus.Processing)}
+            >
+              Processing
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === OrderStatus.OnHold
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(OrderStatus.OnHold)}
+            >
+              On Hold
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === OrderStatus.PendingPayment
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(OrderStatus.PendingPayment)}
+            >
+              Pending Payment
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === OrderStatus.Completed
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(OrderStatus.Completed)}
+            >
+              Completed
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === OrderStatus.Cancelled
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(OrderStatus.Cancelled)}
+            >
+              Cancelled
+            </button>
+            <button
+              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                statusFilter === OrderStatus.Refunded
+                  ? "bg-[#2271B1] text-white"
+                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+              }`}
+              onClick={() => setFilter(OrderStatus.Refunded)}
+            >
+              Refunded
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Acciones en lote */}
-      <div className="flex items-center gap-4 mb-4">
+      <div className="hidden sm:flex items-center gap-4 mb-4">
         <div className="flex items-center gap-2">
           <select
             className="select rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] px-3 py-2"
