@@ -3,6 +3,8 @@ import ProductVariant, { IProductVariantDocument } from '@models/ProductVariant'
 import {
   CreateProductRequestDto,
   CreateProductResponseDto,
+  GetProductsResponseDto,
+  PaginationMetadata,
   ProductCategoryDto,
   ProductListItemDto,
   ProductSubcategoryDto,
@@ -30,6 +32,20 @@ import Category, { ICategoryDocument } from '@models/Category';
 import Subcategory, { ISubcategoryDocument } from '@models/Subcategory';
 import { StockMovementReason } from '@interfaces/stockMovement';
 import { InventoryService } from './inventory.service';
+
+// Interfaces internas para organizar los filtros y opciones
+interface ProductFilters {
+  categorySlug?: string;
+  subcategorySlug?: string;
+  inStock?: boolean;
+}
+
+interface QueryBuildResult {
+  baseQuery: FilterQuery<IProductDocument>;
+  stockFilteredIds?: Types.ObjectId[];
+  categoryId?: Types.ObjectId;
+  subcategoryId?: Types.ObjectId;
+}
 
 export class ProductService {
   private inventoryService = new InventoryService();
@@ -218,120 +234,411 @@ export class ProductService {
     }));
   }
 
-  public async getProducts(
-    limit: number = 10,
-    cursor?: string,
-    categorySlug?: string,
-    subcategorySlug?: string,
-    inStock?: boolean,
-  ): Promise<{
-    products: ProductListItemDto[];
-    nextCursor: string | null;
-  }> {
-    try {
-      const query: FilterQuery<IProductDocument> = {};
-      if (cursor) {
-        query._id = { $gt: new Types.ObjectId(cursor) };
+  /**
+   * Método centralizado para construir queries de productos con filtros
+   * Elimina la duplicación de lógica entre diferentes métodos de paginación
+   */
+  private async buildProductQuery(filters: ProductFilters): Promise<QueryBuildResult> {
+    const baseQuery: FilterQuery<IProductDocument> = {};
+    let stockFilteredIds: Types.ObjectId[] | undefined;
+    let categoryId: Types.ObjectId | undefined;
+    let subcategoryId: Types.ObjectId | undefined;
+
+    // Filtro por categoría
+    if (filters.categorySlug) {
+      const category = await Category.findOne({ slug: filters.categorySlug }).select('_id').lean();
+      if (!category) {
+        throw new AppError('Categoría no encontrada', 404, 'fail', false);
       }
+      categoryId = category._id;
+      baseQuery.category = { $in: [category._id] };
 
-      if (categorySlug) {
-        const category = await Category.findOne({ slug: categorySlug }).select('_id').lean();
-        if (!category) {
-          throw new AppError('Categoría no encontrada', 404, 'fail', false);
+      // Filtro por subcategoría (solo si existe categoría)
+      if (filters.subcategorySlug) {
+        const subcategory = await Subcategory.findOne({
+          slug: filters.subcategorySlug,
+          category: { $in: [category._id] },
+        })
+          .select('_id')
+          .lean();
+
+        if (!subcategory) {
+          throw new AppError('Subcategoría no encontrada en la categoría indicada', 404, 'fail', false);
         }
-        query.category = { $in: [category._id] };
-
-        if (subcategorySlug) {
-          const subcategory = await Subcategory.findOne({
-            slug: subcategorySlug,
-            category: { $in: [category._id] },
-          })
-            .select('_id')
-            .lean();
-
-          if (!subcategory) {
-            throw new AppError('Subcategoría no encontrada en la categoría indicada', 404, 'fail', false);
-          }
-
-          query.subcategory = { $in: [subcategory._id] };
-        }
+        subcategoryId = subcategory._id;
+        baseQuery.subcategory = { $in: [subcategory._id] };
       }
+    }
 
-      // Si se solicita filtrar por stock, primero obtener productos que tienen variantes con stock
-      let filteredProductIds: Types.ObjectId[] | undefined;
-      if (inStock === true) {
-        const productsWithStock = await ProductVariant.aggregate([
-          { $match: { stock: { $gt: 0 } } },
-          { $group: { _id: '$product' } },
-          { $project: { _id: 1 } },
-        ]);
-        filteredProductIds = productsWithStock.map((item) => item._id);
-
-        // Si no hay productos con stock, retornar resultado vacío
-        if (filteredProductIds.length === 0) {
-          return {
-            products: [],
-            nextCursor: null,
-          };
-        }
-
-        // Agregar filtro de productos con stock al query principal
-        query._id = query._id ? { ...query._id, $in: filteredProductIds } : { $in: filteredProductIds };
+    // Filtro por stock - optimizado para evitar doble filtrado
+    if (filters.inStock === true) {
+      stockFilteredIds = await this.getProductsWithStock();
+      if (stockFilteredIds.length === 0) {
+        // Retornar query que no coincidirá con nada
+        baseQuery._id = { $in: [] };
+      } else {
+        baseQuery._id = { $in: stockFilteredIds };
       }
+    }
 
-      const products = await Product.find(query)
-        .sort({ _id: 1 })
-        .limit(limit)
-        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
-        .populate({ path: 'category', select: '_id name slug' })
-        .populate({ path: 'subcategory', select: '_id name slug' })
-        .lean();
+    return {
+      baseQuery,
+      ...(stockFilteredIds && { stockFilteredIds }),
+      ...(categoryId && { categoryId }),
+      ...(subcategoryId && { subcategoryId }),
+    };
+  }
 
-      const productIds = products.map((p) => p._id);
+  /**
+   * Método optimizado para obtener IDs de productos que tienen stock
+   * Centraliza la lógica y evita duplicación en múltiples métodos
+   */
+  private async getProductsWithStock(): Promise<Types.ObjectId[]> {
+    const productsWithStock = await ProductVariant.aggregate([
+      { $match: { stock: { $gt: 0 } } },
+      { $group: { _id: '$product' } },
+      { $project: { _id: 1 } },
+    ]);
+    return productsWithStock.map((item) => item._id);
+  }
 
+  /**
+   * Método centralizado para construir respuestas de productos con variantes
+   * Elimina duplicación de lógica de ensamblado entre métodos
+   */
+  private async buildProductResponse(
+    products: (IProductDocument & {
+      category: ICategoryDocument[] | Types.ObjectId[];
+      subcategory: ISubcategoryDocument | Types.ObjectId;
+    })[],
+    includeVariants: boolean = true,
+  ): Promise<ProductListItemDto[]> {
+    if (products.length === 0) return [];
+
+    const productIds = products.map((p) => p._id);
+    const variantsMap = new Map<string, ProductVariantSummaryDto[]>();
+
+    if (includeVariants) {
       const variantsByProduct = await ProductVariant.find({
         product: { $in: productIds },
       })
         .select('color stock averageCostUSD priceUSD thumbnail images product')
         .lean();
 
-      // Agrupa las variantes por producto usando mapVariants
-      const variantsMap = new Map<string, ProductVariantSummaryDto[]>();
+      // Agrupa las variantes por producto
       for (const productId of productIds) {
         const variants = variantsByProduct.filter((variant) => variant.product.toString() === productId.toString());
         variantsMap.set(productId.toString(), this.mapVariants(variants as IProductVariantDocument[]));
       }
+    }
 
-      let result: ProductListItemDto[] = products.map((product) => {
-        const categoryInfo = this.mapCategories(product.category);
-        const subcategoryInfo = this.mapSubcategory(product.subcategory);
+    return products.map((product) => {
+      const categoryInfo = this.mapCategories(product.category);
+      const subcategoryInfo = this.mapSubcategory(product.subcategory);
 
-        return {
-          id: product._id.toString(),
-          slug: product.slug,
-          thumbnail: product.thumbnail,
-          primaryImage: product.primaryImage,
-          category: categoryInfo,
-          subcategory: subcategoryInfo,
-          productModel: product.productModel,
-          sku: product.sku,
-          ...(product.size !== undefined && { size: product.size }),
-          description: product.description ?? '',
-          variants: variantsMap.get(product._id.toString()) ?? [],
-        };
-      });
+      return {
+        id: product._id.toString(),
+        slug: product.slug,
+        thumbnail: product.thumbnail,
+        primaryImage: product.primaryImage,
+        category: categoryInfo,
+        subcategory: subcategoryInfo,
+        productModel: product.productModel,
+        sku: product.sku,
+        ...(product.size !== undefined && { size: product.size }),
+        description: product.description ?? '',
+        variants: variantsMap.get(product._id.toString()) ?? [],
+      };
+    });
+  }
 
-      // Si se solicita filtrar por stock, hacer un filtro adicional en el resultado
-      // para asegurar que solo se incluyan productos con al menos una variante con stock
-      if (inStock === true) {
-        result = result.filter((product) => product.variants.some((variant) => variant.stock > 0));
+  /**
+   * Método optimizado para conteo de productos
+   * Usa la nueva estructura centralizada y elimina lógica duplicada
+   */
+  private async getProductsCount(filters: ProductFilters): Promise<number> {
+    const { baseQuery, stockFilteredIds } = await this.buildProductQuery(filters);
+
+    // Si tenemos filtro de stock y no hay productos con stock, retornar 0
+    if (filters.inStock === true && stockFilteredIds && stockFilteredIds.length === 0) {
+      return 0;
+    }
+
+    // Para queries simples o cuando ya tenemos los IDs filtrados, usar countDocuments
+    return Product.countDocuments(baseQuery);
+  }
+
+  /**
+   * Obtiene productos para una página específica por número
+   * Método optimizado que usa la nueva arquitectura centralizada
+   */
+  public async getProductsByPage(
+    page: number = 1,
+    limit: number = 10,
+    categorySlug?: string,
+    subcategorySlug?: string,
+    inStock?: boolean,
+  ): Promise<GetProductsResponseDto> {
+    try {
+      if (page < 1) {
+        throw new AppError('El número de página debe ser mayor a 0', 400, 'fail', false);
       }
 
-      const nextCursor = products.length === limit ? products[products.length - 1]._id.toString() : null;
+      const filters: ProductFilters = {};
+      if (categorySlug) filters.categorySlug = categorySlug;
+      if (subcategorySlug) filters.subcategorySlug = subcategorySlug;
+      if (inStock !== undefined) filters.inStock = inStock;
+
+      // Usar método centralizado para construir query
+      const { baseQuery } = await this.buildProductQuery(filters);
+
+      // Si no hay productos con stock (cuando se filtra por stock), retornar vacío
+      if (baseQuery._id && Array.isArray(baseQuery._id.$in) && baseQuery._id.$in.length === 0) {
+        return {
+          products: [],
+          pagination: {
+            totalCount: 0,
+            totalPages: 0,
+            currentPage: page,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+            previousCursor: null,
+            limit,
+            itemsInCurrentPage: 0,
+          },
+        };
+      }
+
+      // Calcular skip para la página específica
+      const skip = (page - 1) * limit;
+
+      // Obtener total count usando método optimizado
+      const totalCount = await this.getProductsCount(filters);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      // Validar que la página solicitada existe
+      if (page > totalPages && totalCount > 0) {
+        throw new AppError(`La página ${page} no existe. Máximo: ${totalPages}`, 404, 'fail', false);
+      }
+
+      // Obtener productos con skip y limit
+      const products = await Product.find(baseQuery)
+        .sort({ _id: 1 })
+        .skip(skip)
+        .limit(limit + 1) // +1 para determinar si hay siguiente página
+        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
+        .populate({ path: 'category', select: '_id name slug' })
+        .populate({ path: 'subcategory', select: '_id name slug' })
+        .lean();
+
+      const hasNextPage = products.length > limit;
+      const actualProducts = hasNextPage ? products.slice(0, limit) : products;
+      const itemsInCurrentPage = actualProducts.length;
+
+      // Usar método centralizado para construir respuesta
+      const result = await this.buildProductResponse(actualProducts, true);
+
+      // Calcular cursors para compatibilidad con navegación cursor-based
+      const nextCursor =
+        hasNextPage && actualProducts.length > 0 ? actualProducts[actualProducts.length - 1]._id.toString() : null;
+
+      // Para previous cursor, calcular el ID del primer elemento de la página anterior
+      let previousCursor: string | null = null;
+      if (page > 1) {
+        const previousSkip = Math.max(0, (page - 2) * limit);
+        const previousPageProduct = await Product.findOne(baseQuery)
+          .sort({ _id: 1 })
+          .skip(previousSkip)
+          .select('_id')
+          .lean();
+        previousCursor = previousPageProduct?._id.toString() || null;
+      }
+
+      const pagination: PaginationMetadata = {
+        totalCount,
+        totalPages,
+        currentPage: page,
+        hasNextPage,
+        hasPreviousPage: page > 1,
+        nextCursor,
+        previousCursor,
+        limit,
+        itemsInCurrentPage,
+      };
 
       return {
         products: result,
+        pagination,
+      };
+    } catch (error) {
+      logger.error('Error al obtener productos por página', {
+        error,
+        page,
+        limit,
+        categorySlug,
+        subcategorySlug,
+        inStock,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener productos por página.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
+   * Obtiene solo los metadatos de paginación sin cargar los productos
+   * Método optimizado que usa la nueva arquitectura centralizada
+   */
+  public async getProductsPaginationInfo(
+    limit: number = 10,
+    categorySlug?: string,
+    subcategorySlug?: string,
+    inStock?: boolean,
+  ): Promise<Omit<PaginationMetadata, 'nextCursor' | 'previousCursor' | 'itemsInCurrentPage'>> {
+    try {
+      const filters: ProductFilters = {};
+      if (categorySlug) filters.categorySlug = categorySlug;
+      if (subcategorySlug) filters.subcategorySlug = subcategorySlug;
+      if (inStock !== undefined) filters.inStock = inStock;
+
+      // Usar método optimizado para obtener conteo
+      const totalCount = await this.getProductsCount(filters);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      return {
+        totalCount,
+        totalPages,
+        currentPage: 1,
+        hasNextPage: totalPages > 1,
+        hasPreviousPage: false,
+        limit,
+      };
+    } catch (error) {
+      logger.error('Error al obtener información de paginación', {
+        error,
+        limit,
+        categorySlug,
+        subcategorySlug,
+        inStock,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener información de paginación.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
+   * Método de paginación por cursor - Simplificado
+   * @deprecated Considera usar getProductsByPage para mejor performance
+   */
+  public async getProducts(
+    limit: number = 10,
+    cursor?: string,
+    categorySlug?: string,
+    subcategorySlug?: string,
+    inStock?: boolean,
+  ): Promise<GetProductsResponseDto> {
+    try {
+      const filters: ProductFilters = {};
+      if (categorySlug) filters.categorySlug = categorySlug;
+      if (subcategorySlug) filters.subcategorySlug = subcategorySlug;
+      if (inStock !== undefined) filters.inStock = inStock;
+
+      // Construir query base usando método centralizado
+      const { baseQuery } = await this.buildProductQuery(filters);
+
+      // Aplicar cursor si existe
+      const query = { ...baseQuery };
+      if (cursor) {
+        query._id = query._id ? { ...query._id, $gt: new Types.ObjectId(cursor) } : { $gt: new Types.ObjectId(cursor) };
+      }
+
+      // Si no hay productos con stock (cuando se filtra), retornar vacío
+      if (baseQuery._id && Array.isArray(baseQuery._id.$in) && baseQuery._id.$in.length === 0) {
+        return {
+          products: [],
+          pagination: {
+            totalCount: 0,
+            totalPages: 0,
+            currentPage: 1,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            nextCursor: null,
+            previousCursor: null,
+            limit,
+            itemsInCurrentPage: 0,
+          },
+        };
+      }
+
+      // Obtener total count
+      const totalCount = await this.getProductsCount(filters);
+
+      // Obtener productos con cursor aplicado
+      const products = await Product.find(query)
+        .sort({ _id: 1 })
+        .limit(limit + 1) // +1 para determinar si hay siguiente página
+        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
+        .populate({ path: 'category', select: '_id name slug' })
+        .populate({ path: 'subcategory', select: '_id name slug' })
+        .lean();
+
+      // Determinar si hay página siguiente
+      const hasNextPage = products.length > limit;
+      const actualProducts = hasNextPage ? products.slice(0, limit) : products;
+      const itemsInCurrentPage = actualProducts.length;
+
+      // Usar método centralizado para construir respuesta
+      const result = await this.buildProductResponse(actualProducts, true);
+
+      // Calcular metadatos de paginación
+      const totalPages = Math.ceil(totalCount / limit);
+
+      // Estimar página actual basada en cursor (simplificado)
+      let currentPage = 1;
+      if (cursor) {
+        const countBeforeCursor = await Product.countDocuments({
+          ...baseQuery,
+          _id: { ...baseQuery._id, $lte: new Types.ObjectId(cursor) },
+        });
+        currentPage = Math.floor(countBeforeCursor / limit) + 1;
+      }
+
+      const nextCursor =
+        hasNextPage && actualProducts.length > 0 ? actualProducts[actualProducts.length - 1]._id.toString() : null;
+
+      const hasPreviousPage = cursor !== undefined;
+      let previousCursor: string | null = null;
+      if (hasPreviousPage && currentPage > 1) {
+        const skipCount = Math.max(0, (currentPage - 2) * limit);
+        const previousPageProduct = await Product.findOne(baseQuery)
+          .sort({ _id: 1 })
+          .skip(skipCount)
+          .select('_id')
+          .lean();
+        previousCursor = previousPageProduct?._id.toString() || null;
+      }
+
+      const pagination: PaginationMetadata = {
+        totalCount,
+        totalPages,
+        currentPage,
+        hasNextPage,
+        hasPreviousPage,
         nextCursor,
+        previousCursor,
+        limit,
+        itemsInCurrentPage,
+      };
+
+      return {
+        products: result,
+        pagination,
       };
     } catch (error) {
       logger.error('Error al obtener productos', { error, limit, cursor });

@@ -123,6 +123,126 @@ export class ProductController {
     }
   };
 
+  public getProductsByPage = async (req: Request, res: Response<ApiResponse | ApiErrorResponse>): Promise<void> => {
+    try {
+      // Validación de parámetros de consulta
+      const pageParam = req.query.page as string;
+      const limitParam = req.query.limit as string;
+      const categorySlug = req.query.categorySlug as string | undefined;
+      const subcategorySlug = req.query.subcategorySlug as string | undefined;
+      const inStockParam = req.query.inStock as string | undefined;
+
+      let page = 1;
+      if (pageParam) {
+        page = parseInt(pageParam, 10);
+        if (isNaN(page) || page <= 0) {
+          res.status(400).json({
+            status: 'fail',
+            message: "El parámetro 'page' debe ser un número positivo.",
+          });
+          return;
+        }
+      }
+
+      let limit = 10;
+      if (limitParam) {
+        limit = parseInt(limitParam, 10);
+        if (isNaN(limit) || limit <= 0) {
+          res.status(400).json({
+            status: 'fail',
+            message: "El parámetro 'limit' debe ser un número positivo.",
+          });
+          return;
+        }
+      }
+
+      // Convertir el parámetro inStock a boolean
+      let inStock: boolean | undefined;
+      if (inStockParam !== undefined) {
+        inStock = inStockParam.toLowerCase() === 'true';
+      }
+
+      // Llamada al servicio para obtener productos por página
+      const result = await this.productService.getProductsByPage(page, limit, categorySlug, subcategorySlug, inStock);
+
+      res.status(200).json({
+        status: 'success',
+        data: result,
+      });
+    } catch (error: unknown) {
+      logger.error('Error fetching products by page:', { error });
+
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        } as ApiErrorResponse);
+      } else {
+        const appError = new AppError('Internal Server Error', 500, 'error', false);
+        res.status(appError.statusCode).json({
+          status: appError.status,
+          message: appError.message,
+        } as ApiErrorResponse);
+      }
+    }
+  };
+
+  public getProductsPaginationInfo = async (
+    req: Request,
+    res: Response<ApiResponse | ApiErrorResponse>,
+  ): Promise<void> => {
+    try {
+      // Validación de parámetros de consulta
+      const limitParam = req.query.limit as string;
+      const categorySlug = req.query.categorySlug as string | undefined;
+      const subcategorySlug = req.query.subcategorySlug as string | undefined;
+      const inStockParam = req.query.inStock as string | undefined;
+
+      let limit = 10;
+      if (limitParam) {
+        limit = parseInt(limitParam, 10);
+        if (isNaN(limit) || limit <= 0) {
+          res.status(400).json({
+            status: 'fail',
+            message: "El parámetro 'limit' debe ser un número positivo.",
+          });
+          return;
+        }
+      }
+
+      // Convertir el parámetro inStock a boolean
+      let inStock: boolean | undefined;
+      if (inStockParam !== undefined) {
+        inStock = inStockParam.toLowerCase() === 'true';
+      }
+
+      // Llamada al servicio para obtener información de paginación
+      const result = await this.productService.getProductsPaginationInfo(limit, categorySlug, subcategorySlug, inStock);
+
+      res.status(200).json({
+        status: 'success',
+        data: result,
+      });
+    } catch (error: unknown) {
+      logger.error('Error fetching products pagination info:', { error });
+
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        } as ApiErrorResponse);
+      } else {
+        const appError = new AppError('Internal Server Error', 500, 'error', false);
+        res.status(appError.statusCode).json({
+          status: appError.status,
+          message: appError.message,
+        } as ApiErrorResponse);
+      }
+    }
+  };
+
   public getProducts = async (req: Request, res: Response<ApiResponse | ApiErrorResponse>): Promise<void> => {
     try {
       // Validación de parámetros de consulta

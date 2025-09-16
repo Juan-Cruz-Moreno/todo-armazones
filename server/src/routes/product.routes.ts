@@ -10,6 +10,8 @@ const productController: ProductController = new ProductController();
 
 router.post('/', checkAdmin, upload.any(), productController.createProductWithVariants);
 router.get('/', productController.getProducts);
+router.get('/by-page', productController.getProductsByPage);
+router.get('/pagination-info', productController.getProductsPaginationInfo);
 router.get('/search', productController.searchProducts);
 
 // Nueva ruta para actualización masiva de precios

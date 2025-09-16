@@ -79,3 +79,20 @@ export interface ProductListItemDto {
 export interface SearchProductsResponseDto {
   products: ProductListItemDto[];
 }
+
+export interface PaginationMetadata {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextCursor: string | null;
+  previousCursor: string | null;
+  limit: number;
+  itemsInCurrentPage: number;
+}
+
+export interface GetProductsResponseDto {
+  products: ProductListItemDto[];
+  pagination: PaginationMetadata;
+}

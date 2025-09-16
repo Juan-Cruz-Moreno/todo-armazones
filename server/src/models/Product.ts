@@ -34,6 +34,15 @@ productSchema.index({ category: 1 }); // Índice para categoría
 
 productSchema.index({ category: 1, subcategory: 1 }); // Índice compuesto para categoría y subcategoría
 
+// Nuevos índices optimizados para las queries más frecuentes
+productSchema.index({ _id: 1, category: 1 }); // Optimiza paginación con filtro de categoría
+
+productSchema.index({ _id: 1, subcategory: 1 }); // Optimiza paginación con filtro de subcategoría
+
+productSchema.index({ _id: 1, category: 1, subcategory: 1 }); // Optimiza paginación con ambos filtros
+
+productSchema.index({ createdAt: -1 }); // Para ordenamiento por fecha de creación
+
 // Creación del modelo de Mongoose
 const Product = model<IProductDocument>('Product', productSchema);
 

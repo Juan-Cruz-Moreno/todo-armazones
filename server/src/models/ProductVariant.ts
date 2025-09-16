@@ -32,6 +32,15 @@ const productVariantSchema = new Schema<IProductVariantDocument>(
   { timestamps: true },
 );
 
+// Índices optimizados para ProductVariant
+productVariantSchema.index({ product: 1 }); // Para buscar variantes por producto
+
+productVariantSchema.index({ stock: 1 }); // Para filtrar por stock
+
+productVariantSchema.index({ product: 1, stock: 1 }); // Compuesto para filtros frecuentes
+
+productVariantSchema.index({ 'color.name': 1 }); // Para buscar por color
+
 const ProductVariant = model<IProductVariantDocument>('ProductVariant', productVariantSchema);
 
 export default ProductVariant;

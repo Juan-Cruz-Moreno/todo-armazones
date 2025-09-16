@@ -2423,7 +2423,7 @@ export class OrderService {
 
   /**
    * Cancela/elimina un reembolso de una orden
-   * Restaura los valores originales recalculando automáticamente el subtotal, gastos bancarios y total
+   * Restaura los valores originales recalculando desde los items base para evitar corrupción financiera
    * @param orderId - ID de la orden
    * @param cancelledBy - Usuario que cancela el reembolso
    * @returns Resultado detallado de la cancelación del reembolso
@@ -2446,34 +2446,56 @@ export class OrderService {
         const currentSubTotal = order.subTotal;
         const currentBankTransferExpense = order.bankTransferExpense;
         const currentTotalAmount = order.totalAmount;
-
-        // Lógica correcta de cancelación de reembolso:
-        // Restaurar el margen de contribución sumando el monto del reembolso cancelado
-        const cancelledRefundAmount = order.refund.appliedAmount;
         const currentContributionMarginUSD = order.totalContributionMarginUSD;
-        const currentCogs = order.totalCogsUSD;
+        const cancelledRefundAmount = order.refund.appliedAmount;
 
-        // Restaurar el margen de contribución sumando el reembolso cancelado
-        const restoredContributionMargin = currentContributionMarginUSD + cancelledRefundAmount;
+        // 🔧 LÓGICA CORREGIDA: Recalcular desde los items originales
+        // En lugar de sumar al margen actual (potencialmente corrupto),
+        // recalculamos todo desde los valores base de los items
+        
+        // Recalcular totales originales desde los items (valores verdaderos)
+        const originalSubTotalFromItems = order.items.reduce((total, item) => total + item.subTotal, 0);
+        const originalCogsFromItems = order.items.reduce((total, item) => total + item.cogsUSD, 0);
+        const originalContributionMarginFromItems = order.items.reduce((total, item) => total + item.contributionMarginUSD, 0);
 
-        // Recalcular el subtotal basado en COGS + margen restaurado
-        const restoredSubTotal = currentCogs + restoredContributionMargin;
+        // Validación de integridad: Verificar que los valores calculados sean consistentes
+        const expectedSubTotal = originalCogsFromItems + originalContributionMarginFromItems;
+        if (Math.abs(originalSubTotalFromItems - expectedSubTotal) > 0.01) {
+          logger.warn('Inconsistencia detectada en valores de items', {
+            orderId: order._id.toString(),
+            orderNumber: order.orderNumber,
+            originalSubTotalFromItems,
+            expectedSubTotal: expectedSubTotal,
+            originalCogsFromItems,
+            originalContributionMarginFromItems,
+          });
+        }
+
+        // Usar los valores más precisos (suma directa de items)
+        const restoredSubTotal = originalSubTotalFromItems;
+        const restoredContributionMargin = originalContributionMarginFromItems;
+        const restoredCogs = originalCogsFromItems;
+
+        // Validación de seguridad: El subtotal restaurado no debe exceder la suma real de items
+        if (restoredSubTotal < 0) {
+          throw new AppError('Error en el cálculo: El subtotal restaurado es negativo', 500, 'error');
+        }
 
         // Recalcular gastos bancarios basado en el subtotal restaurado
         const { bankTransferExpense: restoredBankTransferExpense, totalAmount: restoredTotalAmount } =
           this.calculateTotals(restoredSubTotal, order.paymentMethod);
 
-        // Actualizar la orden con los valores restaurados
+        // Actualizar la orden con los valores originales restaurados
         order.subTotal = restoredSubTotal;
+        order.totalContributionMarginUSD = restoredContributionMargin;
+        order.totalCogsUSD = restoredCogs; // Asegurar consistencia
+        
         if (restoredBankTransferExpense !== undefined) {
           order.bankTransferExpense = restoredBankTransferExpense;
         } else {
-          // Usar set para remover el campo cuando es undefined
           order.set('bankTransferExpense', undefined);
         }
         order.totalAmount = restoredTotalAmount;
-        order.totalContributionMarginUSD = restoredContributionMargin;
-        // totalCogsUSD permanece sin cambios
 
         // Recalcular totalAmountARS con el valor actual del dólar
         const dollar = await Dollar.findOne().session(session);
@@ -2487,19 +2509,26 @@ export class OrderService {
         // Guardar la orden
         await order.save({ session });
 
-        logger.info('Reembolso cancelado exitosamente', {
+        logger.info('Reembolso cancelado exitosamente con recálculo desde items originales', {
           orderId: order._id.toString(),
           orderNumber: order.orderNumber,
           orderStatus: order.orderStatus,
           cancelledRefundAmount,
-          originalSubTotal: currentSubTotal, // SubTotal antes de la cancelación (con reembolso aplicado)
-          restoredSubTotal,
-          originalTotalAmount: currentTotalAmount, // Total antes de la cancelación (con reembolso aplicado)
-          restoredTotalAmount,
-          restoredTotalAmountARS: order.totalAmountARS,
+          // Valores antes de la cancelación (con reembolso aplicado)
+          originalSubTotal: currentSubTotal,
+          originalTotalAmount: currentTotalAmount,
           originalContributionMargin: currentContributionMarginUSD,
+          // Valores restaurados (recalculados desde items)
+          restoredSubTotal,
+          restoredTotalAmount,
           restoredContributionMargin,
-          cogsUnchanged: order.totalCogsUSD,
+          restoredCogs,
+          restoredTotalAmountARS: order.totalAmountARS,
+          // Validación de integridad
+          originalSubTotalFromItems,
+          originalCogsFromItems,
+          originalContributionMarginFromItems,
+          integrityCheck: Math.abs(restoredSubTotal - (restoredCogs + restoredContributionMargin)) < 0.01,
           cancelledBy: cancelledBy?.toString(),
         });
 
@@ -2524,7 +2553,7 @@ export class OrderService {
             restoredTotalAmount,
             originalContributionMarginUSD: currentContributionMarginUSD,
             restoredContributionMarginUSD: restoredContributionMargin,
-            cogsUSD: order.totalCogsUSD, // COGS permanece sin cambios
+            cogsUSD: restoredCogs,
           },
         };
       });

@@ -12,11 +12,6 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
-        hostname: "api.juancruzmoreno.dev",
-        pathname: "/uploads/**",
-      },
-      {
-        protocol: "https",
         hostname: "api.todoarmazonesarg.com",
         pathname: "/uploads/**",
       },
@@ -26,6 +21,7 @@ const nextConfig: NextConfig = {
         pathname: "/uploads/**",
       },
     ],
+    unoptimized: true,
   },
 };
 

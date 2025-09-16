@@ -22,6 +22,7 @@ export interface ProductVariant {
   thumbnail: string;
   images: string[];
   priceUSD: number;
+  averageCostUSD: number;
 }
 
 export interface Product {
@@ -38,7 +39,29 @@ export interface Product {
   variants: ProductVariant[];
 }
 
+export interface PaginationMetadata {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextCursor: string | null;
+  previousCursor: string | null;
+  limit: number;
+  itemsInCurrentPage: number;
+}
+
 export interface ProductsResponse {
   products: Product[];
-  nextCursor: string | null;
+  pagination: PaginationMetadata;
+}
+
+// Interfaz para obtener solo metadatos de paginación (usado por el nuevo endpoint)
+export interface ProductsPaginationInfo {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  limit: number;
 }

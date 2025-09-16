@@ -47,9 +47,6 @@ importers:
       react-redux:
         specifier: ^9.2.0
         version: 9.2.0(@types/react@19.1.12)(react@19.1.1)(redux@5.0.1)
-      react-window:
-        specifier: ^2.1.0
-        version: 2.1.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
       zod:
         specifier: ^4.0.5
         version: 4.1.8
@@ -1753,12 +1750,6 @@ packages:
         optional: true
       redux:
         optional: true
-
-  react-window@2.1.0:
-    resolution: {integrity: sha512-STMrsd6t3pN/XFa5cblpwTLpsEDtrtdeNY+71QsEaY0m7Fhbn9R4XXYzYAyKDpeYbjmBpAflqHBdDDKW928m3Q==}
-    peerDependencies:
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
 
   react@19.1.1:
     resolution: {integrity: sha512-w8nqGImo45dmMIfljjMwOGtbmC/mk4CMYhWIicdSflH91J9TyCyczcPFXJzrZ/ZXcgGRFeP6BU0BEJTw6tZdfQ==}
@@ -3781,11 +3772,6 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.1.12
       redux: 5.0.1
-
-  react-window@2.1.0(react-dom@19.1.1(react@19.1.1))(react@19.1.1):
-    dependencies:
-      react: 19.1.1
-      react-dom: 19.1.1(react@19.1.1)
 
   react@19.1.1: {}
 

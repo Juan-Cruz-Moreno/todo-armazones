@@ -1,57 +1,40 @@
 "use client";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useProducts } from "@/hooks/useProducts";
 import Image from "next/image";
 import { formatCurrency } from "@/utils/formatCurrency";
 import Link from "next/link";
-import { debounce } from "@/utils/debounce";
 import { Boxes, Plus, SquarePen, DollarSign } from "lucide-react";
-import LoadingSpinner from "@/components/atoms/LoadingSpinner";
+import Pagination from "@/components/molecules/Pagination";
 
 const SKELETON_COUNT = 10;
 
 const ProductsPage = () => {
   const {
     products,
-    nextCursor,
+    pagination,
     loading,
     error,
-    fetchProducts,
+    fetchProductsByPage,
     searchResults,
     searchLoading,
     searchProducts,
     clearSearchResults,
+    loadPageByNumber,
+    resetPagination,
   } = useProducts();
 
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
-
-  const observer = useRef<IntersectionObserver | null>(null);
-
-  // Debounced fetchProducts para scroll infinito
-  const debouncedFetch = useRef(
-    debounce((params: { cursor?: string }) => {
-      fetchProducts(params);
-    }, 200)
-  ).current;
-
-  const lastProductRef = useCallback(
-    (node: HTMLLIElement | null) => {
-      if (loading) return;
-      if (observer.current) observer.current.disconnect();
-      observer.current = new window.IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && nextCursor && !searching) {
-          debouncedFetch({ cursor: nextCursor });
-        }
-      });
-      if (node) observer.current.observe(node);
-    },
-    [loading, nextCursor, debouncedFetch, searching]
-  );
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Cargar productos al montar o limpiar búsqueda
   useEffect(() => {
-    if (!searching) fetchProducts();
+    if (!searching) {
+      resetPagination();
+      fetchProductsByPage({ page: 1, limit: 20 }); // 20 productos por página para admin
+      setCurrentPage(1);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searching]);
 
@@ -71,6 +54,15 @@ const ProductsPage = () => {
     clearSearchResults();
     setSearching(false);
   };
+
+  // Función para manejar cambio de página
+  const handlePageChange = useCallback((pageNumber: number) => {
+    // Scroll hacia arriba inmediatamente cuando cambie de página
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    
+    setCurrentPage(pageNumber);
+    loadPageByNumber(pageNumber, { limit: 20 });
+  }, [loadPageByNumber]);
 
   // Skeleton para lista
   const SkeletonRow = () => (
@@ -167,7 +159,7 @@ const ProductsPage = () => {
                     {product.subcategory.name}
                   </div>
                   <div>
-                    <div className="text-sm text-[#666666]">Precioss:</div>
+                    <div className="text-sm text-[#666666]">Precios:</div>
                     <div className="text-sm text-[#666666] space-y-1">
                       {product.variants && product.variants.length > 0 ? (
                         product.variants.map((variant) => (
@@ -226,153 +218,90 @@ const ProductsPage = () => {
             No hay productos
           </li>
         )}
-        {products.map((product, idx) => {
-          if (idx === products.length - 1 && !searching) {
-            return (
-              <li
-                ref={lastProductRef}
-                className="list-row border border-[#e1e1e1] rounded-none flex items-center gap-4 p-2"
-                key={product.id}
-              >
-                <div>
-                  <Image
-                    src={`${process.env.NEXT_PUBLIC_API_URL}/${product.thumbnail}`}
-                    alt={
-                      product.productModel + " " + product.sku ||
-                      "Product Image"
-                    }
-                    width={40}
-                    height={40}
-                  />
-                </div>
-                <div className="list-col-grow flex-1">
-                  <div className="text-base font-medium text-[#222222]">
-                    {product.productModel}
-                  </div>
-                  <div className="text-sm text-[#666666]">
-                    {product.category.map((cat) => cat.name).join(", ")} -{" "}
-                    {product.subcategory.name}
-                  </div>
-                  <div>
-                    <div className="text-sm text-[#666666] space-y-1">
-                      {product.variants && product.variants.length > 0 ? (
-                        product.variants.map((variant) => (
-                          <div key={variant.id}>
-                            {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")}
-                          </div>
-                        ))
-                      ) : (
-                        <div>-</div>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <span className="text-sm text-[#666666]">
-                      Stock total:{" "}
-                      {product.variants.reduce(
-                        (total, variant) => total + variant.stock,
-                        0
-                      )}
-                    </span>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Link href={`/products/inventory/${product.id}`}>
-                    <button
-                      className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
-                      title="Gestionar Inventario"
-                    >
-                      <Boxes className="size-4" />
-                    </button>
-                  </Link>
-                  <Link href={`/products/edit/${product.id}`}>
-                    <button
-                      className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
-                      title="Editar Producto"
-                    >
-                      <SquarePen className="size-4" />
-                    </button>
-                  </Link>
-                </div>
-              </li>
-            );
-          }
-          return (
-            <li
-              className="list-row border border-[#e1e1e1] rounded-none flex items-center gap-4 p-2"
-              key={product.id}
-            >
+        {products.map((product) => (
+          <li
+            className="list-row border border-[#e1e1e1] rounded-none flex items-center gap-4 p-2"
+            key={product.id}
+          >
+            <div>
+              <Image
+                src={`${process.env.NEXT_PUBLIC_API_URL}/${product.thumbnail}`}
+                alt={
+                  product.productModel + " " + product.sku ||
+                  "Product Image"
+                }
+                width={40}
+                height={40}
+              />
+            </div>
+            <div className="list-col-grow flex-1">
+              <div className="text-base font-medium text-[#222222]">
+                {product.productModel}
+              </div>
+              <div className="text-sm text-[#666666]">
+                {product.category.map((cat) => cat.name).join(", ")} -{" "}
+                {product.subcategory.name}
+              </div>
               <div>
-                <Image
-                  src={`${process.env.NEXT_PUBLIC_API_URL}/${product.thumbnail}`}
-                  alt={
-                    product.productModel + " " + product.sku || "Product Image"
-                  }
-                  width={40}
-                  height={40}
-                />
-              </div>
-              <div className="list-col-grow flex-1">
-                <div className="text-base font-medium text-[#222222]">
-                  {product.productModel}
-                </div>
-                <div className="text-sm text-[#666666]">
-                  {product.category.map((cat) => cat.name).join(", ")} -{" "}
-                  {product.subcategory.name}
-                </div>
-                <div>
-                  <div className="text-sm text-[#666666] space-y-1">
-                    {product.variants && product.variants.length > 0 ? (
-                      product.variants.map((variant) => (
-                        <div key={variant.id}>
-                          {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")}
-                        </div>
-                      ))
-                    ) : (
-                      <div>-</div>
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <span className="text-sm text-[#666666]">
-                    Stock total:{" "}
-                    {product.variants.reduce(
-                      (total, variant) => total + variant.stock,
-                      0
-                    )}
-                  </span>
+                <div className="text-sm text-[#666666] space-y-1">
+                  {product.variants && product.variants.length > 0 ? (
+                    product.variants.map((variant) => (
+                      <div key={variant.id}>
+                        {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")}
+                      </div>
+                    ))
+                  ) : (
+                    <div>-</div>
+                  )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Link href={`/products/inventory/${product.id}`}>
-                  <button
-                    className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
-                    title="Gestionar Inventario"
-                  >
-                    <Boxes className="size-4" />
-                  </button>
-                </Link>
-                <Link href={`/products/edit/${product.id}`}>
-                  <button
-                    className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
-                    title="Editar Producto"
-                  >
-                    <SquarePen className="size-4" />
-                  </button>
-                </Link>
+              <div>
+                <span className="text-sm text-[#666666]">
+                  Stock total:{" "}
+                  {product.variants.reduce(
+                    (total, variant) => total + variant.stock,
+                    0
+                  )}
+                </span>
               </div>
-            </li>
-          );
-        })}
+            </div>
+            <div className="flex items-center gap-2">
+              <Link href={`/products/inventory/${product.id}`}>
+                <button
+                  className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
+                  title="Gestionar Inventario"
+                >
+                  <Boxes className="size-4" />
+                </button>
+              </Link>
+              <Link href={`/products/edit/${product.id}`}>
+                <button
+                  className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
+                  title="Editar Producto"
+                >
+                  <SquarePen className="size-4" />
+                </button>
+              </Link>
+            </div>
+          </li>
+        ))}
       </ul>
-      {loading && products.length > 0 && (
-        <div className="flex justify-center py-4 text-[#666666]">
-          <LoadingSpinner />
-        </div>
+      
+      {/* Componente de paginación */}
+      {!searching && pagination && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={currentPage}
+          totalPages={pagination.totalPages}
+          onPageChange={handlePageChange}
+          loading={loading}
+          className="mt-6"
+        />
       )}
-      {!nextCursor && !loading && products.length > 0 && (
-        <div className="p-4 text-center text-sm text-[#222222] opacity-60">
-          No hay más productos.
+
+      {/* Información de resultados */}
+      {!searching && pagination && (
+        <div className="mt-4 text-sm text-[#666666] text-center">
+          Mostrando {products.length} de {pagination.totalCount} productos
         </div>
       )}
     </div>
