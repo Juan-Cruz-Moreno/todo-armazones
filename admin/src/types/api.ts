@@ -55,7 +55,12 @@ export function isApiError(error: unknown): error is ApiAxiosError {
 // Helper para extraer mensaje de error
 export function getErrorMessage(error: unknown): string {
   if (isApiError(error)) {
-    return error.response?.data?.message || 'Error desconocido';
+    const message = error.response?.data?.message || 'Error desconocido';
+    const details = error.response?.data?.details;
+    if (details && typeof details === 'object' && 'cause' in details) {
+      return `${message}: ${details.cause}`;
+    }
+    return message;
   }
   
   if (error instanceof Error) {

@@ -8,6 +8,6 @@ export interface IProduct {
   subcategory: Types.ObjectId;
   productModel: string;
   sku: string;
-  size?: string;
+  size: string;
   description?: string;
 }

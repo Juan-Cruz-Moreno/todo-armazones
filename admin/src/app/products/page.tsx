@@ -27,16 +27,17 @@ const ProductsPage = () => {
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [inStock, setInStock] = useState(false);
 
   // Cargar productos al montar o limpiar búsqueda
   useEffect(() => {
     if (!searching) {
       resetPagination();
-      fetchProductsByPage({ page: 1, limit: 20 }); // 20 productos por página para admin
+      fetchProductsByPage({ page: 1, limit: 20, inStock }); // 20 productos por página para admin
       setCurrentPage(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searching]);
+  }, [searching, inStock]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +47,7 @@ const ProductsPage = () => {
       return;
     }
     setSearching(true);
-    await searchProducts(search);
+    await searchProducts({ q: search, inStock });
   };
 
   const handleClear = () => {
@@ -61,8 +62,8 @@ const ProductsPage = () => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     
     setCurrentPage(pageNumber);
-    loadPageByNumber(pageNumber, { limit: 20 });
-  }, [loadPageByNumber]);
+    loadPageByNumber(pageNumber, { limit: 20, inStock });
+  }, [loadPageByNumber, inStock]);
 
   // Skeleton para lista
   const SkeletonRow = () => (
@@ -118,6 +119,18 @@ const ProductsPage = () => {
           </button>
         </Link>
       </div>
+      {/* Checkbox para filtrar por stock */}
+      <div className="mb-4">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={inStock}
+            onChange={(e) => setInStock(e.target.checked)}
+            className="checkbox checkbox-neutral"
+          />
+          <span className="text-sm text-[#666666]">Mostrar solo productos en stock</span>
+        </label>
+      </div>
       {/* Resultados de búsqueda */}
       {searching && (
         <div className="mb-6">
@@ -164,7 +177,7 @@ const ProductsPage = () => {
                       {product.variants && product.variants.length > 0 ? (
                         product.variants.map((variant) => (
                           <div key={variant.id}>
-                            {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")}
+                            {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")} - Costo promedio: {formatCurrency(variant.averageCostUSD, "es-US", "USD")}
                           </div>
                         ))
                       ) : (
@@ -247,7 +260,7 @@ const ProductsPage = () => {
                   {product.variants && product.variants.length > 0 ? (
                     product.variants.map((variant) => (
                       <div key={variant.id}>
-                        {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")}
+                        {variant.color?.name ?? "-"}: {formatCurrency(variant.priceUSD, "es-US", "USD")} - Costo promedio: {formatCurrency(variant.averageCostUSD, "es-US", "USD")}
                       </div>
                     ))
                   ) : (

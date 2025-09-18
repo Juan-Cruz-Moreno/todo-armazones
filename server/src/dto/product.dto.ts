@@ -8,7 +8,7 @@ export interface CreateProductRequestDto {
   subcategory: Types.ObjectId;
   productModel: string;
   sku: string;
-  size?: string;
+  size: string;
   description?: string;
 }
 
@@ -21,7 +21,7 @@ export interface CreateProductResponseDto {
   subcategory: ProductSubcategoryDto;
   productModel: string;
   sku: string;
-  size?: string;
+  size: string;
   description?: string;
 }
 
@@ -35,20 +35,6 @@ export interface UpdateProductRequestDto {
   size?: string;
   description?: string;
 }
-
-// export interface UpdateProductResponseDto {
-//   id: string;
-//   slug: string;
-//   thumbnail: string;
-//   primaryImage: string;
-//   category: ProductCategoryDto[];
-//   subcategory: ProductSubcategoryDto;
-//   productModel: string;
-//   sku: string;
-//   size?: string;
-//   costUSD: number;
-//   priceUSD: number;
-// }
 
 export interface ProductCategoryDto {
   id: string;

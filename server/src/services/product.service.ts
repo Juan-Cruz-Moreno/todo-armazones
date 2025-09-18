@@ -1,5 +1,7 @@
 import Product, { IProductDocument } from '@models/Product';
 import ProductVariant, { IProductVariantDocument } from '@models/ProductVariant';
+import Category, { ICategoryDocument } from '@models/Category';
+import Subcategory, { ISubcategoryDocument } from '@models/Subcategory';
 import {
   CreateProductRequestDto,
   CreateProductResponseDto,
@@ -28,8 +30,6 @@ import { AppError } from '@utils/AppError';
 import logger from '@config/logger';
 import { FilterQuery, Types } from 'mongoose';
 import { generateProductSlug } from '@helpers/product-slug.helper';
-import Category, { ICategoryDocument } from '@models/Category';
-import Subcategory, { ISubcategoryDocument } from '@models/Subcategory';
 import { StockMovementReason } from '@interfaces/stockMovement';
 import { InventoryService } from './inventory.service';
 
@@ -50,6 +50,141 @@ interface QueryBuildResult {
 export class ProductService {
   private inventoryService = new InventoryService();
 
+  /**
+   * Valida los datos de entrada del producto
+   */
+  private validateProduct(productDto: CreateProductRequestDto): void {
+    if (!productDto.productModel?.trim()) {
+      throw new AppError('El modelo del producto es requerido', 400, 'error', false);
+    }
+    if (!productDto.sku?.trim()) {
+      throw new AppError('El SKU del producto es requerido', 400, 'error', false);
+    }
+    if (!productDto.size?.trim()) {
+      throw new AppError('El tamaño del producto es requerido', 400, 'error', false);
+    }
+    if (!Array.isArray(productDto.category) || productDto.category.length === 0) {
+      throw new AppError('Al menos una categoría es requerida', 400, 'error', false);
+    }
+    if (productDto.category.length > 10) {
+      throw new AppError('No se permiten más de 10 categorías por producto', 400, 'error', false);
+    }
+    if (!productDto.subcategory) {
+      throw new AppError('La subcategoría es requerida', 400, 'error', false);
+    }
+  }
+
+  /**
+   * Valida los datos de entrada de las variantes
+   */
+  private validateVariants(variantsDto: CreateProductVariantRequestDto[]): void {
+    if (!Array.isArray(variantsDto) || variantsDto.length === 0) {
+      throw new AppError('Al menos una variante es requerida', 400, 'error', false);
+    }
+    if (variantsDto.length > 50) {
+      throw new AppError('No se permiten más de 50 variantes por producto', 400, 'error', false);
+    }
+
+    const colorHexes = new Set<string>();
+    for (const variant of variantsDto) {
+      if (!variant.color?.name?.trim() || !variant.color?.hex?.trim()) {
+        throw new AppError('El color de la variante es requerido', 400, 'error', false);
+      }
+      if (colorHexes.has(variant.color.hex)) {
+        throw new AppError('No se permiten variantes con el mismo color', 400, 'error', false);
+      }
+      colorHexes.add(variant.color.hex);
+      if (variant.stock < 0) {
+        throw new AppError('El stock no puede ser negativo', 400, 'error', false);
+      }
+      if (variant.initialCostUSD < 0) {
+        throw new AppError('El costo inicial no puede ser negativo', 400, 'error', false);
+      }
+      if (variant.priceUSD < 0) {
+        throw new AppError('El precio no puede ser negativo', 400, 'error', false);
+      }
+      if (!variant.thumbnail?.trim()) {
+        throw new AppError('La miniatura de la variante es requerida', 400, 'error', false);
+      }
+      if (!Array.isArray(variant.images)) {
+        throw new AppError('Las imágenes deben ser un array', 400, 'error', false);
+      }
+      if (variant.images.length > 10) {
+        throw new AppError('No se permiten más de 10 imágenes por variante', 400, 'error', false);
+      }
+    }
+  }
+
+  /**
+   * Valida los datos de entrada del producto para actualización (campos opcionales)
+   */
+  private validateUpdateProduct(productDto: UpdateProductRequestDto): void {
+    if (productDto.productModel !== undefined && !productDto.productModel?.trim()) {
+      throw new AppError('El modelo del producto no puede estar vacío', 400, 'error', false);
+    }
+    if (productDto.sku !== undefined && !productDto.sku?.trim()) {
+      throw new AppError('El SKU del producto no puede estar vacío', 400, 'error', false);
+    }
+    if (productDto.size !== undefined && !productDto.size?.trim()) {
+      throw new AppError('El tamaño del producto no puede estar vacío', 400, 'error', false);
+    }
+    if (productDto.category !== undefined) {
+      if (!Array.isArray(productDto.category) || productDto.category.length === 0) {
+        throw new AppError('Al menos una categoría es requerida', 400, 'error', false);
+      }
+      if (productDto.category.length > 10) {
+        throw new AppError('No se permiten más de 10 categorías por producto', 400, 'error', false);
+      }
+    }
+    if (productDto.subcategory !== undefined && !productDto.subcategory) {
+      throw new AppError('La subcategoría no puede estar vacía', 400, 'error', false);
+    }
+  }
+
+  /**
+   * Valida los datos de entrada de las variantes para actualización
+   */
+  private validateUpdateVariants(variantsDto: { id: string; data: UpdateProductVariantRequestDto }[]): void {
+    if (!Array.isArray(variantsDto) || variantsDto.length === 0) {
+      throw new AppError('Al menos una variante es requerida para actualizar', 400, 'error', false);
+    }
+    if (variantsDto.length > 50) {
+      throw new AppError('No se permiten más de 50 variantes por producto', 400, 'error', false);
+    }
+
+    const colorHexes = new Set<string>();
+    for (const variantUpdate of variantsDto) {
+      const variant = variantUpdate.data;
+      if (variant.color) {
+        if (!variant.color.name?.trim() || !variant.color.hex?.trim()) {
+          throw new AppError('El color de la variante no puede estar vacío', 400, 'error', false);
+        }
+        if (colorHexes.has(variant.color.hex)) {
+          throw new AppError('No se permiten variantes con el mismo color', 400, 'error', false);
+        }
+        colorHexes.add(variant.color.hex);
+      }
+      if (variant.priceUSD !== undefined && variant.priceUSD < 0) {
+        throw new AppError('El precio no puede ser negativo', 400, 'error', false);
+      }
+      if (variant.averageCostUSD !== undefined && variant.averageCostUSD < 0) {
+        throw new AppError('El costo promedio no puede ser negativo', 400, 'error', false);
+      }
+      if (variant.thumbnail !== undefined && !variant.thumbnail?.trim()) {
+        throw new AppError('La miniatura de la variante no puede estar vacía', 400, 'error', false);
+      }
+      if (variant.images !== undefined) {
+        if (!Array.isArray(variant.images)) {
+          throw new AppError('Las imágenes deben ser un array', 400, 'error', false);
+        }
+        if (variant.images.length > 10) {
+          throw new AppError('No se permiten más de 10 imágenes por variante', 400, 'error', false);
+        }
+      }
+      // Nota: stock se maneja vía InventoryService; averageCostUSD se valida aquí para modificaciones manuales
+    }
+  }
+
   public async createProductWithVariants(
     productDto: CreateProductRequestDto,
     variantsDto: CreateProductVariantRequestDto[],
@@ -58,11 +193,45 @@ export class ProductService {
     product: CreateProductResponseDto;
     variants: CreateProductVariantResponseDto[];
   }> {
+    // Validaciones de entrada
+    this.validateProduct(productDto);
+    this.validateVariants(variantsDto);
+
+    // Generar slug único (unicidad manejada por índices de MongoDB)
+    const slug = await generateProductSlug(productDto.productModel, productDto.sku);
+
     try {
       // Usar withTransaction para manejar la transacción
       const result = await withTransaction(async (session) => {
-        // Generar el slug del producto
-        const slug = await generateProductSlug(productDto.productModel, productDto.sku);
+        // Ya no necesitamos generar el slug aquí, usamos el generado pre-transacción
+
+        // Validar existencia de categorías
+        const categories = await Category.find({
+          _id: { $in: productDto.category },
+        }).session(session);
+        if (categories.length !== productDto.category.length) {
+          throw new AppError('Una o más categorías no existen', 400, 'error', false);
+        }
+
+        // Validar existencia de subcategoría
+        const subcategory = await Subcategory.findById(productDto.subcategory).session(session);
+        if (!subcategory) {
+          throw new AppError('La subcategoría no existe', 400, 'error', false);
+        }
+
+        // Validar que la subcategoría pertenezca a al menos una de las categorías seleccionadas
+        const subcategoryCategories = subcategory.category.map((cat) => cat.toString());
+        const hasMatchingCategory = productDto.category.some((catId) =>
+          subcategoryCategories.includes(catId.toString()),
+        );
+        if (!hasMatchingCategory) {
+          throw new AppError(
+            'La subcategoría no pertenece a ninguna de las categorías seleccionadas',
+            400,
+            'error',
+            false,
+          );
+        }
 
         // Crear el producto base incluyendo el slug
         const product = await new Product({ ...productDto, slug }).save({
@@ -76,6 +245,9 @@ export class ProductService {
           .session(session);
 
         // Crear las variantes con stock inicial y costo promedio
+        logger.info(`Creando ${variantsDto.length} variantes para producto`, {
+          productModel: productDto.productModel,
+        });
         const variantDocs = await ProductVariant.insertMany(
           variantsDto.map((variant) => ({
             product: product._id,
@@ -96,44 +268,67 @@ export class ProductService {
           const variant = variantDocs[i];
           const variantDto = variantsDto[i];
 
-          if (variantDto.stock > 0) {
-            // Usar InventoryService para crear el stock inicial
-            await this.inventoryService.createStockEntryWithSession(
-              variant._id,
-              variantDto.stock,
-              session,
-              variantDto.initialCostUSD,
-              StockMovementReason.INITIAL_STOCK,
-              undefined, // reference
-              'Stock inicial del producto',
-              createdBy,
+          try {
+            if (variantDto.stock > 0) {
+              logger.info(`Creando stock inicial para variante ${variant._id}`, {
+                productId: product._id,
+                variantId: variant._id,
+                stock: variantDto.stock,
+                initialCost: variantDto.initialCostUSD,
+              });
+
+              // Usar InventoryService para crear el stock inicial
+              await this.inventoryService.createStockEntryWithSession(
+                variant._id,
+                variantDto.stock,
+                session,
+                variantDto.initialCostUSD,
+                StockMovementReason.INITIAL_STOCK,
+                undefined, // reference
+                'Stock inicial del producto',
+                createdBy,
+              );
+
+              // Obtener la variante actualizada para la respuesta
+              const updatedVariant = await ProductVariant.findById(variant._id).session(session);
+
+              variantResponses.push({
+                id: variant._id.toString(),
+                product: variant.product.toString(),
+                color: variant.color,
+                stock: updatedVariant?.stock || variantDto.stock,
+                averageCostUSD: updatedVariant?.averageCostUSD || variantDto.initialCostUSD,
+                priceUSD: variant.priceUSD,
+                thumbnail: variant.thumbnail,
+                images: variant.images,
+              });
+            } else {
+              // Si no hay stock inicial, solo agregar la variante como está
+              variantResponses.push({
+                id: variant._id.toString(),
+                product: variant.product.toString(),
+                color: variant.color,
+                stock: 0,
+                averageCostUSD: variant.averageCostUSD,
+                priceUSD: variant.priceUSD,
+                thumbnail: variant.thumbnail,
+                images: variant.images,
+              });
+            }
+          } catch (variantError) {
+            logger.error(`Error procesando variante ${i}`, {
+              variantId: variant._id,
+              error: variantError,
+              variantDto,
+            });
+            throw new AppError(
+              `Error al procesar variante ${i + 1}: ${
+                variantError instanceof Error ? variantError.message : 'Error desconocido'
+              }`,
+              500,
+              'error',
+              false,
             );
-
-            // Obtener la variante actualizada para la respuesta
-            const updatedVariant = await ProductVariant.findById(variant._id).session(session);
-
-            variantResponses.push({
-              id: variant._id.toString(),
-              product: variant.product.toString(),
-              color: variant.color,
-              stock: updatedVariant?.stock || variantDto.stock,
-              averageCostUSD: updatedVariant?.averageCostUSD || variantDto.initialCostUSD,
-              priceUSD: variant.priceUSD,
-              thumbnail: variant.thumbnail,
-              images: variant.images,
-            });
-          } else {
-            // Si no hay stock inicial, solo agregar la variante como está
-            variantResponses.push({
-              id: variant._id.toString(),
-              product: variant.product.toString(),
-              color: variant.color,
-              stock: 0,
-              averageCostUSD: variant.averageCostUSD,
-              priceUSD: variant.priceUSD,
-              thumbnail: variant.thumbnail,
-              images: variant.images,
-            });
           }
         }
 
@@ -147,9 +342,7 @@ export class ProductService {
           subcategory: this.mapSubcategory(populatedProduct!.subcategory),
           productModel: populatedProduct!.productModel,
           sku: populatedProduct!.sku,
-          ...(populatedProduct!.size !== undefined && {
-            size: populatedProduct!.size,
-          }),
+          size: populatedProduct!.size,
           description: populatedProduct!.description ?? '',
         };
 
@@ -161,7 +354,9 @@ export class ProductService {
       logger.error('Error while creating product with variants', {
         error,
         productDto,
-        variantsDto,
+        variantsDto: variantsDto.length,
+        createdBy,
+        stack: error instanceof Error ? error.stack : undefined,
       });
 
       // Lanzar un AppError con detalles del error
@@ -345,7 +540,7 @@ export class ProductService {
         subcategory: subcategoryInfo,
         productModel: product.productModel,
         sku: product.sku,
-        ...(product.size !== undefined && { size: product.size }),
+        size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
         description: product.description ?? '',
         variants: variantsMap.get(product._id.toString()) ?? [],
       };
@@ -681,7 +876,7 @@ export class ProductService {
         subcategory: subcategoryInfo,
         productModel: product.productModel,
         sku: product.sku,
-        size: product.size ?? '',
+        size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
         description: product.description ?? '',
         variants: this.mapVariants(variants as IProductVariantDocument[]),
       };
@@ -702,33 +897,128 @@ export class ProductService {
     productDto: UpdateProductRequestDto,
     variantsDto: { id: string; data: UpdateProductVariantRequestDto }[],
   ): Promise<ProductListItemDto> {
+    // Validaciones de entrada (adaptadas para update)
+    this.validateUpdateProduct(productDto);
+    this.validateUpdateVariants(variantsDto);
+
+    // Generar nuevo slug si se actualizan productModel o sku
+    let newSlug: string | undefined;
+    if (productDto.productModel || productDto.sku) {
+      const existingProduct = await Product.findById(productId).select('productModel sku');
+      if (!existingProduct) {
+        throw new AppError('Producto no encontrado', 404, 'fail', false);
+      }
+      const model = productDto.productModel || existingProduct.productModel;
+      const sku = productDto.sku || existingProduct.sku;
+      newSlug = await generateProductSlug(model, sku);
+    }
+
     try {
       const result = await withTransaction(async (session) => {
+        // Validar existencia de categorías si se proporcionan
+        if (productDto.category && productDto.category.length > 0) {
+          const categories = await Category.find({
+            _id: { $in: productDto.category },
+          }).session(session);
+          if (categories.length !== productDto.category.length) {
+            throw new AppError('Una o más categorías no existen', 400, 'error', false);
+          }
+        }
+
+        // Validar existencia de subcategoría si se proporciona
+        let subcategory: ISubcategoryDocument | null = null;
+        if (productDto.subcategory) {
+          subcategory = await Subcategory.findById(productDto.subcategory).session(session);
+          if (!subcategory) {
+            throw new AppError('La subcategoría no existe', 400, 'error', false);
+          }
+        }
+
+        // Validar relación subcategoría-categorías si ambas se actualizan
+        if (subcategory && productDto.category && productDto.category.length > 0) {
+          const subcategoryCategories = subcategory.category.map((cat: Types.ObjectId) => cat.toString());
+          const hasMatchingCategory = productDto.category.some((catId) =>
+            subcategoryCategories.includes(catId.toString()),
+          );
+          if (!hasMatchingCategory) {
+            throw new AppError(
+              'La subcategoría no pertenece a ninguna de las categorías seleccionadas',
+              400,
+              'error',
+              false,
+            );
+          }
+        }
+
         // Actualizar producto
-        const product = await Product.findByIdAndUpdate(productId, { $set: productDto }, { new: true, session })
+        const updateData = newSlug ? { ...productDto, slug: newSlug } : productDto;
+        const product = await Product.findByIdAndUpdate(productId, { $set: updateData }, { new: true, session })
           .populate({ path: 'category', select: '_id name slug' })
           .populate({ path: 'subcategory', select: '_id name slug' });
         if (!product) {
           throw new AppError('Producto no encontrado', 404, 'fail', false);
         }
 
-        // Actualizar variantes
+        // Actualizar variantes con logging y manejo de errores por variante
         const updatedVariants: IProductVariantDocument[] = [];
-        for (const variantUpdate of variantsDto) {
-          const variant = await ProductVariant.findOneAndUpdate(
-            { _id: variantUpdate.id, product: product._id },
-            { $set: variantUpdate.data },
-            { new: true, session },
-          );
-          if (!variant) {
-            throw new AppError(`Variante no encontrada: ${variantUpdate.id}`, 404, 'fail', false);
+        for (let i = 0; i < variantsDto.length; i++) {
+          const variantUpdate = variantsDto[i];
+          try {
+            logger.info(`Actualizando variante ${variantUpdate.id}`, {
+              productId,
+              variantId: variantUpdate.id,
+              data: variantUpdate.data,
+            });
+
+            const variant = await ProductVariant.findOneAndUpdate(
+              { _id: variantUpdate.id, product: product._id },
+              { $set: variantUpdate.data },
+              { new: true, session },
+            );
+            if (!variant) {
+              throw new AppError(`Variante no encontrada: ${variantUpdate.id}`, 404, 'fail', false);
+            }
+            updatedVariants.push(variant);
+          } catch (variantError) {
+            logger.error(`Error actualizando variante ${i + 1}`, {
+              variantId: variantUpdate.id,
+              error: variantError,
+              data: variantUpdate.data,
+            });
+            throw new AppError(
+              `Error al actualizar variante ${i + 1}: ${
+                variantError instanceof Error ? variantError.message : 'Error desconocido'
+              }`,
+              500,
+              'error',
+              false,
+            );
           }
-          updatedVariants.push(variant);
+        }
+
+        // Eliminar variantes que no están en el payload enviado (eliminadas en frontend)
+        const sentVariantIds = variantsDto.map(v => v.id);
+        const allProductVariants = await ProductVariant.find({ product: product._id }, '_id', { session });
+        const variantsToDelete = allProductVariants.filter(v => !sentVariantIds.includes(v._id.toString()));
+
+        if (variantsToDelete.length > 0) {
+          logger.info(`Eliminando ${variantsToDelete.length} variantes no enviadas`, {
+            productId,
+            variantsToDelete: variantsToDelete.map(v => v._id.toString()),
+          });
+
+          await ProductVariant.deleteMany(
+            { _id: { $in: variantsToDelete.map(v => v._id) } },
+            { session }
+          );
         }
 
         // Armar respuesta igual que ProductListItemDto
         const categoryInfo = this.mapCategories(product.category);
         const subcategoryInfo = this.mapSubcategory(product.subcategory);
+
+        // Obtener todas las variantes restantes del producto (después de posibles eliminaciones)
+        const remainingVariants = await ProductVariant.find({ product: product._id }, null, { session });
 
         return {
           id: product._id.toString(),
@@ -739,9 +1029,9 @@ export class ProductService {
           subcategory: subcategoryInfo,
           productModel: product.productModel,
           sku: product.sku,
-          size: product.size ?? '',
+          size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
           description: product.description ?? '',
-          variants: this.mapVariants(updatedVariants),
+          variants: this.mapVariants(remainingVariants),
         } as ProductListItemDto;
       });
 
@@ -752,6 +1042,7 @@ export class ProductService {
         productId,
         productDto,
         variantsDto,
+        stack: error instanceof Error ? error.stack : undefined,
       });
       throw error instanceof AppError
         ? error
@@ -819,7 +1110,7 @@ export class ProductService {
           subcategory: subcategoryInfo,
           productModel: product.productModel,
           sku: product.sku,
-          ...(product.size !== undefined && { size: product.size }),
+          size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
           description: product.description ?? '',
           variants: variantsMap.get(product._id.toString()) ?? [],
         };
@@ -936,7 +1227,9 @@ export class ProductService {
         // 5. Ejecutar actualización masiva
         let totalUpdated = 0;
         if (bulkOperations.length > 0) {
-          const bulkResult = await ProductVariant.bulkWrite(bulkOperations, { session });
+          const bulkResult = await ProductVariant.bulkWrite(bulkOperations, {
+            session,
+          });
           totalUpdated = bulkResult.modifiedCount;
         }
 

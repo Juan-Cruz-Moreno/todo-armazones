@@ -16,12 +16,8 @@ import { addItemToCart } from "@/redux/slices/cartSlice";
 const ProductPage = () => {
   const { slug } = useParams();
   const router = useRouter();
-  const {
-    addItem,
-    clearSpecificError,
-    getAddItemLoading,
-    getAddItemError,
-  } = useCart();
+  const { addItem, clearSpecificError, getAddItemLoading, getAddItemError } =
+    useCart();
 
   // Usar el nuevo hook
   const { productDetail, loading, error, fetchProductBySlug } = useProducts();
@@ -244,7 +240,8 @@ const ProductPage = () => {
               className="w-full h-auto rounded-none object-contain"
               priority
               style={{
-                maxHeight: "calc(100vh - (var(--navbar-height) + var(--breadcrumb-height)))",
+                maxHeight:
+                  "calc(100vh - (var(--navbar-height) + var(--breadcrumb-height)))",
               }}
             />
             {/* Lente del zoom */}
@@ -252,15 +249,15 @@ const ProductPage = () => {
               <div
                 className="absolute border-2 border-gray-400 pointer-events-none bg-white bg-opacity-50 transition-opacity duration-200"
                 style={{
-                  width: 'clamp(120px, 15vw, 200px)',
-                  height: 'clamp(120px, 15vw, 200px)',
+                  width: "clamp(120px, 15vw, 200px)",
+                  height: "clamp(120px, 15vw, 200px)",
                   left: `${mousePosition.x}%`,
                   top: `${mousePosition.y}%`,
-                  transform: 'translate(-50%, -50%)',
+                  transform: "translate(-50%, -50%)",
                   backgroundImage: `url(${process.env.NEXT_PUBLIC_API_URL}/${imageToShow})`,
-                  backgroundSize: '600%',
+                  backgroundSize: "600%",
                   backgroundPosition: `${mousePosition.x}% ${mousePosition.y}%`,
-                  backgroundRepeat: 'no-repeat',
+                  backgroundRepeat: "no-repeat",
                 }}
               />
             )}
@@ -273,11 +270,17 @@ const ProductPage = () => {
           </h1>
           <div className="mb-4">
             <p className="text-[#555555] text-xl font-normal mb-4">
-              {formatCurrency(productDetail.variants[0].priceUSD, "en-US", "USD")}
+              {formatCurrency(
+                productDetail.variants[0].priceUSD,
+                "en-US",
+                "USD"
+              )}
             </p>
-            <p className="font-normal text-sm text-[#555555] font-dm mb-2">
-              {productDetail.size}
-            </p>
+            {productDetail.size && (
+              <p className="font-normal text-sm text-[#555555] font-dm mb-2">
+                {productDetail.size}
+              </p>
+            )}
             {productDetail.description && (
               <p className="font-normal text-sm text-[#666666] mb-4 leading-relaxed">
                 {productDetail.description}

@@ -48,9 +48,9 @@ export class ProductController {
       await sharp(primaryImageFile.path).resize(300, 300).toFile(thumbnailPath);
       generatedFiles.push(thumbnailPath);
 
-      // 3. Parsear los datos recibidos como string JSON
-      const productData = typeof req.body.product === 'string' ? JSON.parse(req.body.product) : req.body.product;
-      const variantsData = typeof req.body.variants === 'string' ? JSON.parse(req.body.variants) : req.body.variants;
+      // 3. Los datos ya están parseados por el middleware parseJsonFields
+      const productData = req.body.product;
+      const variantsData = req.body.variants;
 
       // 4. Asociar imágenes a cada variante usando el nombre del color como identificador
       const variantsDto: CreateProductVariantRequestDto[] = await Promise.all(
@@ -75,8 +75,8 @@ export class ProductController {
           // Guardar rutas de imágenes y thumbnail principal
           return {
             ...variant,
-            images: imagesForVariant.map((img) => '/uploads/' + img.filename),
-            thumbnail: '/uploads/' + thumbName,
+            images: imagesForVariant.map((img) => 'uploads/' + img.filename),
+            thumbnail: 'uploads/' + thumbName,
           };
         }),
       );
@@ -84,8 +84,8 @@ export class ProductController {
       // 5. Asignar rutas de imágenes procesadas al producto
       const productDto: CreateProductRequestDto = {
         ...productData,
-        primaryImage: '/uploads/' + primaryImageFile.filename,
-        thumbnail: '/uploads/' + thumbnailFilename,
+        primaryImage: 'uploads/' + primaryImageFile.filename,
+        thumbnail: 'uploads/' + thumbnailFilename,
       };
 
       // Obtener el ID del usuario desde la sesión
@@ -349,9 +349,7 @@ export class ProductController {
     const generatedFiles: string[] = [];
     try {
       // Procesar imagen principal si se envía
-      let productDto = (
-        typeof req.body.product === 'string' ? JSON.parse(req.body.product) : req.body.product
-      ) as UpdateProductRequestDto;
+      let productDto = req.body.product as UpdateProductRequestDto;
 
       let thumbnailFilename: string | undefined;
 
@@ -366,15 +364,13 @@ export class ProductController {
 
         productDto = {
           ...productDto,
-          primaryImage: '/uploads/' + primaryImageFile.filename,
-          thumbnail: '/uploads/' + thumbnailFilename,
+          primaryImage: 'uploads/' + primaryImageFile.filename,
+          thumbnail: 'uploads/' + thumbnailFilename,
         };
       }
 
       // Procesar variantes y asociar imágenes si se envían
-      const variantsRaw = (
-        typeof req.body.variants === 'string' ? JSON.parse(req.body.variants) : req.body.variants
-      ) as { id: string; data: UpdateProductVariantRequestDto }[];
+      const variantsRaw = req.body.variants as { id: string; data: UpdateProductVariantRequestDto }[];
 
       const variantsDto = await Promise.all(
         variantsRaw.map(async (variant) => {
@@ -393,8 +389,8 @@ export class ProductController {
                 ...variant,
                 data: {
                   ...variant.data,
-                  images: imagesForVariant.map((img) => '/uploads/' + img.filename),
-                  thumbnail: '/uploads/' + thumbName,
+                  images: imagesForVariant.map((img) => 'uploads/' + img.filename),
+                  thumbnail: 'uploads/' + thumbName,
                 },
               };
             }

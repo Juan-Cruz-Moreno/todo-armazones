@@ -31,6 +31,7 @@ export const useProducts = () => {
     bulkUpdateError,
     paginationInfoLoading,
     paginationInfoError,
+    lastCreatedProduct,
   } = useAppSelector((state) => state.products);
 
   return {
@@ -45,6 +46,7 @@ export const useProducts = () => {
     bulkUpdateError,
     paginationInfoLoading,
     paginationInfoError,
+    lastCreatedProduct,
     
     // Derived state for convenience
     hasNextPage: pagination?.hasNextPage || false,
@@ -89,7 +91,7 @@ export const useProducts = () => {
       inStock?: boolean;
     }) => dispatch(fetchProductsPaginationInfo(params)),
     
-    searchProducts: (q: string) => dispatch(searchProducts(q)),
+    searchProducts: (params: { q: string; inStock?: boolean }) => dispatch(searchProducts(params)),
     clearSearchResults: () => dispatch(clearSearchResults()),
     createProduct: (payload: CreateProductPayload) =>
       dispatch(createProduct(payload)),

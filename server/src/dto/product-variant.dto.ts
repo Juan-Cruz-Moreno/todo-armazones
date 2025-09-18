@@ -31,16 +31,9 @@ export interface UpdateProductVariantRequestDto {
   priceUSD?: number;
   thumbnail?: string;
   images?: string[];
-  // Note: stock y averageCostUSD se actualizan únicamente mediante InventoryService
+  averageCostUSD?: number; // Permitir modificación manual del costo promedio ponderado
+  // Note: stock se actualiza únicamente mediante InventoryService
 }
-
-// export interface UpdateProductVariantResponseDto {
-//   id: string;
-//   product: string;
-//   color: ProductVariantColorDto;
-//   stock: number;
-//   images: string[];
-// }
 
 export interface ProductVariantSummaryDto {
   id: string;

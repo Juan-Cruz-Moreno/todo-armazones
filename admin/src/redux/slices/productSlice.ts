@@ -26,6 +26,7 @@ interface ProductsState {
   bulkUpdateError: string | null;
   paginationInfoLoading: boolean;
   paginationInfoError: string | null;
+  lastCreatedProduct: Product | null;
 }
 
 const initialState: ProductsState = {
@@ -40,6 +41,7 @@ const initialState: ProductsState = {
   bulkUpdateError: null,
   paginationInfoLoading: false,
   paginationInfoError: null,
+  lastCreatedProduct: null,
 };
 
 // Fetch products with optional filters and pagination
@@ -134,12 +136,17 @@ export const fetchProductsPaginationInfo = createAsyncThunk<
 });
 
 // Search products
-export const searchProducts = createAsyncThunk<Product[], string>(
+export const searchProducts = createAsyncThunk<Product[], { q: string; inStock?: boolean }>(
   "products/searchProducts",
-  async (q, { rejectWithValue }) => {
+  async ({ q, inStock }, { rejectWithValue }) => {
     try {
+      const query = new URLSearchParams();
+      query.append("q", encodeURIComponent(q));
+      if (inStock !== undefined) query.append("inStock", inStock.toString());
+
+      const url = `/products/search${query.toString() ? "?" + query.toString() : ""}`;
       const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(
-        `/products/search?q=${encodeURIComponent(q)}`
+        url
       );
       return data.data!.products;
     } catch (err: unknown) {
@@ -346,6 +353,7 @@ const productSlice = createSlice({
         // action.payload SIEMPRE tiene { product, variants }
         const { product, variants } = action.payload;
         state.products.unshift({ ...product, variants });
+        state.lastCreatedProduct = product; // Guardar el producto creado
       })
       .addCase(createProduct.rejected, (state, action) => {
         state.loading = false;

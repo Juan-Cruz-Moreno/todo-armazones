@@ -203,7 +203,7 @@ const EditOrderPage = () => {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (addItemsModal.productQuery.trim()) {
-        searchProducts(addItemsModal.productQuery.trim());
+        searchProducts({ q: addItemsModal.productQuery.trim(), inStock: true });
       } else {
         clearSearchResults();
       }
@@ -468,7 +468,7 @@ const EditOrderPage = () => {
 
   // Buscar productos/variantes para el modal
   const handleProductSearch = (query: string) => {
-    if (query) searchProducts(query);
+    if (query) searchProducts({ q: query, inStock: true });
   };
 
   // Agregar ProductVariant a la orden

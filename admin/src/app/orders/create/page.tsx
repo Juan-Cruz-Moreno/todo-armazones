@@ -298,7 +298,7 @@ function CreateOrderPage() {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (addItemsModal.productQuery.trim()) {
-        searchProducts(addItemsModal.productQuery.trim());
+        searchProducts({ q: addItemsModal.productQuery.trim(), inStock: true });
       } else {
         clearSearchResults();
       }

@@ -1,8 +1,13 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
+import { useForm, useFieldArray } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { useProducts } from "@/hooks/useProducts";
-import type { UpdateProductPayload } from "@/interfaces/product";
+import {
+  updateProductWithVariantsFrontendSchema,
+  UpdateProductFormData,
+} from "@/schemas/product.schema";
 import { normalizeColorName } from "@/utils/normalizeColorName";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
@@ -13,6 +18,7 @@ const initialVariant = {
   data: {
     color: { name: "", hex: "" },
     priceUSD: 0,
+    averageCostUSD: 0,
   },
 };
 
@@ -38,174 +44,159 @@ export default function EditProductPage({
     }
   }, [product, products, router]);
 
-  const [formProduct, setFormProduct] = useState<
-    UpdateProductPayload["product"]
-  >(() => {
-    if (!product)
-      return {
-        category: [],
-        subcategory: "",
-        productModel: "",
-        sku: "",
-        size: "",
-        description: "",
-      };
-    return {
-      category: product.category.map((cat) => cat.id),
-      subcategory: product.subcategory.id,
-      productModel: product.productModel,
-      sku: product.sku,
-      size: product.size,
-      description: product.description || "",
-    };
+  const {
+    control,
+    handleSubmit,
+    register,
+    setValue,
+    watch,
+    trigger,
+    formState: { errors },
+  } = useForm<UpdateProductFormData>({
+    resolver: zodResolver(updateProductWithVariantsFrontendSchema),
+    defaultValues: product
+      ? {
+          productId: product.id,
+          product: {
+            category: product.category.map((cat) => cat.id),
+            subcategory: product.subcategory.id,
+            productModel: product.productModel,
+            sku: product.sku,
+            size: product.size,
+            description: product.description || "",
+          },
+          variants: product.variants.map((v) => ({
+            id: v.id,
+            data: {
+              color: { ...v.color },
+              priceUSD: v.priceUSD,
+              averageCostUSD: v.averageCostUSD,
+            },
+          })),
+          files: {
+            primaryImage: undefined as unknown as File,
+            variantImages: {},
+          },
+        }
+      : {
+          productId: "",
+          product: {
+            category: [],
+            subcategory: "",
+            productModel: "",
+            sku: "",
+            size: "",
+            description: "",
+          },
+          variants: [{ ...initialVariant }],
+          files: {
+            primaryImage: undefined as unknown as File,
+            variantImages: {},
+          },
+        },
   });
 
-  const [variants, setVariants] = useState<
-    Array<{
-      id: string;
-      data: {
-        color: { name: string; hex: string };
-        priceUSD?: number;
-        images?: string[];
-      };
-    }>
-  >(() =>
-    product
-      ? product.variants.map((v) => ({
-          id: v.id,
-          data: {
-            color: { ...v.color },
-            priceUSD: v.priceUSD,
-            images: v.images,
-          },
-        }))
-      : [{ ...initialVariant }]
-  );
+  const { fields, append, remove } = useFieldArray({
+    control,
+    name: "variants",
+  });
 
   // Control de colapsado por variante (default: colapsadas)
-  const [expanded, setExpanded] = useState<boolean[]>(
-    () => (product ? product.variants.map(() => false) : [false])
+  const [expanded, setExpanded] = useState<boolean[]>(() =>
+    product ? product.variants.map(() => false) : [false]
   );
 
-  const [primaryImageFile, setPrimaryImageFile] = useState<File | null>(null);
-  const [variantImageFiles, setVariantImageFiles] = useState<
-    Record<string, File[]>
-  >({});
+  const watchedProduct = watch("product");
+  const watchedVariants = watch("variants");
+  const watchedPrimaryImage = watch("files.primaryImage");
+  const watchedVariantImages = watch("files.variantImages");
 
-  // Handlers (igual que antes)
-  const handleProductChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormProduct((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
-
+  // Handlers para categorías y subcategorías
   const handleCategoryChange = (catId: string) => {
-    setFormProduct((prev) => ({
-      ...prev,
-      category: prev.category?.includes(catId)
-        ? prev.category.filter((id) => id !== catId)
-        : [...(prev.category || []), catId],
-    }));
+    const currentCategories = watchedProduct.category || [];
+    const newCategories = currentCategories.includes(catId)
+      ? currentCategories.filter((id) => id !== catId)
+      : [...currentCategories, catId];
+    setValue("product.category", newCategories);
+    trigger("product.category");
   };
 
   const handleSubcategoryChange = (subId: string) => {
-    setFormProduct((prev) => ({
-      ...prev,
-      subcategory: prev.subcategory === subId ? "" : subId,
-    }));
+    const currentSubcategory = watchedProduct.subcategory;
+    setValue("product.subcategory", currentSubcategory === subId ? "" : subId);
+    trigger("product.subcategory");
   };
 
-  const handleVariantChange = (
-    idx: number,
-    field: string,
-    value: string | number
-  ) => {
-    // Si cambia el nombre del color, renombramos la key de imágenes asociada en variantImageFiles
-    const renameVariantImageKey = (oldName: string, newName: string) => {
-      const oldKey = normalizeColorName(oldName);
-      const newKey = normalizeColorName(newName);
-      if (oldKey === newKey) return;
-      setVariantImageFiles((prev) => {
-        const next = { ...prev } as Record<string, File[]>;
-        if (next[oldKey]) {
-          next[newKey] = next[newKey] ? [...next[newKey], ...next[oldKey]] : next[oldKey];
-          delete next[oldKey];
-        }
-        return next;
-      });
-    };
-
-    setVariants((prev) => {
-      const updated = [...prev];
-      if (field.startsWith("color.")) {
-        const colorField = field.split(".")[1] as "name" | "hex";
-        if (colorField === "name") {
-          const oldName = updated[idx].data.color.name;
-          renameVariantImageKey(oldName, value as string);
-        }
-        updated[idx].data.color = {
-          ...updated[idx].data.color,
-          [colorField]: value as string,
-        };
-      } else if (field === "priceUSD") {
-        updated[idx].data.priceUSD = Number(value);
-      }
-      return updated;
-    });
-  };
-
-  const handlePrimaryImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0])
-      setPrimaryImageFile(e.target.files[0]);
-  };
-
+  // Handler para imágenes de variante
   const handleVariantImagesChange = (
     idx: number,
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const colorName = normalizeColorName(variants[idx].data.color.name);
+    const colorName = normalizeColorName(
+      watchedVariants?.[idx]?.data?.color?.name || ""
+    );
     const files = e.target.files;
     if (files && files.length > 0) {
-      setVariantImageFiles((prev) => ({
-        ...prev,
-        [colorName]: Array.from(files),
-      }));
+      const currentVariantImages = watch("files.variantImages") || {};
+      setValue("files.variantImages", {
+        ...currentVariantImages,
+        [`images_${colorName}`]: Array.from(files),
+      });
+      trigger("files.variantImages");
     }
   };
 
-  const addVariant = () =>
-    setVariants((prev) => [
-      ...prev,
-      {
-        id: "",
-        data: { color: { name: "", hex: "" }, priceUSD: 0 },
-      },
-    ]);
-  const removeVariant = (idx: number) =>
-    setVariants((prev) => {
-      const next = prev.filter((_, i) => i !== idx);
-      setExpanded((prevExp) => prevExp.filter((_, i) => i !== idx));
-      return next;
-    });
+  const addVariant = () => {
+    append({ ...initialVariant });
+    setExpanded((prev) => [...prev, false]);
+  };
+
+  const removeVariant = (idx: number) => {
+    remove(idx);
+    setExpanded((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const toggleExpand = (idx: number) =>
     setExpanded((prev) => prev.map((v, i) => (i === idx ? !v : v)));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const onSubmit = async (data: UpdateProductFormData) => {
     if (!product) return;
-    await updateProduct({
-      productId: product.id,
-      product: formProduct,
-      variants,
-      files: {
-        ...(primaryImageFile ? { primaryImage: primaryImageFile } : {}),
-        variantImages: variantImageFiles,
-      },
-    });
-    setSuccess(true);
+    try {
+      const updatedProduct = await updateProduct({
+        productId: data.productId,
+        product: data.product,
+        variants: data.variants || [],
+        files: data.files,
+      }).unwrap();
+      setSuccess(true);
+      // Reset form to updated product values (from backend response)
+      setValue("product", {
+        category: updatedProduct.category.map((cat) => cat.id),
+        subcategory: updatedProduct.subcategory.id,
+        productModel: updatedProduct.productModel,
+        sku: updatedProduct.sku,
+        size: updatedProduct.size,
+        description: updatedProduct.description || "",
+      });
+      setValue(
+        "variants",
+        updatedProduct.variants.map((v) => ({
+          id: v.id,
+          data: {
+            color: { ...v.color },
+            priceUSD: v.priceUSD,
+            averageCostUSD: v.averageCostUSD,
+          },
+        }))
+      );
+      setValue("files", {
+        primaryImage: undefined as unknown as File,
+        variantImages: {},
+      });
+      setExpanded(updatedProduct.variants.map(() => false));
+    } catch (error) {
+      console.error("Error al actualizar producto:", error);
+    }
   };
 
   useEffect(() => {
@@ -213,6 +204,15 @@ export default function EditProductPage({
       modalRef.current.showModal();
     }
   }, [success]);
+
+  // Expandir variantes con errores
+  useEffect(() => {
+    if (errors.variants && Array.isArray(errors.variants)) {
+      setExpanded((prev) =>
+        prev.map((exp, idx) => exp || !!errors.variants![idx])
+      );
+    }
+  }, [errors.variants]);
 
   const closeModalAndGo = () => {
     modalRef.current?.close();
@@ -243,15 +243,30 @@ export default function EditProductPage({
       {/* Formulario */}
       <div className="w-full md:w-1/2 bg-[#ffffff] text-[#111111] rounded-none shadow p-4 md:p-8">
         <h2 className="font-bold text-2xl text-center mb-4">Editar Producto</h2>
-        <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+        <form
+          className="flex flex-col gap-4"
+          onSubmit={handleSubmit(onSubmit)}
+          noValidate
+        >
           {/* Imagen principal */}
           <label className="text-[#7A7A7A]">Imagen principal</label>
           <input
             className="file-input file-input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
             type="file"
             accept="image/*"
-            onChange={handlePrimaryImageChange}
+            onChange={(e) => {
+              setValue(
+                "files.primaryImage",
+                e.target.files?.[0] || (undefined as unknown as File)
+              );
+              trigger("files.primaryImage");
+            }}
           />
+          {errors.files?.primaryImage && (
+            <p className="text-red-500 text-sm">
+              {errors.files.primaryImage.message}
+            </p>
+          )}
           <label className="text-[#7A7A7A]">Categorías</label>
           <div className="flex flex-wrap gap-2 mb-2">
             {categories.map((cat) => (
@@ -259,7 +274,7 @@ export default function EditProductPage({
                 type="button"
                 key={cat.id}
                 className={`btn btn-sm rounded-none ${
-                  formProduct.category?.includes(cat.id)
+                  watchedProduct.category?.includes(cat.id)
                     ? "btn-neutral"
                     : "btn-outline"
                 }`}
@@ -271,19 +286,14 @@ export default function EditProductPage({
           </div>
           {/* Badges de categorías seleccionadas */}
           <div className="flex flex-wrap gap-2 mb-2">
-            {formProduct.category?.map((catId) => {
+            {watchedProduct.category?.map((catId) => {
               const cat = categories.find((c) => c.id === catId);
               if (!cat) return null;
               return (
                 <span
                   key={cat.id}
                   className="badge badge-neutral rounded-none cursor-pointer"
-                  onClick={() =>
-                    setFormProduct((prev) => ({
-                      ...prev,
-                      category: prev.category?.filter((id) => id !== cat.id),
-                    }))
-                  }
+                  onClick={() => handleCategoryChange(cat.id)}
                   title="Quitar"
                 >
                   {cat.name} ✕
@@ -291,6 +301,11 @@ export default function EditProductPage({
               );
             })}
           </div>
+          {errors.product?.category && (
+            <p className="text-red-500 text-sm">
+              {errors.product.category.message}
+            </p>
+          )}
           <label className="text-[#7A7A7A]">Subcategoría</label>
           <div className="flex flex-wrap gap-2 mb-2">
             {subcategories.map((sub) => (
@@ -298,7 +313,7 @@ export default function EditProductPage({
                 type="button"
                 key={sub.id}
                 className={`btn btn-sm rounded-none ${
-                  formProduct.subcategory === sub.id
+                  watchedProduct.subcategory === sub.id
                     ? "btn-neutral"
                     : "btn-outline"
                 }`}
@@ -308,20 +323,15 @@ export default function EditProductPage({
               </button>
             ))}
           </div>
-          {formProduct.subcategory && (
+          {watchedProduct.subcategory && (
             <div className="flex flex-wrap gap-2 mb-2">
               {subcategories
-                .filter((sub) => sub.id === formProduct.subcategory)
+                .filter((sub) => sub.id === watchedProduct.subcategory)
                 .map((sub) => (
                   <span
                     key={sub.id}
                     className="badge badge-neutral rounded-none cursor-pointer"
-                    onClick={() =>
-                      setFormProduct((prev) => ({
-                        ...prev,
-                        subcategory: "",
-                      }))
-                    }
+                    onClick={() => handleSubcategoryChange(sub.id)}
                     title="Quitar"
                   >
                     {sub.name} ✕
@@ -329,47 +339,62 @@ export default function EditProductPage({
                 ))}
             </div>
           )}
+          {errors.product?.subcategory && (
+            <p className="text-red-500 text-sm">
+              {errors.product.subcategory.message}
+            </p>
+          )}
           <label className="text-[#7A7A7A]">Modelo</label>
           <input
             className="input input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
-            name="productModel"
             placeholder="Modelo"
-            value={formProduct.productModel || ""}
-            onChange={handleProductChange}
-            required
+            {...register("product.productModel")}
           />
+          {errors.product?.productModel && (
+            <p className="text-red-500 text-sm">
+              {errors.product.productModel.message}
+            </p>
+          )}
           <label className="text-[#7A7A7A]">SKU</label>
           <input
             className="input input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
-            name="sku"
             placeholder="SKU"
-            value={formProduct.sku || ""}
-            onChange={handleProductChange}
-            required
+            {...register("product.sku")}
           />
+          {errors.product?.sku && (
+            <p className="text-red-500 text-sm">{errors.product.sku.message}</p>
+          )}
           <label className="text-[#7A7A7A]">Calibre</label>
           <input
             className="input input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
-            name="size"
             placeholder="Calibre"
-            value={formProduct.size || ""}
-            onChange={handleProductChange}
-            required
+            {...register("product.size")}
           />
+          {errors.product?.size && (
+            <p className="text-red-500 text-sm">
+              {errors.product.size.message}
+            </p>
+          )}
           <label className="text-[#7A7A7A]">Descripción (opcional)</label>
           <textarea
             className="textarea textarea-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
-            name="description"
             placeholder="Descripción del producto"
-            value={formProduct.description || ""}
-            onChange={handleProductChange}
+            {...register("product.description")}
             rows={3}
           />
+          {errors.product?.description && (
+            <p className="text-red-500 text-sm">
+              {errors.product.description.message}
+            </p>
+          )}
           <div className="divider text-[#7A7A7A]">Variantes</div>
-          {variants.map((variant, idx) => (
+          {errors.variants?.message && (
+            <p className="text-red-500 text-sm">{errors.variants.message}</p>
+          )}
+          {fields.map((field, idx) => (
             <div
-              key={variant.id || idx}
-              className="border p-2 rounded mb-2 relative"
+              key={field.id}
+              className="border p-2 rounded-none mb-2 relative"
             >
               <div className="flex items-center justify-between">
                 <button
@@ -379,13 +404,23 @@ export default function EditProductPage({
                 >
                   <span
                     className="inline-block w-4 h-4 rounded border border-[#e1e1e1]"
-                    style={{ background: variant.data.color.hex }}
+                    style={{
+                      background: watchedVariants?.[idx]?.data?.color?.hex,
+                    }}
                   ></span>
                   <span className="font-medium text-[#222222]">
-                    {variant.data.color.name || "(Sin nombre)"}
+                    {watchedVariants?.[idx]?.data?.color?.name ||
+                      "(Sin nombre)"}
                   </span>
                   <span className="text-xs text-[#7A7A7A]">
-                    Precio: {formatCurrency(variant.data.priceUSD || 0)}
+                    Precio:{" "}
+                    {formatCurrency(
+                      watchedVariants?.[idx]?.data?.priceUSD || 0
+                    )}{" "}
+                    | Costo:{" "}
+                    {formatCurrency(
+                      watchedVariants?.[idx]?.data?.averageCostUSD || 0
+                    )}
                   </span>
                 </button>
                 <div className="flex items-center gap-2">
@@ -401,7 +436,7 @@ export default function EditProductPage({
                     type="button"
                     className="btn btn-xs btn-error"
                     onClick={() => removeVariant(idx)}
-                    disabled={variants.length === 1}
+                    disabled={fields.length === 1}
                     tabIndex={-1}
                     title="Eliminar variante"
                   >
@@ -411,25 +446,23 @@ export default function EditProductPage({
               </div>
               {expanded[idx] && (
                 <div className="flex flex-col gap-1 mt-2">
+                  <input type="hidden" {...register(`variants.${idx}.id`)} />
                   <label className="text-[#7A7A7A]">Color nombre</label>
                   <input
                     className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
                     placeholder="Color nombre"
-                    value={variant.data.color.name}
-                    onChange={(e) =>
-                      handleVariantChange(idx, "color.name", e.target.value)
-                    }
-                    required
+                    {...register(`variants.${idx}.data.color.name`)}
                   />
+                  {errors.variants?.[idx]?.data?.color?.name && (
+                    <p className="text-red-500 text-sm">
+                      {errors.variants[idx].data.color.name.message}
+                    </p>
+                  )}
                   <label className="text-[#7A7A7A]">Color HEX</label>
                   <input
                     className="mb-1 bg-[#FFFFFF] border border-[#e1e1e1] rounded"
                     type="color"
-                    value={variant.data.color.hex}
-                    onChange={(e) =>
-                      handleVariantChange(idx, "color.hex", e.target.value)
-                    }
-                    required
+                    {...register(`variants.${idx}.data.color.hex`)}
                     style={{
                       width: "48px",
                       height: "32px",
@@ -437,17 +470,40 @@ export default function EditProductPage({
                       border: "1px solid #e1e1e1",
                     }}
                   />
+                  {errors.variants?.[idx]?.data?.color?.hex && (
+                    <p className="text-red-500 text-sm">
+                      {errors.variants[idx].data.color.hex.message}
+                    </p>
+                  )}
                   <label className="text-[#7A7A7A]">Precio USD</label>
                   <input
                     className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
                     type="number"
                     placeholder="Precio USD"
-                    value={variant.data.priceUSD || ""}
-                    onChange={(e) =>
-                      handleVariantChange(idx, "priceUSD", e.target.value)
-                    }
-                    required
+                    {...register(`variants.${idx}.data.priceUSD`, {
+                      valueAsNumber: true,
+                    })}
                   />
+                  {errors.variants?.[idx]?.data?.priceUSD && (
+                    <p className="text-red-500 text-sm">
+                      {errors.variants[idx].data.priceUSD.message}
+                    </p>
+                  )}
+                  <label className="text-[#7A7A7A]">Costo Promedio USD</label>
+                  <input
+                    className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
+                    type="number"
+                    step="0.01"
+                    placeholder="Costo Promedio USD"
+                    {...register(`variants.${idx}.data.averageCostUSD`, {
+                      valueAsNumber: true,
+                    })}
+                  />
+                  {errors.variants?.[idx]?.data?.averageCostUSD && (
+                    <p className="text-red-500 text-sm">
+                      {errors.variants[idx].data.averageCostUSD.message}
+                    </p>
+                  )}
                   <label className="text-[#7A7A7A]">Imágenes de variante</label>
                   <input
                     className="file-input file-input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
@@ -482,75 +538,134 @@ export default function EditProductPage({
         {/* Imagen principal */}
         <label className="text-[#7A7A7A]">Imagen principal</label>
         <div className="mb-4">
-          {primaryImageFile ? (
+          {watchedPrimaryImage && watchedPrimaryImage instanceof File ? (
             <Image
-              src={URL.createObjectURL(primaryImageFile)}
+              src={URL.createObjectURL(watchedPrimaryImage)}
               alt="Imagen principal"
               width={300}
               height={300}
-              className="rounded border border-[#e1e1e1] bg-[#FFFFFF]"
+              className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF]"
             />
           ) : (
             <Image
-              src={`${process.env.NEXT_PUBLIC_API_URL}/${product.thumbnail}`}
+              src={`${process.env.NEXT_PUBLIC_API_URL}/${product.primaryImage}`}
               alt="Imagen principal"
               width={300}
               height={300}
-              className="rounded border border-[#e1e1e1] bg-[#FFFFFF]"
+              className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF]"
             />
           )}
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Modelo:</span>
-          <span className="ml-2">{formProduct.productModel}</span>
+          <span className="ml-2">{watchedProduct.productModel || ""}</span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">SKU:</span>
-          <span className="ml-2">{formProduct.sku}</span>
+          <span className="ml-2">{watchedProduct.sku || ""}</span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Tamaño:</span>
-          <span className="ml-2">{formProduct.size}</span>
+          <span className="ml-2">{watchedProduct.size || ""}</span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Descripción:</span>
-          <span className="ml-2">{formProduct.description || "No especificada"}</span>
+          <span className="ml-2">
+            {watchedProduct.description || "No especificada"}
+          </span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Categorías:</span>
           <span className="ml-2">
-            {formProduct.category
+            {watchedProduct.category
               ?.map((catId) => categories.find((c) => c.id === catId)?.name)
               .filter(Boolean)
-              .join(", ")}
+              .join(", ") || ""}
           </span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Subcategoría:</span>
           <span className="ml-2">
-            {subcategories.find((s) => s.id === formProduct.subcategory)
+            {subcategories.find((s) => s.id === watchedProduct.subcategory)
               ?.name || ""}
           </span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Variantes:</span>
           <ul className="mt-2">
-            {variants.map((v, i) => (
+            {(watchedVariants || []).map((v, i) => (
               <li
-                key={v.id || i}
+                key={i}
                 className="flex items-center gap-2 border border-[#e1e1e1] rounded mb-1 px-2 py-1 bg-[#fafafa]"
               >
                 <span
                   className="inline-block w-4 h-4 rounded border border-[#e1e1e1]"
-                  style={{ background: v.data.color.hex }}
+                  style={{ background: v?.data?.color?.hex }}
                 ></span>
-                <span className="text-[#222222]">{v.data.color.name}</span>
+                <span className="text-[#222222]">{v?.data?.color?.name}</span>
                 <span className="text-[#7A7A7A]">
-                  (Precio: {formatCurrency(v.data.priceUSD || 0)})
+                  (Precio: {formatCurrency(v?.data?.priceUSD || 0)} | Costo:{" "}
+                  {formatCurrency(v?.data?.averageCostUSD || 0)})
                 </span>
               </li>
             ))}
           </ul>
+        </div>
+        <div className="mb-2 w-full">
+          <span className="font-semibold text-[#7A7A7A]">
+            Imágenes de Variantes:
+          </span>
+          <div className="mt-2">
+            {/* Imágenes actuales de las variantes */}
+            {product.variants.map((variant) => (
+              <div key={`current-${variant.id}`} className="mb-4">
+                <span className="text-sm text-[#7A7A7A] font-medium">
+                  {variant.color.name} (actuales):
+                </span>
+                {variant.images && variant.images.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {variant.images.map((imageUrl, j) => (
+                      <Image
+                        key={`current-${j}`}
+                        src={`${process.env.NEXT_PUBLIC_API_URL}/${imageUrl}`}
+                        alt={`Imagen actual ${j + 1} de ${variant.color.name}`}
+                        width={100}
+                        height={100}
+                        className="rounded-none border border-[#e1e1e1]"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sin imágenes actuales
+                  </p>
+                )}
+              </div>
+            ))}
+            {/* Nuevas imágenes subidas */}
+            {Object.entries(watchedVariantImages || {}).map(([key, files]) => (
+              <div key={`new-${key}`} className="mb-4">
+                <span className="text-sm text-[#7A7A7A] font-medium">
+                  {key.replace("images_", "")} (nuevas):
+                </span>
+                <div className="flex gap-2 mt-1">
+                  {files.map((file, idx) => (
+                    <Image
+                      key={`new-${idx}`}
+                      src={URL.createObjectURL(file)}
+                      alt={`Nueva imagen ${idx + 1} de ${key.replace(
+                        "images_",
+                        ""
+                      )}`}
+                      width={100}
+                      height={100}
+                      className="rounded-none border border-[#e1e1e1]"
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       <dialog id="edit_product_success_modal" className="modal" ref={modalRef}>

@@ -34,7 +34,7 @@ export interface Product {
   subcategory: ProductSubcategory;
   productModel: string;
   sku: string;
-  size?: string;
+  size?: string; // Mantenido como opcional para compatibilidad legacy
   description?: string;
   variants: ProductVariant[];
 }
@@ -72,7 +72,7 @@ export interface CreateProductPayload {
     subcategory: string; // ID de subcategoría
     productModel: string;
     sku: string;
-    size?: string;
+    size: string; // Ahora requerido para creación
     description?: string;
   };
   variants: Array<{
@@ -107,13 +107,16 @@ export interface UpdateProductPayload {
     data: {
       color?: { name: string; hex: string };
       priceUSD?: number;
+      averageCostUSD?: number; // Permitir modificación manual del costo promedio ponderado
     };
   }>;
   files?: {
     primaryImage?: File;
     variantImages?: Record<string, File[]>;  
   };
-}// Bulk Price Update Interfaces
+}
+
+// Bulk Price Update Interfaces
 export enum PriceUpdateType {
   FIXED_AMOUNT = 'FIXED_AMOUNT',
   PERCENTAGE = 'PERCENTAGE',

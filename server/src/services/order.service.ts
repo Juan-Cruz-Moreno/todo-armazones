@@ -2452,11 +2452,14 @@ export class OrderService {
         // 🔧 LÓGICA CORREGIDA: Recalcular desde los items originales
         // En lugar de sumar al margen actual (potencialmente corrupto),
         // recalculamos todo desde los valores base de los items
-        
+
         // Recalcular totales originales desde los items (valores verdaderos)
         const originalSubTotalFromItems = order.items.reduce((total, item) => total + item.subTotal, 0);
         const originalCogsFromItems = order.items.reduce((total, item) => total + item.cogsUSD, 0);
-        const originalContributionMarginFromItems = order.items.reduce((total, item) => total + item.contributionMarginUSD, 0);
+        const originalContributionMarginFromItems = order.items.reduce(
+          (total, item) => total + item.contributionMarginUSD,
+          0,
+        );
 
         // Validación de integridad: Verificar que los valores calculados sean consistentes
         const expectedSubTotal = originalCogsFromItems + originalContributionMarginFromItems;
@@ -2489,7 +2492,7 @@ export class OrderService {
         order.subTotal = restoredSubTotal;
         order.totalContributionMarginUSD = restoredContributionMargin;
         order.totalCogsUSD = restoredCogs; // Asegurar consistencia
-        
+
         if (restoredBankTransferExpense !== undefined) {
           order.bankTransferExpense = restoredBankTransferExpense;
         } else {
