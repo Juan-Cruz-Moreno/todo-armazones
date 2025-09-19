@@ -1,5 +1,5 @@
 import express, { Application } from 'express';
-import helmet from 'helmet';
+//import helmet from 'helmet';
 import cors from 'cors';
 import expressWinston from 'express-winston';
 import cookieParser from 'cookie-parser';
@@ -20,7 +20,7 @@ const app: Application = express();
 app.set('trust proxy', 1);
 
 // 1. Security Middleware
-app.use(helmet());
+//app.use(helmet());
 app.use(
   cors({
     // Allow all origins
