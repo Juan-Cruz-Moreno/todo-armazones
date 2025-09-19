@@ -3,7 +3,7 @@ import { Types } from 'mongoose';
 export interface IProduct {
   slug: string;
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: Types.ObjectId[];
   subcategory: Types.ObjectId;
   productModel: string;

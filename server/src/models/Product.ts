@@ -12,7 +12,7 @@ const productSchema = new Schema<IProductDocument>(
   {
     slug: { type: String, required: true, unique: true },
     thumbnail: { type: String, required: true },
-    primaryImage: { type: String, required: true },
+    primaryImage: [{ type: String, required: true }],
     category: [{ type: Schema.Types.ObjectId, ref: 'Category', required: true }],
     subcategory: {
       type: Schema.Types.ObjectId,

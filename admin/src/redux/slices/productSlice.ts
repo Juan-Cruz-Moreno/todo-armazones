@@ -161,7 +161,7 @@ function buildCreateProductFormData(payload: CreateProductPayload): FormData {
   formData.append("product", JSON.stringify(payload.product));
   formData.append("variants", JSON.stringify(payload.variants));
   if (payload.files?.primaryImage) {
-    formData.append("primaryImage", payload.files.primaryImage);
+    payload.files.primaryImage.forEach(file => formData.append("primaryImage", file));
   }
   if (payload.files?.variantImages) {
     Object.entries(payload.files.variantImages).forEach(([colorKey, files]) => {
@@ -180,7 +180,7 @@ function buildUpdateProductFormData(payload: UpdateProductPayload): FormData {
   formData.append("product", JSON.stringify(payload.product));
   formData.append("variants", JSON.stringify(payload.variants));
   if (payload.files?.primaryImage) {
-    formData.append("primaryImage", payload.files.primaryImage);
+    payload.files.primaryImage.forEach(file => formData.append("primaryImage", file));
   }
   if (payload.files?.variantImages) {
     Object.entries(payload.files.variantImages).forEach(([colorKey, files]) => {

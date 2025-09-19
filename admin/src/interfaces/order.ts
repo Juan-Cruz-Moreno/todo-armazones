@@ -54,7 +54,6 @@ export interface OrderItem {
       size?: string;
       costUSD: number;
       priceUSD: number;
-      primaryImage: string;
     };
   };
   quantity: number;

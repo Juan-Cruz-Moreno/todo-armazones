@@ -28,7 +28,7 @@ const createProductSchema = z.object({
   // Campos opcionales para imágenes: llegan como archivos vía Multer, no como parte del body JSON.
   // Se incluyen por consistencia y para validar si se envían como strings (e.g., URLs) en el futuro.
   thumbnail: z.string().optional(),
-  primaryImage: z.string().optional(),
+  primaryImage: z.array(z.string()).optional(),
   category: z
     .array(z.string().min(1, 'Cada categoría debe ser un ID válido'))
     .min(1, 'Al menos una categoría es requerida'),
@@ -46,19 +46,34 @@ export const createProductWithVariantsSchema = z.object({
 });
 
 // Esquema para validar actualizaciones parciales de variantes (campos opcionales, ya que stock se maneja vía InventoryService)
-const updateVariantSchema = z.object({
-  color: colorSchema.optional(), // Opcional para updates parciales
-  priceUSD: z.number().min(0, 'Precio debe ser mayor o igual a 0').optional(),
-  averageCostUSD: z.number().min(0, 'Costo promedio debe ser mayor o igual a 0').optional(), // Permitir modificación manual
-  // Nota: stock se actualiza únicamente mediante InventoryService
-  thumbnail: z.string().optional(),
-  images: z.array(z.string()).optional(),
-});
+const updateVariantSchema = z
+  .object({
+    color: colorSchema.optional(), // Opcional para updates parciales
+    priceUSD: z.number().min(0, 'Precio debe ser mayor o igual a 0').optional(),
+    averageCostUSD: z.number().min(0, 'Costo promedio debe ser mayor o igual a 0').optional(), // Permitir modificación manual
+    stock: z.number().min(0, 'Stock no puede ser negativo').optional(), // Opcional para nuevas variantes
+    initialCostUSD: z.number().min(0, 'Costo inicial debe ser mayor o igual a 0').optional(), // Opcional para nuevas variantes
+    thumbnail: z.string().optional(),
+    images: z.array(z.string()).optional(),
+  })
+  .refine(
+    (data) => {
+      // Si se incluye stock > 0, se requiere initialCostUSD
+      if (data.stock !== undefined && data.stock > 0) {
+        return data.initialCostUSD !== undefined;
+      }
+      return true;
+    },
+    {
+      message: 'Si se incluye stock inicial > 0, se requiere initialCostUSD',
+      path: ['initialCostUSD'],
+    },
+  );
 
 // Esquema para validar actualizaciones parciales del producto (todos los campos son opcionales para permitir cambios selectivos)
 const updateProductSchema = z.object({
   thumbnail: z.string().optional(),
-  primaryImage: z.string().optional(),
+  primaryImage: z.array(z.string()).optional(),
   category: z.array(z.string().min(1, 'Cada categoría debe ser un ID válido')).optional(), // Opcional para updates parciales
   subcategory: z.string().min(1, 'Subcategoría es requerida').optional(),
   productModel: z.string().min(1, 'Modelo del producto es requerido').optional(),
@@ -74,7 +89,7 @@ export const updateProductWithVariantsSchema = z
     variants: z
       .array(
         z.object({
-          id: z.string().min(1, 'ID de variante es requerido'), // Requerido para identificar qué variante actualizar
+          id: z.string().optional(), // Opcional para nuevas variantes (vacío)
           data: updateVariantSchema,
         }),
       )

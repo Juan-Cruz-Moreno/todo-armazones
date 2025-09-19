@@ -32,7 +32,9 @@ export interface UpdateProductVariantRequestDto {
   thumbnail?: string;
   images?: string[];
   averageCostUSD?: number; // Permitir modificación manual del costo promedio ponderado
-  // Note: stock se actualiza únicamente mediante InventoryService
+  stock?: number; // Opcional: solo para nuevas variantes creadas en update
+  initialCostUSD?: number; // Opcional: costo inicial si se incluye stock para nuevas variantes
+  // Note: stock se actualiza únicamente mediante InventoryService para variantes existentes
 }
 
 export interface ProductVariantSummaryDto {

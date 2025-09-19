@@ -63,7 +63,7 @@ export default function CreateProductPage() {
       },
       variants: [{ ...initialVariant }],
       files: {
-        primaryImage: undefined as unknown as File,
+        primaryImage: [],
         variantImages: {},
       },
     },
@@ -106,7 +106,6 @@ export default function CreateProductPage() {
   };
 
   const addSuccess = (message: string) => addToastError(message, "success");
-  const addWarning = (message: string) => addToastError(message, "warning");
 
   // Handlers para categorías y subcategorías
   const handleCategoryChange = (catId: string) => {
@@ -241,10 +240,11 @@ export default function CreateProductPage() {
             className="file-input file-input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
             type="file"
             accept="image/*"
+            multiple
             onChange={(e) => {
               setValue(
                 "files.primaryImage",
-                e.target.files?.[0] || (undefined as unknown as File)
+                e.target.files ? Array.from(e.target.files) : []
               );
               trigger("files.primaryImage");
             }}
@@ -545,14 +545,19 @@ export default function CreateProductPage() {
         {/* Imagen principal */}
         <label className="text-[#7A7A7A]">Imagen principal</label>
         <div className="mb-4">
-          {watchedPrimaryImage && watchedPrimaryImage instanceof File ? (
-            <Image
-              src={URL.createObjectURL(watchedPrimaryImage)}
-              alt="Imagen principal"
-              width={300}
-              height={300}
-              className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF]"
-            />
+          {watchedPrimaryImage && watchedPrimaryImage.length > 0 ? (
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {watchedPrimaryImage.map((file, index) => (
+                <Image
+                  key={index}
+                  src={URL.createObjectURL(file)}
+                  alt={`Imagen principal ${index + 1}`}
+                  width={150}
+                  height={150}
+                  className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
+                />
+              ))}
+            </div>
           ) : (
             <div className="w-48 h-48 bg-gray-200 flex items-center justify-center rounded-none text-gray-400 border border-[#e1e1e1]">
               Sin imagen

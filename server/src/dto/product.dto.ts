@@ -3,7 +3,7 @@ import { ProductVariantSummaryDto } from './product-variant.dto';
 
 export interface CreateProductRequestDto {
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: Types.ObjectId[];
   subcategory: Types.ObjectId;
   productModel: string;
@@ -16,7 +16,7 @@ export interface CreateProductResponseDto {
   id: string;
   slug: string;
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: ProductCategoryDto[];
   subcategory: ProductSubcategoryDto;
   productModel: string;
@@ -27,7 +27,7 @@ export interface CreateProductResponseDto {
 
 export interface UpdateProductRequestDto {
   thumbnail?: string;
-  primaryImage?: string;
+  primaryImage?: string[];
   category?: Types.ObjectId[];
   subcategory?: Types.ObjectId;
   productModel?: string;
@@ -52,7 +52,7 @@ export interface ProductListItemDto {
   id: string;
   slug: string;
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: ProductCategoryDto[];
   subcategory: ProductSubcategoryDto;
   productModel: string;

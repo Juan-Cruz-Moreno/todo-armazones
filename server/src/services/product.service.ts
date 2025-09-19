@@ -144,7 +144,7 @@ export class ProductService {
   /**
    * Valida los datos de entrada de las variantes para actualización
    */
-  private validateUpdateVariants(variantsDto: { id: string; data: UpdateProductVariantRequestDto }[]): void {
+  private validateUpdateVariants(variantsDto: { id?: string; data: UpdateProductVariantRequestDto }[]): void {
     if (!Array.isArray(variantsDto) || variantsDto.length === 0) {
       throw new AppError('Al menos una variante es requerida para actualizar', 400, 'error', false);
     }
@@ -179,6 +179,25 @@ export class ProductService {
         }
         if (variant.images.length > 10) {
           throw new AppError('No se permiten más de 10 imágenes por variante', 400, 'error', false);
+        }
+      }
+      // Validaciones para stock e initialCostUSD en nuevas variantes (sin id)
+      if (!variantUpdate.id) {
+        if (variant.stock !== undefined) {
+          if (variant.stock < 0) {
+            throw new AppError('El stock inicial no puede ser negativo', 400, 'error', false);
+          }
+          if (variant.stock > 0 && (variant.initialCostUSD === undefined || variant.initialCostUSD < 0)) {
+            throw new AppError(
+              'Si se incluye stock inicial > 0, se requiere initialCostUSD válido',
+              400,
+              'error',
+              false,
+            );
+          }
+        }
+        if (variant.initialCostUSD !== undefined && variant.initialCostUSD < 0) {
+          throw new AppError('El costo inicial no puede ser negativo', 400, 'error', false);
         }
       }
       // Nota: stock se maneja vía InventoryService; averageCostUSD se valida aquí para modificaciones manuales
@@ -895,7 +914,7 @@ export class ProductService {
   public async updateProductWithVariants(
     productId: string,
     productDto: UpdateProductRequestDto,
-    variantsDto: { id: string; data: UpdateProductVariantRequestDto }[],
+    variantsDto: { id?: string; data: UpdateProductVariantRequestDto }[],
   ): Promise<ProductListItemDto> {
     // Validaciones de entrada (adaptadas para update)
     this.validateUpdateProduct(productDto);
@@ -959,34 +978,87 @@ export class ProductService {
           throw new AppError('Producto no encontrado', 404, 'fail', false);
         }
 
-        // Actualizar variantes con logging y manejo de errores por variante
+        // Actualizar o crear variantes con logging y manejo de errores por variante
         const updatedVariants: IProductVariantDocument[] = [];
+        const createdVariantIds: string[] = [];
         for (let i = 0; i < variantsDto.length; i++) {
           const variantUpdate = variantsDto[i];
           try {
-            logger.info(`Actualizando variante ${variantUpdate.id}`, {
-              productId,
-              variantId: variantUpdate.id,
-              data: variantUpdate.data,
-            });
+            if (variantUpdate.id) {
+              // Actualizar variante existente
+              logger.info(`Actualizando variante ${variantUpdate.id}`, {
+                productId,
+                variantId: variantUpdate.id,
+                data: variantUpdate.data,
+              });
 
-            const variant = await ProductVariant.findOneAndUpdate(
-              { _id: variantUpdate.id, product: product._id },
-              { $set: variantUpdate.data },
-              { new: true, session },
-            );
-            if (!variant) {
-              throw new AppError(`Variante no encontrada: ${variantUpdate.id}`, 404, 'fail', false);
+              const variant = await ProductVariant.findOneAndUpdate(
+                { _id: variantUpdate.id, product: product._id },
+                { $set: variantUpdate.data },
+                { new: true, session },
+              );
+              if (!variant) {
+                throw new AppError(`Variante no encontrada: ${variantUpdate.id}`, 404, 'fail', false);
+              }
+              updatedVariants.push(variant);
+            } else {
+              // Crear nueva variante
+              logger.info(`Creando nueva variante para producto ${productId}`, {
+                data: variantUpdate.data,
+              });
+
+              const newVariantData = {
+                product: product._id,
+                color: variantUpdate.data.color,
+                stock: 0, // Inicializar en 0, luego agregar stock si es necesario
+                averageCostUSD: variantUpdate.data.averageCostUSD || variantUpdate.data.initialCostUSD || 0,
+                priceUSD: variantUpdate.data.priceUSD,
+                thumbnail: variantUpdate.data.thumbnail,
+                images: variantUpdate.data.images || [],
+              };
+              const newVariant = await ProductVariant.create([newVariantData], { session });
+              const createdVariant = newVariant[0];
+              createdVariantIds.push(createdVariant._id.toString());
+
+              // Si se incluye stock inicial > 0, crear entrada de stock
+              if (variantUpdate.data.stock && variantUpdate.data.stock > 0) {
+                logger.info(`Creando stock inicial para nueva variante ${createdVariant._id}`, {
+                  productId,
+                  variantId: createdVariant._id,
+                  stock: variantUpdate.data.stock,
+                  initialCost: variantUpdate.data.initialCostUSD,
+                });
+
+                await this.inventoryService.createStockEntryWithSession(
+                  createdVariant._id,
+                  variantUpdate.data.stock,
+                  session,
+                  variantUpdate.data.initialCostUSD,
+                  StockMovementReason.INITIAL_STOCK,
+                  undefined, // reference
+                  'Stock inicial de nueva variante',
+                  undefined, // createdBy (opcional)
+                );
+
+                // Obtener la variante actualizada con stock
+                const updatedVariant = await ProductVariant.findById(createdVariant._id).session(session);
+                if (updatedVariant) {
+                  updatedVariants.push(updatedVariant);
+                } else {
+                  updatedVariants.push(createdVariant);
+                }
+              } else {
+                updatedVariants.push(createdVariant);
+              }
             }
-            updatedVariants.push(variant);
           } catch (variantError) {
-            logger.error(`Error actualizando variante ${i + 1}`, {
-              variantId: variantUpdate.id,
+            logger.error(`Error procesando variante ${i + 1}`, {
+              variantId: variantUpdate.id || 'nueva',
               error: variantError,
               data: variantUpdate.data,
             });
             throw new AppError(
-              `Error al actualizar variante ${i + 1}: ${
+              `Error al procesar variante ${i + 1}: ${
                 variantError instanceof Error ? variantError.message : 'Error desconocido'
               }`,
               500,
@@ -997,20 +1069,20 @@ export class ProductService {
         }
 
         // Eliminar variantes que no están en el payload enviado (eliminadas en frontend)
-        const sentVariantIds = variantsDto.map(v => v.id);
+        const sentVariantIds = variantsDto
+          .map((v) => v.id)
+          .filter((id) => id)
+          .concat(createdVariantIds);
         const allProductVariants = await ProductVariant.find({ product: product._id }, '_id', { session });
-        const variantsToDelete = allProductVariants.filter(v => !sentVariantIds.includes(v._id.toString()));
+        const variantsToDelete = allProductVariants.filter((v) => !sentVariantIds.includes(v._id.toString()));
 
         if (variantsToDelete.length > 0) {
           logger.info(`Eliminando ${variantsToDelete.length} variantes no enviadas`, {
             productId,
-            variantsToDelete: variantsToDelete.map(v => v._id.toString()),
+            variantsToDelete: variantsToDelete.map((v) => v._id.toString()),
           });
 
-          await ProductVariant.deleteMany(
-            { _id: { $in: variantsToDelete.map(v => v._id) } },
-            { session }
-          );
+          await ProductVariant.deleteMany({ _id: { $in: variantsToDelete.map((v) => v._id) } }, { session });
         }
 
         // Armar respuesta igual que ProductListItemDto

@@ -9,7 +9,7 @@ interface Product {
   _id: string;
   slug: string;
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: string[];
   subcategory: string;
   productModel: string;

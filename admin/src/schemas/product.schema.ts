@@ -47,17 +47,20 @@ export const createProductSchema = z.object({
 // Schema para archivos del producto
 export const productFilesSchema = z.object({
   primaryImage: z
-    .instanceof(File, { message: "Debe seleccionar una imagen principal" })
+    .array(z.instanceof(File))
+    .min(1, "Al menos una imagen principal es requerida")
     .refine(
-      (file) => file.size <= 15 * 1024 * 1024,
-      "La imagen debe ser menor a 15MB"
+      (files) => files.every((file) => file.size <= 15 * 1024 * 1024),
+      "Cada imagen debe ser menor a 15MB"
     )
     .refine(
-      (file) =>
-        ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(
-          file.type
+      (files) =>
+        files.every((file) =>
+          ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(
+            file.type
+          )
         ),
-      "La imagen debe ser JPG, PNG o WebP"
+      "Cada imagen debe ser JPG, PNG o WebP"
     ),
   variantImages: variantImagesSchema,
 });
@@ -84,8 +87,21 @@ export const updateVariantSchema = z.object({
   color: colorSchema.optional(), // Opcional para updates parciales
   priceUSD: z.number().min(0, "El precio debe ser mayor o igual a 0").optional(),
   averageCostUSD: z.number().min(0, "El costo promedio debe ser mayor o igual a 0").optional(), // Permitir modificación manual
-  // Nota: stock se actualiza únicamente mediante InventoryService
-});
+  stock: z.number().min(0, "El stock no puede ser negativo").optional(), // Opcional para nuevas variantes
+  initialCostUSD: z.number().min(0, "El costo inicial debe ser mayor o igual a 0").optional(), // Opcional para nuevas variantes
+}).refine(
+  (data) => {
+    // Si se incluye stock > 0, se requiere initialCostUSD
+    if (data.stock !== undefined && data.stock > 0) {
+      return data.initialCostUSD !== undefined;
+    }
+    return true;
+  },
+  {
+    message: "Si se incluye stock inicial > 0, se requiere initialCostUSD",
+    path: ["initialCostUSD"],
+  },
+);
 
 // Schema para producto en actualización (frontend)
 export const updateProductSchema = z.object({
@@ -105,17 +121,19 @@ export const updateProductSchema = z.object({
 // Schema para archivos en actualización (opcionales)
 export const updateProductFilesSchema = z.object({
   primaryImage: z
-    .instanceof(File)
+    .array(z.instanceof(File))
     .refine(
-      (file) => file.size <= 15 * 1024 * 1024,
-      "La imagen debe ser menor a 15MB"
+      (files) => files.every((file) => file.size <= 15 * 1024 * 1024),
+      "Cada imagen debe ser menor a 15MB"
     )
     .refine(
-      (file) =>
-        ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(
-          file.type
+      (files) =>
+        files.every((file) =>
+          ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(
+            file.type
+          )
         ),
-      "La imagen debe ser JPG, PNG o WebP"
+      "Cada imagen debe ser JPG, PNG o WebP"
     )
     .optional(),
   variantImages: z.record(
@@ -131,7 +149,7 @@ export const updateProductWithVariantsFrontendSchema = z.object({
   variants: z
     .array(
       z.object({
-        id: z.string().min(1, "El ID de variante es requerido"), // Requerido para identificar qué variante actualizar
+        id: z.string().optional(), // Opcional para nuevas variantes (vacío)
         data: updateVariantSchema,
       })
     )
@@ -141,7 +159,23 @@ export const updateProductWithVariantsFrontendSchema = z.object({
 .refine(
   (data) => data.product || (data.variants && data.variants.length > 0),
   "Debe actualizarse al menos el producto o una variante"
-);
+)
+.refine((data) => {
+  // Validar que nuevas variantes (sin id) tengan al menos una imagen
+  if (data.variants) {
+    return data.variants.every((v) => {
+      if (!v.id) { // Nueva variante
+        const normalizedKey = `images_${normalizeColorName(v.data.color?.name || "")}`;
+        return (data.files?.variantImages?.[normalizedKey]?.length ?? 0) > 0;
+      }
+      return true;
+    });
+  }
+  return true;
+}, {
+  message: "Nueva variante debe tener al menos una imagen",
+  path: ["files", "variantImages"],
+});
 
 // Tipos inferidos para usar en formularios
 export type CreateProductFormData = z.infer<

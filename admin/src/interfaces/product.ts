@@ -29,7 +29,7 @@ export interface Product {
   id: string;
   slug: string;
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: ProductCategory[];
   subcategory: ProductSubcategory;
   productModel: string;
@@ -82,7 +82,7 @@ export interface CreateProductPayload {
     priceUSD: number;
   }>;
   files?: {
-    primaryImage?: File;
+    primaryImage?: File[];
     variantImages?: Record<string, File[]>;
   };
 }
@@ -103,15 +103,17 @@ export interface UpdateProductPayload {
     description?: string;
   };
   variants: Array<{
-    id: string; // ID de la variante
+    id?: string; // ID de la variante (opcional para nuevas)
     data: {
       color?: { name: string; hex: string };
       priceUSD?: number;
       averageCostUSD?: number; // Permitir modificación manual del costo promedio ponderado
+      stock?: number; // Opcional para nuevas variantes
+      initialCostUSD?: number; // Opcional para nuevas variantes
     };
   }>;
   files?: {
-    primaryImage?: File;
+    primaryImage?: File[];
     variantImages?: Record<string, File[]>;  
   };
 }

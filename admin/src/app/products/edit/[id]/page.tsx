@@ -4,21 +4,38 @@ import React, { useEffect, useRef, useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useProducts } from "@/hooks/useProducts";
-import {
-  updateProductWithVariantsFrontendSchema,
-  UpdateProductFormData,
-} from "@/schemas/product.schema";
 import { normalizeColorName } from "@/utils/normalizeColorName";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { formatCurrency } from "@/utils/formatCurrency";
+import {
+  updateProductWithVariantsFrontendSchema,
+  type UpdateProductFormData,
+} from "@/schemas/product.schema";
+import { getErrorMessage } from "@/types/api";
+
+// Tipo extendido para incluir isNew en los fields del array
+type VariantField = {
+  id?: string;
+  data: {
+    color?: { name: string; hex: string };
+    priceUSD?: number;
+    averageCostUSD?: number;
+    stock?: number;
+    initialCostUSD?: number;
+  };
+  isNew?: boolean;
+};
 
 const initialVariant = {
   id: "",
+  isNew: true, // Indica que es una variante nueva
   data: {
     color: { name: "", hex: "" },
     priceUSD: 0,
-    averageCostUSD: 0,
+    // averageCostUSD no se incluye para variantes nuevas
+    stock: 0, // Para nuevas variantes
+    initialCostUSD: 0, // Para nuevas variantes
   },
 };
 
@@ -33,6 +50,44 @@ export default function EditProductPage({
   const router = useRouter();
   const modalRef = useRef<HTMLDialogElement>(null);
   const [success, setSuccess] = useState(false);
+
+  // Estado para manejar errores en toast
+  const [toastErrors, setToastErrors] = useState<
+    {
+      id: string;
+      message: string;
+      type: "error" | "success" | "warning";
+      timestamp: number;
+    }[]
+  >([]);
+
+  // Funciones helper para manejar errores en toast
+  const addToastError = (
+    message: string,
+    type: "error" | "success" | "warning" = "error"
+  ) => {
+    const newError = {
+      id: Date.now().toString(),
+      message,
+      type,
+      timestamp: Date.now(),
+    };
+    setToastErrors((prev) => [...prev, newError]);
+
+    // Auto-remover después de 5 segundos para success y warning, 8 segundos para error
+    setTimeout(
+      () => {
+        removeToastError(newError.id);
+      },
+      type === "error" ? 8000 : 5000
+    );
+  };
+
+  const removeToastError = (id: string) => {
+    setToastErrors((prev) => prev.filter((err) => err.id !== id));
+  };
+
+  const addSuccess = (message: string) => addToastError(message, "success");
 
   // Busca el producto por id usando params.id
   const product =
@@ -67,14 +122,16 @@ export default function EditProductPage({
           },
           variants: product.variants.map((v) => ({
             id: v.id,
+            isNew: false, // Variantes existentes
             data: {
               color: { ...v.color },
               priceUSD: v.priceUSD,
               averageCostUSD: v.averageCostUSD,
+              // No incluir stock ni initialCostUSD para variantes existentes
             },
           })),
           files: {
-            primaryImage: undefined as unknown as File,
+            primaryImage: [],
             variantImages: {},
           },
         }
@@ -90,7 +147,7 @@ export default function EditProductPage({
           },
           variants: [{ ...initialVariant }],
           files: {
-            primaryImage: undefined as unknown as File,
+            primaryImage: [],
             variantImages: {},
           },
         },
@@ -168,6 +225,7 @@ export default function EditProductPage({
         variants: data.variants || [],
         files: data.files,
       }).unwrap();
+      addSuccess("Producto actualizado exitosamente.");
       setSuccess(true);
       // Reset form to updated product values (from backend response)
       setValue("product", {
@@ -182,20 +240,26 @@ export default function EditProductPage({
         "variants",
         updatedProduct.variants.map((v) => ({
           id: v.id,
+          isNew: false, // Todas son existentes ahora
           data: {
             color: { ...v.color },
             priceUSD: v.priceUSD,
             averageCostUSD: v.averageCostUSD,
+            // No incluir stock ni initialCostUSD para variantes existentes
           },
         }))
       );
       setValue("files", {
-        primaryImage: undefined as unknown as File,
+        primaryImage: [],
         variantImages: {},
       });
       setExpanded(updatedProduct.variants.map(() => false));
     } catch (error) {
       console.error("Error al actualizar producto:", error);
+      // Mostrar error en toast
+      const errorMessage =
+        typeof error === "string" ? error : getErrorMessage(error);
+      addToastError(errorMessage);
     }
   };
 
@@ -254,10 +318,11 @@ export default function EditProductPage({
             className="file-input file-input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
             type="file"
             accept="image/*"
+            multiple
             onChange={(e) => {
               setValue(
                 "files.primaryImage",
-                e.target.files?.[0] || (undefined as unknown as File)
+                e.target.files ? Array.from(e.target.files) : []
               );
               trigger("files.primaryImage");
             }}
@@ -417,9 +482,13 @@ export default function EditProductPage({
                     {formatCurrency(
                       watchedVariants?.[idx]?.data?.priceUSD || 0
                     )}{" "}
-                    | Costo:{" "}
-                    {formatCurrency(
-                      watchedVariants?.[idx]?.data?.averageCostUSD || 0
+                    {!(field as VariantField).isNew && (
+                      <>
+                        | Costo:{" "}
+                        {formatCurrency(
+                          watchedVariants?.[idx]?.data?.averageCostUSD || 0
+                        )}
+                      </>
                     )}
                   </span>
                 </button>
@@ -489,20 +558,65 @@ export default function EditProductPage({
                       {errors.variants[idx].data.priceUSD.message}
                     </p>
                   )}
-                  <label className="text-[#7A7A7A]">Costo Promedio USD</label>
-                  <input
-                    className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
-                    type="number"
-                    step="0.01"
-                    placeholder="Costo Promedio USD"
-                    {...register(`variants.${idx}.data.averageCostUSD`, {
-                      valueAsNumber: true,
-                    })}
-                  />
-                  {errors.variants?.[idx]?.data?.averageCostUSD && (
-                    <p className="text-red-500 text-sm">
-                      {errors.variants[idx].data.averageCostUSD.message}
-                    </p>
+                  {/* Costo Promedio USD solo para variantes existentes */}
+                  {!(field as VariantField).isNew && (
+                    <>
+                      <label className="text-[#7A7A7A]">
+                        Costo Promedio USD
+                      </label>
+                      <input
+                        className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
+                        type="number"
+                        step="0.01"
+                        placeholder="Costo Promedio USD"
+                        {...register(`variants.${idx}.data.averageCostUSD`, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                      {errors.variants?.[idx]?.data?.averageCostUSD && (
+                        <p className="text-red-500 text-sm">
+                          {errors.variants[idx].data.averageCostUSD.message}
+                        </p>
+                      )}
+                    </>
+                  )}
+                  {/* Campos solo para nuevas variantes */}
+                  {(field as VariantField).isNew && (
+                    <>
+                      <label className="text-[#7A7A7A]">Stock Inicial</label>
+                      <input
+                        className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
+                        type="number"
+                        min="0"
+                        placeholder="Stock Inicial"
+                        {...register(`variants.${idx}.data.stock`, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                      {errors.variants?.[idx]?.data?.stock && (
+                        <p className="text-red-500 text-sm">
+                          {errors.variants[idx].data.stock.message}
+                        </p>
+                      )}
+                      <label className="text-[#7A7A7A]">
+                        Costo Inicial USD
+                      </label>
+                      <input
+                        className="input input-bordered mb-1 bg-[#FFFFFF] border border-[#e1e1e1]"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="Costo Inicial USD"
+                        {...register(`variants.${idx}.data.initialCostUSD`, {
+                          valueAsNumber: true,
+                        })}
+                      />
+                      {errors.variants?.[idx]?.data?.initialCostUSD && (
+                        <p className="text-red-500 text-sm">
+                          {errors.variants[idx].data.initialCostUSD.message}
+                        </p>
+                      )}
+                    </>
                   )}
                   <label className="text-[#7A7A7A]">Imágenes de variante</label>
                   <input
@@ -538,27 +652,87 @@ export default function EditProductPage({
         {/* Imagen principal */}
         <label className="text-[#7A7A7A]">Imagen principal</label>
         <div className="mb-4">
-          {watchedPrimaryImage && watchedPrimaryImage instanceof File ? (
-            <Image
-              src={URL.createObjectURL(watchedPrimaryImage)}
-              alt="Imagen principal"
-              width={300}
-              height={300}
-              className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF]"
-            />
-          ) : (
-            <Image
-              src={`${process.env.NEXT_PUBLIC_API_URL}/${product.primaryImage}`}
-              alt="Imagen principal"
-              width={300}
-              height={300}
-              className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF]"
-            />
+          {/* Mostrar nuevas imágenes si existen */}
+          {watchedPrimaryImage && watchedPrimaryImage.length > 0 && (
+            <div className="mb-2">
+              <span className="text-sm text-[#7A7A7A] font-medium">
+                Nuevas imágenes:
+              </span>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
+                {watchedPrimaryImage.map((file, index) => (
+                  <Image
+                    key={`new-${index}`}
+                    src={URL.createObjectURL(file)}
+                    alt={`Nueva imagen principal ${index + 1}`}
+                    width={150}
+                    height={150}
+                    className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
+                  />
+                ))}
+              </div>
+            </div>
           )}
+
+          {/* Mostrar imágenes actuales si existen */}
+          {(!watchedPrimaryImage || watchedPrimaryImage.length === 0) &&
+            product && (
+              <>
+                {Array.isArray(product.primaryImage) &&
+                product.primaryImage.length > 0 ? (
+                  <div className="mb-2">
+                    <span className="text-sm text-[#7A7A7A] font-medium">
+                      Imágenes actuales:
+                    </span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
+                      {product.primaryImage.map((imageUrl, index) => (
+                        <Image
+                          key={`current-${index}`}
+                          src={`${process.env.NEXT_PUBLIC_API_URL}/${imageUrl}`}
+                          alt={`Imagen principal actual ${index + 1}`}
+                          width={150}
+                          height={150}
+                          className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ) : typeof product.primaryImage === "string" &&
+                  product.primaryImage ? (
+                  <div className="mb-2">
+                    <span className="text-sm text-[#7A7A7A] font-medium">
+                      Imagen actual:
+                    </span>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
+                      <Image
+                        key="current-single"
+                        src={`${process.env.NEXT_PUBLIC_API_URL}/${product.primaryImage}`}
+                        alt="Imagen principal actual"
+                        width={150}
+                        height={150}
+                        className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-48 h-48 bg-gray-200 flex items-center justify-center rounded-none text-gray-400 border border-[#e1e1e1]">
+                    Sin imagen
+                  </div>
+                )}
+              </>
+            )}
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Modelo:</span>
-          <span className="ml-2">{watchedProduct.productModel || ""}</span>
+          <a
+            href={`https://tienda.todoarmazonesarg.com/producto/${
+              product.slug || ""
+            }`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-2 text-[#222222] hover:underline"
+          >
+            {watchedProduct.productModel || ""}
+          </a>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">SKU:</span>
@@ -674,12 +848,21 @@ export default function EditProductPage({
             ¡Producto actualizado con éxito!
           </h3>
           <p className="py-4">
-            El producto fue actualizado correctamente. Puedes ver todos los
-            productos en la sección de productos.
+            El producto fue actualizado correctamente. Puedes continuar editando
+            o ver todos los productos.
           </p>
-          <div className="modal-action">
+          <div className="modal-action flex flex-col gap-2">
             <button
               className="btn rounded-none shadow-none border-none transition-colors duration-300 ease-in-out h-12 text-base px-6 w-full"
+              onClick={() => {
+                modalRef.current?.close();
+                setSuccess(false);
+              }}
+            >
+              Continuar editando
+            </button>
+            <button
+              className="btn rounded-none shadow-none border-none transition-colors duration-300 ease-in-out h-12 text-base px-6 w-full btn-secondary"
               onClick={closeModalAndGo}
             >
               Ir a productos
@@ -687,6 +870,30 @@ export default function EditProductPage({
           </div>
         </div>
       </dialog>
+
+      {/* Toasts de errores */}
+      <div className="toast toast-top toast-end z-50">
+        {toastErrors.map((err) => (
+          <div
+            key={err.id}
+            className={`alert ${
+              err.type === "error"
+                ? "alert-error"
+                : err.type === "success"
+                ? "alert-success"
+                : "alert-warning"
+            }`}
+          >
+            <span>{err.message}</span>
+            <button
+              className="btn btn-sm btn-circle btn-ghost"
+              onClick={() => removeToastError(err.id)}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

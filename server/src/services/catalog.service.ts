@@ -127,7 +127,7 @@ export class CatalogService {
       id: product._id.toString(),
       slug: product.slug,
       thumbnail: this.getAbsoluteImageUrl(product.thumbnail),
-      primaryImage: this.getAbsoluteImageUrl(product.primaryImage),
+      primaryImage: this.getAbsoluteImageUrl(product.primaryImage?.[0]),
       productModel: product.productModel,
       sku: product.sku,
       ...(product.size ? { size: product.size } : {}),

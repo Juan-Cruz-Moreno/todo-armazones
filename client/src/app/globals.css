@@ -44,3 +44,17 @@
 .no-underline {
   text-decoration: none !important;
 }
+
+/* Personalización de flechas de Swiper */
+.swiper-button-next,
+.swiper-button-prev {
+  color: #666666 !important; /* Gris */
+  font-size: 14px !important; /* Tamaño más pequeño */
+  width: 30px !important; /* Ancho reducido */
+  height: 30px !important; /* Alto reducido */
+}
+.swiper-button-next::after,
+.swiper-button-prev::after {
+  color: #666666 !important;
+  font-size: 14px !important;
+}

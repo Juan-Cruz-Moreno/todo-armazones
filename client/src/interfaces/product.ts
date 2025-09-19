@@ -29,7 +29,7 @@ export interface Product {
   id: string;
   slug: string;
   thumbnail: string;
-  primaryImage: string;
+  primaryImage: string[];
   category: ProductCategory[];
   subcategory: ProductSubcategory;
   productModel: string;

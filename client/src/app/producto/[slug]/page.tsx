@@ -12,6 +12,12 @@ import { MinusIcon, PlusIcon } from "lucide-react";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
 import { cartEvents } from "@/utils/eventBus";
 import { addItemToCart } from "@/redux/slices/cartSlice";
+import { Swiper, SwiperSlide } from "swiper/react";
+import { Navigation, Pagination, Zoom } from "swiper/modules";
+import "swiper/css";
+import "swiper/css/navigation";
+import "swiper/css/pagination";
+import "swiper/css/zoom";
 
 const ProductPage = () => {
   const { slug } = useParams();
@@ -26,24 +32,9 @@ const ProductPage = () => {
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
 
-  // Estado para el zoom magnifier
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-
-  const handleMouseEnter = () => {
-    setIsZoomed(true);
-  };
-
-  const handleMouseLeave = () => {
-    setIsZoomed(false);
-  };
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
-    setMousePosition({ x, y });
-  };
+  // Estado para el modal de imagen
+  const [modalOpen, setModalOpen] = useState(false);
+  const [selectedImage, setSelectedImage] = useState<string>('');
 
   // Si no tenemos un slug en la URL, redirigimos a la página principal
   useEffect(() => {
@@ -138,10 +129,8 @@ const ProductPage = () => {
     ? productDetail.variants.find((v) => v.color.hex === selectedColor) || null
     : null;
 
-  // Imagen a mostrar: primaryImage si no hay variante seleccionada, si no la de la variante
-  const imageToShow = selectedVariant
-    ? selectedVariant.images[0]
-    : productDetail.primaryImage;
+  // Imágenes a mostrar: primaryImage si no hay variante seleccionada, si no la de la variante
+  const imagesToShow = selectedVariant ? selectedVariant.images : productDetail.primaryImage;
 
   const handleDecrease = () => {
     setQuantity((prev) => (prev > 1 ? prev - 1 : 1));
@@ -225,42 +214,38 @@ const ProductPage = () => {
       <div className="flex flex-col md:flex-row gap-6">
         {/* Imágenes del producto */}
         <div className="flex-1 flex justify-center items-start">
-          <div
-            className="relative cursor-crosshair w-full"
-            onMouseEnter={handleMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            onMouseMove={handleMouseMove}
-            aria-label="Imagen del producto con zoom disponible al pasar el mouse"
-          >
-            <Image
-              src={`${process.env.NEXT_PUBLIC_API_URL}/${imageToShow}`}
-              alt={productDetail.productModel}
-              width={400}
-              height={400}
-              className="w-full h-auto rounded-none object-contain"
-              priority
+          <div className="w-full max-w-md md:max-w-lg">
+            <Swiper
+              modules={[Navigation, Pagination, Zoom]}
+              spaceBetween={10}
+              slidesPerView={1}
+              navigation
+              pagination={{ clickable: true }}
+              zoom={{ maxRatio: 3 }}
+              className="product-swiper"
               style={{
-                maxHeight:
-                  "calc(100vh - (var(--navbar-height) + var(--breadcrumb-height)))",
+                maxHeight: "calc(100vh - (var(--navbar-height) + var(--breadcrumb-height)))",
               }}
-            />
-            {/* Lente del zoom */}
-            {isZoomed && (
-              <div
-                className="absolute border-2 border-gray-400 pointer-events-none bg-white bg-opacity-50 transition-opacity duration-200"
-                style={{
-                  width: "clamp(120px, 15vw, 200px)",
-                  height: "clamp(120px, 15vw, 200px)",
-                  left: `${mousePosition.x}%`,
-                  top: `${mousePosition.y}%`,
-                  transform: "translate(-50%, -50%)",
-                  backgroundImage: `url(${process.env.NEXT_PUBLIC_API_URL}/${imageToShow})`,
-                  backgroundSize: "600%",
-                  backgroundPosition: `${mousePosition.x}% ${mousePosition.y}%`,
-                  backgroundRepeat: "no-repeat",
-                }}
-              />
-            )}
+            >
+              {imagesToShow.map((image, index) => (
+                <SwiperSlide key={index} zoom>
+                  <div className="swiper-zoom-container">
+                    <Image
+                      src={`${process.env.NEXT_PUBLIC_API_URL}/${image}`}
+                      alt={`${productDetail.productModel} - Imagen ${index + 1}`}
+                      width={400}
+                      height={400}
+                      className="w-full h-auto rounded-none object-contain cursor-pointer"
+                      priority={index === 0}
+                      onClick={() => {
+                        setSelectedImage(image);
+                        setModalOpen(true);
+                      }}
+                    />
+                  </div>
+                </SwiperSlide>
+              ))}
+            </Swiper>
           </div>
         </div>
         {/* Detalles del producto */}
@@ -475,6 +460,30 @@ const ProductPage = () => {
           </div>
         </div>
       </div>
+
+      {/* Modal para imagen en detalle */}
+      {modalOpen && (
+        <div className="modal modal-open">
+          <div className="modal-box max-w-4xl p-4 bg-black rounded-none">
+            <button
+              className="btn btn-sm btn-circle btn-ghost absolute right-2 top-2 z-10 text-white hover:bg-white hover:text-black"
+              onClick={() => setModalOpen(false)}
+            >
+              ✕
+            </button>
+            <div className="flex justify-center items-center min-h-[60vh] py-8">
+              <Image
+                src={`${process.env.NEXT_PUBLIC_API_URL}/${selectedImage}`}
+                alt={`${productDetail.productModel} - Imagen ampliada`}
+                width={800}
+                height={800}
+                className="max-w-full max-h-full object-contain"
+              />
+            </div>
+          </div>
+          <div className="modal-backdrop" onClick={() => setModalOpen(false)}></div>
+        </div>
+      )}
     </div>
   );
 };

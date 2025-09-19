@@ -37,15 +37,17 @@ export class ProductController {
     const files = req.files as Express.Multer.File[];
     const generatedFiles: string[] = [];
     try {
-      // Primary image
-      const primaryImageFile = files.find((file) => file.fieldname === 'primaryImage');
-      if (!primaryImageFile) throw new AppError('Primary image is required', 400, 'fail', false);
-      generatedFiles.push(primaryImageFile.path);
+      // Primary images (multiple allowed)
+      const primaryImageFiles = files.filter((file) => file.fieldname === 'primaryImage');
+      if (primaryImageFiles.length === 0)
+        throw new AppError('At least one primary image is required', 400, 'fail', false);
+      primaryImageFiles.forEach((file) => generatedFiles.push(file.path));
 
-      // 2. Crear thumbnail con Sharp
-      const thumbnailFilename = 'thumb-' + primaryImageFile.filename;
-      const thumbnailPath = path.join(primaryImageFile.destination, thumbnailFilename);
-      await sharp(primaryImageFile.path).resize(300, 300).toFile(thumbnailPath);
+      // 2. Crear thumbnail con Sharp (solo para la primera imagen)
+      const firstPrimaryImage = primaryImageFiles[0];
+      const thumbnailFilename = 'thumb-' + firstPrimaryImage.filename;
+      const thumbnailPath = path.join(firstPrimaryImage.destination, thumbnailFilename);
+      await sharp(firstPrimaryImage.path).resize(300, 300).toFile(thumbnailPath);
       generatedFiles.push(thumbnailPath);
 
       // 3. Los datos ya están parseados por el middleware parseJsonFields
@@ -84,7 +86,7 @@ export class ProductController {
       // 5. Asignar rutas de imágenes procesadas al producto
       const productDto: CreateProductRequestDto = {
         ...productData,
-        primaryImage: 'uploads/' + primaryImageFile.filename,
+        primaryImage: primaryImageFiles.map((file) => 'uploads/' + file.filename),
         thumbnail: 'uploads/' + thumbnailFilename,
       };
 
@@ -348,35 +350,45 @@ export class ProductController {
     const files = (req.files as Express.Multer.File[]) || [];
     const generatedFiles: string[] = [];
     try {
-      // Procesar imagen principal si se envía
+      // Procesar imágenes principales si se envían (múltiples)
       let productDto = req.body.product as UpdateProductRequestDto;
 
       let thumbnailFilename: string | undefined;
 
-      const primaryImageFile = files.find((file) => file.fieldname === 'primaryImage');
-      if (primaryImageFile) {
-        // Crear thumbnail
-        thumbnailFilename = 'thumb-' + primaryImageFile.filename;
-        const thumbnailPath = path.join(primaryImageFile.destination, thumbnailFilename);
-        await sharp(primaryImageFile.path).resize(300, 300).toFile(thumbnailPath);
-        generatedFiles.push(primaryImageFile.path);
+      const primaryImageFiles = files.filter((file) => file.fieldname === 'primaryImage');
+      if (primaryImageFiles.length > 0) {
+        primaryImageFiles.forEach((file) => generatedFiles.push(file.path));
+        // Crear thumbnail solo para la primera imagen
+        const firstPrimaryImage = primaryImageFiles[0];
+        thumbnailFilename = 'thumb-' + firstPrimaryImage.filename;
+        const thumbnailPath = path.join(firstPrimaryImage.destination, thumbnailFilename);
+        await sharp(firstPrimaryImage.path).resize(300, 300).toFile(thumbnailPath);
         generatedFiles.push(thumbnailPath);
 
         productDto = {
           ...productDto,
-          primaryImage: 'uploads/' + primaryImageFile.filename,
+          primaryImage: primaryImageFiles.map((file) => 'uploads/' + file.filename),
           thumbnail: 'uploads/' + thumbnailFilename,
         };
       }
 
       // Procesar variantes y asociar imágenes si se envían
-      const variantsRaw = req.body.variants as { id: string; data: UpdateProductVariantRequestDto }[];
+      const variantsRaw = req.body.variants as { id?: string; data: UpdateProductVariantRequestDto }[];
 
       const variantsDto = await Promise.all(
         variantsRaw.map(async (variant) => {
           if (variant.data && variant.data.color && variant.data.color.name) {
             const colorKey = `images_${normalizeColorName(variant.data.color.name)}`;
             const imagesForVariant = files.filter((img) => img.fieldname === colorKey).map((img) => img);
+            // Validación: Nueva variante requiere al menos una imagen
+            if (!variant.id && imagesForVariant.length === 0) {
+              throw new AppError(
+                `Nueva variante de color '${variant.data.color.name}' debe tener al menos una imagen.`,
+                400,
+                'fail',
+                false,
+              );
+            }
             if (imagesForVariant.length > 0) {
               // Solo generar thumbnail de la primera imagen de la variante
               const firstImg = imagesForVariant[0];

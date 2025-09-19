@@ -33,9 +33,9 @@ export async function generateMetadata({
       openGraph: {
         title: `${productName} - Todo Armazones`,
         description: `${productName} | Productos ópticos de calidad`,
-        images: product.primaryImage ? [
+        images: product.primaryImage && product.primaryImage.length > 0 ? [
           {
-            url: `${process.env.NEXT_PUBLIC_API_URL}${product.primaryImage}`,
+            url: `${process.env.NEXT_PUBLIC_API_URL}${product.primaryImage[0]}`,
             width: 400,
             height: 400,
             alt: productName,
@@ -46,7 +46,7 @@ export async function generateMetadata({
         card: "summary_large_image",
         title: `${productName} - Todo Armazones`,
         description: `${productName}`,
-        images: product.primaryImage ? [`${process.env.NEXT_PUBLIC_API_URL}${product.primaryImage}`] : [],
+        images: product.primaryImage && product.primaryImage.length > 0 ? [`${process.env.NEXT_PUBLIC_API_URL}${product.primaryImage[0]}`] : [],
       },
     };
   } catch {
