@@ -77,7 +77,6 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      domain: env.NODE_ENV === 'production' ? '.todoarmazonesarg.com' : undefined, // Configura el dominio solo en producción
       httpOnly: true,
       secure: env.NODE_ENV === 'production', // Solo en producción
       sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax', // Configuración para cookies en producción
