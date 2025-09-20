@@ -1,5 +1,5 @@
 import express, { Application } from 'express';
-//import helmet from 'helmet';
+import helmet from 'helmet';
 import cors from 'cors';
 import expressWinston from 'express-winston';
 import cookieParser from 'cookie-parser';
@@ -20,7 +20,7 @@ const app: Application = express();
 app.set('trust proxy', 1);
 
 // 1. Security Middleware
-//app.use(helmet());
+app.use(helmet());
 app.use(
   cors({
     // Allow all origins
@@ -32,6 +32,24 @@ app.use(
     ],
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: [
+      'Origin',
+      'X-Requested-With',
+      'Content-Type',
+      'Accept',
+      'Authorization',
+      'X-CSRF-Token',
+      'X-API-Key',
+      'Cache-Control',
+      'Pragma',
+      'User-Agent',
+      'Referer',
+      'Accept-Encoding',
+      'Accept-Language',
+      'If-Modified-Since',
+      'If-None-Match',
+    ],
+    maxAge: 0, // No cache preflight requests
   }),
 );
 
@@ -59,6 +77,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
+      domain: env.NODE_ENV === 'production' ? '.todoarmazonesarg.com' : undefined, // Configura el dominio solo en producción
       httpOnly: true,
       secure: env.NODE_ENV === 'production', // Solo en producción
       sameSite: env.NODE_ENV === 'production' ? 'none' : 'lax', // Configuración para cookies en producción
@@ -69,13 +88,23 @@ app.use(
 
 // Servir archivos estáticos de /uploads
 const uploadsPath = path.join(process.cwd(), 'uploads');
+const allowedOrigins = [
+  'https://tienda.todoarmazonesarg.com',
+  'https://admin.todoarmazonesarg.com',
+  'http://localhost:3000',
+  'http://localhost:3001',
+];
+
 app.use(
   '/uploads',
   express.static(uploadsPath, {
     maxAge: '1d', // Cache por 1 día
-    setHeaders: (res) => {
-      // Agregar headers CORS para las imágenes
-      res.setHeader('Access-Control-Allow-Origin', '*');
+    setHeaders: (res, _path) => {
+      // Permitir orígenes específicos para consistencia con CORS
+      const origin = res.req.headers.origin;
+      if (origin && allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+      }
       res.setHeader('Access-Control-Allow-Methods', 'GET');
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     },
