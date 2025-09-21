@@ -48,20 +48,7 @@ export const createProductSchema = z.object({
 export const productFilesSchema = z.object({
   primaryImage: z
     .array(z.instanceof(File))
-    .min(1, "Al menos una imagen principal es requerida")
-    .refine(
-      (files) => files.every((file) => file.size <= 15 * 1024 * 1024),
-      "Cada imagen debe ser menor a 15MB"
-    )
-    .refine(
-      (files) =>
-        files.every((file) =>
-          ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(
-            file.type
-          )
-        ),
-      "Cada imagen debe ser JPG, PNG o WebP"
-    ),
+    .min(1, "Al menos una imagen principal es requerida"),
   variantImages: variantImagesSchema,
 });
 
@@ -120,22 +107,7 @@ export const updateProductSchema = z.object({
 
 // Schema para archivos en actualización (opcionales)
 export const updateProductFilesSchema = z.object({
-  primaryImage: z
-    .array(z.instanceof(File))
-    .refine(
-      (files) => files.every((file) => file.size <= 15 * 1024 * 1024),
-      "Cada imagen debe ser menor a 15MB"
-    )
-    .refine(
-      (files) =>
-        files.every((file) =>
-          ["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(
-            file.type
-          )
-        ),
-      "Cada imagen debe ser JPG, PNG o WebP"
-    )
-    .optional(),
+  primaryImage: z.array(z.instanceof(File)).optional(),
   variantImages: z.record(
     z.string(),
     z.array(z.instanceof(File))
