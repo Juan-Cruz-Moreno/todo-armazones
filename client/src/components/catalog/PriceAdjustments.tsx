@@ -27,14 +27,6 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
           <span className="text-2xl">💰</span>
           ¡Aumenta tus ganancias con precios inteligentes!
         </h4>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="btn btn-sm bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 border-none shadow-lg transform hover:scale-105 transition-all duration-200"
-        >
-          <Plus className="w-4 h-4" />
-          Agregar Ajuste
-        </button>
       </div>
 
       <div className="text-sm text-[#666666] mb-4">
@@ -54,7 +46,7 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
             </li>
             <li className="flex items-start gap-2">
               <span className="text-green-600 font-bold mt-1">✓</span>
-              <span><strong>Lucrativo:</strong> 35% de incremento = $100 → $135 ¡Más ganancias por venta!</span>
+              <span><strong>Lucrativo:</strong> 35% de incremento = $10 → $13.5 ¡Más ganancias por venta!</span>
             </li>
           </ul>
         </div>
@@ -76,9 +68,9 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
                 <strong>Ejemplo real:</strong>
               </p>
               <div className="text-left">
-                <p className="text-sm text-[#222222]">Producto: $100 (costo)</p>
-                <p className="text-sm font-bold text-green-600">Con 35% markup: $135 (venta)</p>
-                <p className="text-sm font-bold text-blue-600">¡Ganancia extra: $35 por unidad!</p>
+                <p className="text-sm text-[#222222]">Producto: $10 (costo)</p>
+                <p className="text-sm font-bold text-green-600">Con 35% markup: $13.5 (venta)</p>
+                <p className="text-sm font-bold text-blue-600">¡Ganancia extra: $3.5 por unidad!</p>
               </div>
             </div>
             <button
@@ -129,7 +121,7 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
                   <select
                     value={adjustment.categoryId || ''}
                     onChange={(e) => onUpdate(index, 'categoryId', e.target.value)}
-                    className="select select-bordered w-full text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    className="select select-bordered w-full text-sm bg-white border border-gray-300 text-[#222222] focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   >
                     <option value="">Seleccionar categoría</option>
                     {categories.map((category) => (
@@ -149,9 +141,9 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
                   <select
                     value={adjustment.subcategoryId || ''}
                     onChange={(e) => onUpdate(index, 'subcategoryId', e.target.value)}
-                    className="select select-bordered w-full text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
+                    className="select select-bordered w-full text-sm bg-white border border-gray-300 text-[#222222] focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
                   >
-                    <option value="">Seleccionar subcategoría</option>
+                    <option value="">Aplicar a todos los productos</option>
                     {subcategories.map((subcategory) => (
                       <option key={subcategory.id} value={subcategory.id}>
                         {subcategory.title}
@@ -173,55 +165,19 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
                       onUpdate(
                         index,
                         'percentageIncrease',
-                        parseFloat(e.target.value) || 0
+                        e.target.value
                       )
                     }
-                    min="0"
-                    max="1000"
                     step="0.1"
-                    className="input input-bordered w-full text-sm focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
+                    className="input input-bordered w-full text-sm bg-white border border-gray-300 text-[#222222] focus:border-green-500 focus:ring-2 focus:ring-green-200 transition-all"
                     placeholder="Ej: 35"
                   />
                 </div>
               </div>
 
-              {/* Preview del cálculo */}
-              {adjustment.percentageIncrease > 0 && (
-                <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2 text-green-800">
-                      <span className="text-lg">💰</span>
-                      <span className="font-semibold">¡Excelente cálculo!</span>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-sm text-green-700">Precio base</div>
-                      <div className="font-bold text-green-800">$100 USD</div>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white p-3 rounded border border-green-200 mb-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-[#222222]">Con {adjustment.percentageIncrease}% markup:</span>
-                      <span className="font-bold text-green-600 text-lg">
-                        ${(100 * (1 + adjustment.percentageIncrease / 100)).toFixed(2)} USD
-                      </span>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-green-100 p-2 rounded">
-                    <div className="flex justify-between items-center text-green-800">
-                      <span className="text-sm font-semibold">¡Ganancia extra por unidad!</span>
-                      <span className="font-bold text-lg">
-                        +${(100 * (adjustment.percentageIncrease / 100)).toFixed(2)} USD
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               {/* Validación visual */}
               {!adjustment.categoryId && !adjustment.subcategoryId && (
-                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-200">
+                <div className="bg-gradient-to-r from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-200 mt-4">
                   <div className="flex items-center gap-2 text-yellow-800 mb-2">
                     <span className="text-lg">⚠️</span>
                     <span className="font-medium">
@@ -237,7 +193,7 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
 
               {/* Información de prioridad cuando ambos están seleccionados */}
               {adjustment.categoryId && adjustment.subcategoryId && (
-                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200">
+                <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-200 mt-4">
                   <div className="flex items-center gap-2 text-blue-800 mb-2">
                     <span className="text-lg">🎯</span>
                     <span className="font-semibold">
@@ -254,6 +210,18 @@ const PriceAdjustments: React.FC<PriceAdjustmentsProps> = ({
               )}
             </motion.div>
           ))}
+
+          {/* Botón para agregar ajuste al final */}
+          <div className="flex justify-center mt-6">
+            <button
+              type="button"
+              onClick={onAdd}
+              className="btn bg-gradient-to-r from-green-500 to-green-600 text-white hover:from-green-600 hover:to-green-700 border-none shadow-lg transform hover:scale-105 transition-all duration-200"
+            >
+              <Plus className="w-4 h-4" />
+              Agregar Otro Ajuste
+            </button>
+          </div>
         </div>
       )}
     </div>

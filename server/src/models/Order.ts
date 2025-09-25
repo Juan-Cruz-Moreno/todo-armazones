@@ -134,7 +134,7 @@ const orderSchema = new Schema<IOrderDocument>(
 
 // Índices para optimizar consultas de analytics
 orderSchema.index({ createdAt: 1, orderStatus: 1 }); // Para filtrar por fecha y estado
-orderSchema.index({ createdAt: -1 }); // Para ordenamiento por fecha descendente
+orderSchema.index({ createdAt: -1, _id: -1 }); // Para ordenamiento determinístico por fecha descendente y _id
 // Índice para optimizar consultas basadas únicamente en orderStatus
 orderSchema.index({ orderStatus: 1 });
 

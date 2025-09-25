@@ -17,16 +17,18 @@ const Navbar = () => {
             width={150}
             height={75}
             priority
+            className="w-32 md:w-[150px] h-auto"
           />
         </Link>
       </div>
       <div className="flex flex-row items-center gap-2 flex-none">
         <Link
           href="/catalogo"
-          className="flex items-center gap-2 bg-white text-black cursor-pointer mr-3"
+          className="flex items-center gap-2 bg-white text-black cursor-pointer mr-3 whitespace-nowrap"
           aria-label="Ir al catálogo"
         >
-          <span>Catálogo</span>
+          <span className="md:hidden">Catálogo PDF</span>
+          <span className="hidden md:inline">Descargar Catálogo PDF</span>
         </Link>
         <SearchDrawer />
         <CartDrawer />

@@ -851,10 +851,11 @@ export class OrderService {
     if (cursor) {
       query._id = { $lt: new Types.ObjectId(cursor) };
     }
-    const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1 }).limit(limit);
+    const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
     if (!orders || orders.length === 0) {
       return { orders: [], nextCursor: null };
     }
+
     const mappedOrders = orders.map((order) => this.mapOrderToUserResponseDto(order));
     const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
     return { orders: mappedOrders, nextCursor };
@@ -863,7 +864,7 @@ export class OrderService {
   // Get all orders for admin with cursor pagination and filter by status
   public async getAllOrders(
     cursor: string | null = null,
-    limit: number = 1,
+    limit: number = 10,
     status?: OrderStatus,
   ): Promise<{ orders: OrderResponseDto[]; nextCursor: string | null }> {
     const query: OrderQuery = {};
@@ -877,7 +878,8 @@ export class OrderService {
     }
 
     // Usar helper para obtener todas las órdenes populadas y mapearlas
-    const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1 }).limit(limit);
+    // Sort determinístico por fecha y _id para evitar duplicaciones cuando se actualiza createdAt
+    const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
 
     const mappedOrders = orders.map((order) => this.mapOrderToResponseDto(order));
     const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;

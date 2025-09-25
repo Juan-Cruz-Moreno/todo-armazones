@@ -1,13 +1,12 @@
 // src/services/catalog.service.ts
 
-import path from 'path';
-import fs from 'fs';
 import { FilterQuery, Types } from 'mongoose';
 
 import Category from '@models/Category';
 import Subcategory from '@models/Subcategory';
 import Product from '@models/Product';
 import ProductVariant from '@models/ProductVariant';
+import Dollar from '@models/Dollar';
 
 import {
   GenerateCatalogRequestDto,
@@ -23,14 +22,41 @@ import {
 import { AppError } from '@utils/AppError';
 import logger from '@config/logger';
 import { generateCatalogPDF } from '@utils/catalogPdfGenerator';
-import env from '@config/env';
-import transporter from '@config/nodemailer.config';
 import { IProductDocument } from '@models/Product';
 import { IProductVariantDocument } from '@models/ProductVariant';
 import { ICategoryDocument } from '@models/Category';
 import { ISubcategoryDocument } from '@models/Subcategory';
+import path from 'path';
+import fs from 'fs';
+import { getCatalogIo } from '../socket/socketManager';
+import env from '@config/env';
 
 export class CatalogService {
+  private emitProgress(
+    roomId: string,
+    step: string,
+    progress: number,
+    data?: unknown,
+    ack?: (response: unknown) => void,
+  ) {
+    logger.info('Emitting progress', { roomId, step, progress, data, timestamp: Date.now() });
+    const catalogIo = getCatalogIo();
+    if (catalogIo && roomId) {
+      try {
+        catalogIo.to(roomId).emit('catalog-progress', { step, progress, data }, ack);
+        logger.info('Progress emitted successfully', { roomId, step, progress });
+      } catch (error) {
+        const appError = new AppError('Failed to emit progress', 500, 'error', false, {
+          roomId,
+          step,
+          error: (error as Error).message,
+        });
+        logger.error('Error emitting progress', { error: appError.message, stack: appError.stack, roomId, step });
+      }
+    } else {
+      logger.warn('Catalog IO not available or no roomId', { roomId, catalogIoAvailable: !!catalogIo });
+    }
+  }
   /**
    * Calcula el precio ajustado según los ajustes de precio configurados.
    * Prioridad: subcategoría específica > categoría específica > subcategoría sola > categoría sola
@@ -74,10 +100,6 @@ export class CatalogService {
     return originalPrice;
   }
 
-  /**
-   * Convierte ruta/imagen relativa a URL absoluta usando el prefijo fijo.
-   * Devuelve placeholder si no hay imagen.
-   */
   private getAbsoluteImageUrl(imageUrl?: string): string {
     if (!imageUrl) {
       return 'https://via.placeholder.com/300x200/f3f4f6/6b7280?text=Sin+Imagen';
@@ -85,7 +107,7 @@ export class CatalogService {
     if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) return imageUrl;
     // Para rutas relativas, quitar '/' inicial si existe y agregar prefijo
     const cleanUrl = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
-    return `https://api.todoarmazonesarg.com/${cleanUrl}`;
+    return `${env.SERVER_URL}/${cleanUrl}`;
   }
 
   /**
@@ -136,22 +158,22 @@ export class CatalogService {
   }
 
   /**
-   * Genera un catálogo (PDF) y lo envia por email. Mantiene el comportamiento
-   * de tu método original (guardado en uploads, adjunto por email).
+   * Genera un catálogo (PDF) y lo guarda en el servidor.
    */
   public async generateCatalog(
     catalogData: GenerateCatalogRequestDto,
     logoFile?: Express.Multer.File,
+    roomId?: string,
   ): Promise<GenerateCatalogResponseDto> {
     try {
+      this.emitProgress(roomId || '', 'starting', 0, { message: 'Iniciando generación de catálogo' });
+
       // Requerimos al menos una categoría o subcategoría
       if (!catalogData.categories?.length && !catalogData.subcategories?.length) {
         throw new AppError('Debe especificar al menos una categoría o subcategoría', 400);
       }
 
-      if (!catalogData.email) {
-        throw new AppError('El email es requerido', 400);
-      }
+      this.emitProgress(roomId || '', 'validating', 10, { message: 'Validando datos de entrada' });
 
       // Procesar logo
       let logoUrl = 'https://i.imgur.com/nzdfwS7.png';
@@ -159,8 +181,17 @@ export class CatalogService {
         logoUrl = this.getAbsoluteImageUrl(`/uploads/${logoFile.filename}`);
       }
 
+      this.emitProgress(roomId || '', 'processing-logo', 20, { message: 'Procesando logo' });
+
       // Obtener datos del catálogo (optimizado)
+      this.emitProgress(roomId || '', 'fetching-data', 30, { message: 'Consultando datos del catálogo' });
       const catalogInfo = await this.getCatalogData(catalogData);
+
+      this.emitProgress(roomId || '', 'data-fetched', 50, { message: 'Datos obtenidos, preparando PDF' });
+
+      // Obtener baseValue del dólar
+      const dollar = await Dollar.findOne();
+      const dollarBaseValue = dollar?.baseValue || 0;
 
       const fullCatalogData: CatalogDataDto = {
         title: 'Catálogo de Productos',
@@ -176,59 +207,61 @@ export class CatalogService {
           timeZone: 'America/Argentina/Buenos_Aires',
         }),
         ...catalogInfo,
+        dollarBaseValue,
+        showPrices: catalogData.showPrices ?? true,
       };
 
-      const pdfBuffer = await generateCatalogPDF(fullCatalogData);
+      this.emitProgress(roomId || '', 'starting-pdf', 70, { message: 'Iniciando generación de PDF' });
 
-      // Guardar en uploads
-      const uploadsPath = path.join(process.cwd(), 'uploads');
-      if (!fs.existsSync(uploadsPath)) fs.mkdirSync(uploadsPath, { recursive: true });
+      // Crear callback para progreso granular del PDF
+      const pdfProgressCallback = (step: string, progress: number, message: string) => {
+        this.emitProgress(roomId || '', step, progress, { message });
+      };
+
+      const pdfBuffer = await generateCatalogPDF(fullCatalogData, pdfProgressCallback);
 
       const fileName = `catalog-${Date.now()}.pdf`;
-      const filePath = path.join(uploadsPath, fileName);
+
+      this.emitProgress(roomId || '', 'saving-pdf', 98, { message: 'Guardando PDF en servidor' });
+
+      const filePath = path.join(process.cwd(), 'uploads', fileName);
       fs.writeFileSync(filePath, pdfBuffer);
 
-      // Enviar email con adjunto
-      await transporter.sendMail({
-        from: `Todo Armazones Argentina <${env.EMAIL_USER}>`,
-        to: catalogData.email,
-        subject: 'Tu catálogo de productos está listo',
-        // @ts-expect-error plantilla handlebars en transporter
-        template: 'catalog-email',
-        context: {
-          logoUrl,
-          generatedAt: fullCatalogData.generatedAt,
-          categoriesCount: catalogInfo.categories.length,
-          totalProducts: catalogInfo.totalProducts,
-          totalVariants: catalogInfo.totalVariants,
-        },
-        attachments: [
-          {
-            filename: fileName,
-            content: pdfBuffer,
-            contentType: 'application/pdf',
-          },
-        ],
-      });
+      this.emitProgress(roomId || '', 'finalizing', 99, { message: 'Finalizando proceso' });
 
-      logger.info('Catálogo generado y enviado exitosamente', {
+      logger.info('Catálogo generado exitosamente', {
         fileName,
-        email: catalogData.email,
         categoriesCount: catalogInfo.categories.length,
         totalProducts: catalogInfo.totalProducts,
         totalVariants: catalogInfo.totalVariants,
         priceAdjustmentsApplied: catalogData.priceAdjustments?.length || 0,
       });
 
+      this.emitProgress(roomId || '', 'completed', 100, { fileName, message: 'Catálogo generado exitosamente' });
+
       return {
-        message: 'Catálogo generado y enviado por email exitosamente',
-        pdfUrl: `/uploads/${fileName}`,
+        message: 'Catálogo generado exitosamente',
+        pdfBuffer,
         fileName,
       };
     } catch (error) {
+      this.emitProgress(roomId || '', 'error', 0, { message: 'Error en generación', error: (error as Error).message });
       logger.error('Error al generar catálogo', { error, catalogData });
       throw error;
     }
+  }
+
+  /**
+   * Método optimizado para obtener IDs de productos que tienen stock
+   * Centraliza la lógica y evita duplicación en múltiples métodos
+   */
+  private async getProductsWithStock(): Promise<Types.ObjectId[]> {
+    const productsWithStock = await ProductVariant.aggregate([
+      { $match: { stock: { $gt: 0 } } },
+      { $group: { _id: '$product' } },
+      { $project: { _id: 1 } },
+    ]);
+    return productsWithStock.map((item) => item._id);
   }
 
   /**
@@ -276,6 +309,29 @@ export class CatalogService {
       productFilter.category = { $in: categoryIds };
     }
 
+    // Filtro por stock - optimizado para evitar doble filtrado
+    let stockFilteredIds: Types.ObjectId[] | undefined;
+    if (catalogData.inStock === true) {
+      stockFilteredIds = await this.getProductsWithStock();
+      if (stockFilteredIds.length === 0) {
+        // Si no hay productos con stock, retornar vacío
+        return {
+          categories: [],
+          totalProducts: 0,
+          totalVariants: 0,
+        };
+      }
+      // Intersectar con filtros existentes
+      if (productFilter._id && '$in' in productFilter._id) {
+        const currentIn = (productFilter._id as { $in: Types.ObjectId[] }).$in;
+        productFilter._id = {
+          $in: currentIn.filter((id: Types.ObjectId) => stockFilteredIds!.includes(id)),
+        };
+      } else {
+        productFilter._id = { $in: stockFilteredIds };
+      }
+    }
+
     // --> Queries optimizadas (4 queries)
     const [categories, subcategories, products] = await Promise.all([
       Category.find(categoryFilter).lean(),
@@ -297,7 +353,7 @@ export class CatalogService {
       productsList = (await Product.find(fallbackProductFilter).lean()) as IProductDocument[];
     }
 
-    // Si no hay productsList (posible si productFilter vacío y no hay categories/subcategories),
+    // Si no hay productsList (posible si productFilter vacío y no hay categorías/subcategorías),
     // entonces no hay nada que devolver.
     if (!productsList || productsList.length === 0) {
       return {

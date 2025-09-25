@@ -29,7 +29,6 @@ const PriceAdjustmentSchema = z
 export const GenerateCatalogRequestSchema = {
   body: z
     .object({
-      email: z.string().email('Debe proporcionar un email válido').min(1, 'El email es requerido'),
       categories: z
         .union([
           z.array(ObjectIdSchema),
@@ -72,13 +71,38 @@ export const GenerateCatalogRequestSchema = {
         ])
         .optional()
         .default([]), // Array vacío por defecto
+      inStock: z
+        .union([
+          z.boolean(),
+          z.string().transform((str) => {
+            try {
+              return JSON.parse(str);
+            } catch {
+              return false;
+            }
+          }),
+        ])
+        .optional(), // Filtro opcional para productos con stock
+      showPrices: z
+        .union([
+          z.boolean(),
+          z.string().transform((str) => {
+            try {
+              return JSON.parse(str);
+            } catch {
+              return true; // Por defecto true si no se puede parsear
+            }
+          }),
+        ])
+        .optional()
+        .default(true), // Por defecto mostrar precios
     })
     .superRefine((data, ctx) => {
-      // Validación personalizada: al menos una de las dos propiedades debe tener valores
-      if (data.categories.length === 0 && data.subcategories.length === 0) {
+      // Validación personalizada: al menos una de las dos propiedades debe tener valores, o inStock debe ser true
+      if (data.categories.length === 0 && data.subcategories.length === 0 && data.inStock !== true) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          message: 'Debe especificar al menos una categoría o subcategoría',
+          code: 'custom',
+          message: 'Debe especificar al menos una categoría o subcategoría, o activar el filtro de stock',
           path: ['categories'], // Indica dónde ocurrió el error
         });
       }
@@ -86,7 +110,7 @@ export const GenerateCatalogRequestSchema = {
       // Validación adicional: no se permite que una categoría y subcategoría sean ambas nulas
       if (data.priceAdjustments.some((adjustment) => !adjustment.categoryId && !adjustment.subcategoryId)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: 'custom',
           message: 'Cada ajuste de precio debe tener al menos una categoría o subcategoría',
           path: ['priceAdjustments'],
         });

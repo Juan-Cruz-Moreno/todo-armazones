@@ -7,15 +7,16 @@ export interface PriceAdjustmentDto {
 }
 
 export interface GenerateCatalogRequestDto {
-  email: string; // Email al que se enviará el catálogo
   categories?: Types.ObjectId[]; // IDs de categorías específicas a incluir
   subcategories?: Types.ObjectId[]; // IDs de subcategorías específicas a incluir
   priceAdjustments?: PriceAdjustmentDto[]; // Ajustes de precio por categoría/subcategoría
+  inStock?: boolean; // Incluir solo productos con al menos una variante en stock
+  showPrices?: boolean; // Mostrar precios en el catálogo (por defecto true)
 }
 
 export interface GenerateCatalogResponseDto {
   message: string;
-  pdfUrl: string; // URL del PDF generado
+  pdfBuffer: Buffer; // Buffer del PDF generado
   fileName: string; // Nombre del archivo PDF
 }
 
@@ -71,4 +72,6 @@ export interface CatalogDataDto {
   categories: CatalogCategoryDto[];
   totalProducts: number;
   totalVariants: number;
+  dollarBaseValue: number;
+  showPrices: boolean; // Mostrar precios en el catálogo
 }

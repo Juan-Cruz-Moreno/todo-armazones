@@ -41,6 +41,10 @@ export default function CreateProductPage() {
     }[]
   >([]);
 
+  // Estados para cachear URLs de object y evitar memory leaks
+  const [primaryImageURLs, setPrimaryImageURLs] = useState<string[]>([]);
+  const [variantImageURLs, setVariantImageURLs] = useState<Record<string, string[]>>({});
+
   const {
     control,
     handleSubmit,
@@ -78,6 +82,19 @@ export default function CreateProductPage() {
   const watchedVariants = watch("variants");
   const watchedPrimaryImage = watch("files.primaryImage");
   const watchedVariantImages = watch("files.variantImages");
+
+  // Función para revocar todas las URLs de object
+  const revokeAllURLs = () => {
+    primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
+    Object.values(variantImageURLs).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
+    setPrimaryImageURLs([]);
+    setVariantImageURLs({});
+  };
+
+  // Revocar URLs al desmontar el componente
+  useEffect(() => {
+    return () => revokeAllURLs();
+  }, []);
 
   // Funciones helper para manejar errores en toast
   const addToastError = (
@@ -131,12 +148,17 @@ export default function CreateProductPage() {
     const colorName = normalizeColorName(
       watchedVariants[idx]?.color?.name || ""
     );
+    const normalizedKey = `images_${colorName}`;
     const files = e.target.files;
     if (files && files.length > 0) {
+      // Revocar URLs anteriores para este color
+      variantImageURLs[normalizedKey]?.forEach(url => URL.revokeObjectURL(url));
+      const newURLs = Array.from(files).map(file => URL.createObjectURL(file));
+      setVariantImageURLs(prev => ({ ...prev, [normalizedKey]: newURLs }));
       const currentVariantImages = watch("files.variantImages") || {};
       setValue("files.variantImages", {
         ...currentVariantImages,
-        [`images_${colorName}`]: Array.from(files),
+        [normalizedKey]: Array.from(files),
       });
       trigger("files.variantImages");
     }
@@ -179,6 +201,8 @@ export default function CreateProductPage() {
       // Reset form completamente
       reset();
       setExpanded([false]);
+      // Revocar todas las URLs después de reset
+      revokeAllURLs();
     } catch (error) {
       console.error("Error al crear producto:", error);
       // Mostrar error en toast
@@ -242,9 +266,14 @@ export default function CreateProductPage() {
             accept="image/*"
             multiple
             onChange={(e) => {
+              // Revocar URLs anteriores
+              primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
+              const newFiles = e.target.files ? Array.from(e.target.files) : [];
+              const newURLs = newFiles.map(file => URL.createObjectURL(file));
+              setPrimaryImageURLs(newURLs);
               setValue(
                 "files.primaryImage",
-                e.target.files ? Array.from(e.target.files) : []
+                newFiles
               );
               trigger("files.primaryImage");
             }}
@@ -545,12 +574,12 @@ export default function CreateProductPage() {
         {/* Imagen principal */}
         <label className="text-[#7A7A7A]">Imagen principal</label>
         <div className="mb-4">
-          {watchedPrimaryImage && watchedPrimaryImage.length > 0 ? (
+          {primaryImageURLs.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {watchedPrimaryImage.map((file, index) => (
+              {primaryImageURLs.map((url, index) => (
                 <Image
                   key={index}
-                  src={URL.createObjectURL(file)}
+                  src={url}
                   alt={`Imagen principal ${index + 1}`}
                   width={150}
                   height={150}
@@ -628,7 +657,7 @@ export default function CreateProductPage() {
               const normalizedKey = `images_${normalizeColorName(
                 v?.color?.name || ""
               )}`;
-              const images = watchedVariantImages?.[normalizedKey];
+              const images = variantImageURLs[normalizedKey];
               if (!images || images.length === 0) return null;
               return (
                 <div key={i} className="mb-4">
@@ -636,10 +665,10 @@ export default function CreateProductPage() {
                     {v?.color?.name || "Sin nombre"}:
                   </span>
                   <div className="flex flex-wrap gap-2 mt-1">
-                    {images.map((file, j) => (
+                    {images.map((url, j) => (
                       <Image
                         key={j}
-                        src={URL.createObjectURL(file)}
+                        src={url}
                         alt={`Imagen ${j + 1} de ${v?.color?.name}`}
                         width={100}
                         height={100}

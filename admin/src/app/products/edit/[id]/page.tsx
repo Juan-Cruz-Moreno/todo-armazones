@@ -61,6 +61,10 @@ export default function EditProductPage({
     }[]
   >([]);
 
+  // Estados para cachear URLs de object y evitar memory leaks
+  const [primaryImageURLs, setPrimaryImageURLs] = useState<string[]>([]);
+  const [variantImageURLs, setVariantImageURLs] = useState<Record<string, string[]>>({});
+
   // Funciones helper para manejar errores en toast
   const addToastError = (
     message: string,
@@ -168,6 +172,19 @@ export default function EditProductPage({
   const watchedPrimaryImage = watch("files.primaryImage");
   const watchedVariantImages = watch("files.variantImages");
 
+  // Función para revocar todas las URLs de object
+  const revokeAllURLs = () => {
+    primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
+    Object.values(variantImageURLs).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
+    setPrimaryImageURLs([]);
+    setVariantImageURLs({});
+  };
+
+  // Revocar URLs al desmontar el componente
+  useEffect(() => {
+    return () => revokeAllURLs();
+  }, []);
+
   // Handlers para categorías y subcategorías
   const handleCategoryChange = (catId: string) => {
     const currentCategories = watchedProduct.category || [];
@@ -192,12 +209,17 @@ export default function EditProductPage({
     const colorName = normalizeColorName(
       watchedVariants?.[idx]?.data?.color?.name || ""
     );
+    const normalizedKey = `images_${colorName}`;
     const files = e.target.files;
     if (files && files.length > 0) {
+      // Revocar URLs anteriores para este color
+      variantImageURLs[normalizedKey]?.forEach(url => URL.revokeObjectURL(url));
+      const newURLs = Array.from(files).map(file => URL.createObjectURL(file));
+      setVariantImageURLs(prev => ({ ...prev, [normalizedKey]: newURLs }));
       const currentVariantImages = watch("files.variantImages") || {};
       setValue("files.variantImages", {
         ...currentVariantImages,
-        [`images_${colorName}`]: Array.from(files),
+        [normalizedKey]: Array.from(files),
       });
       trigger("files.variantImages");
     }
@@ -254,6 +276,8 @@ export default function EditProductPage({
         variantImages: {},
       });
       setExpanded(updatedProduct.variants.map(() => false));
+      // Revocar todas las URLs después de reset
+      revokeAllURLs();
     } catch (error) {
       console.error("Error al actualizar producto:", error);
       // Mostrar error en toast
@@ -320,9 +344,14 @@ export default function EditProductPage({
             accept="image/*"
             multiple
             onChange={(e) => {
+              // Revocar URLs anteriores
+              primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
+              const newFiles = e.target.files ? Array.from(e.target.files) : [];
+              const newURLs = newFiles.map(file => URL.createObjectURL(file));
+              setPrimaryImageURLs(newURLs);
               setValue(
                 "files.primaryImage",
-                e.target.files ? Array.from(e.target.files) : []
+                newFiles
               );
               trigger("files.primaryImage");
             }}
@@ -659,10 +688,10 @@ export default function EditProductPage({
                 Nuevas imágenes:
               </span>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
-                {watchedPrimaryImage.map((file, index) => (
+                {primaryImageURLs.map((url, index) => (
                   <Image
                     key={`new-${index}`}
-                    src={URL.createObjectURL(file)}
+                    src={url}
                     alt={`Nueva imagen principal ${index + 1}`}
                     width={150}
                     height={150}
@@ -823,10 +852,10 @@ export default function EditProductPage({
                   {key.replace("images_", "")} (nuevas):
                 </span>
                 <div className="flex gap-2 mt-1">
-                  {files.map((file, idx) => (
+                  {variantImageURLs[key]?.map((url, idx) => (
                     <Image
                       key={`new-${idx}`}
-                      src={URL.createObjectURL(file)}
+                      src={url}
                       alt={`Nueva imagen ${idx + 1} de ${key.replace(
                         "images_",
                         ""

@@ -30,15 +30,16 @@ export interface Subcategory {
 export interface PriceAdjustment {
   categoryId?: string;
   subcategoryId?: string;
-  percentageIncrease: number;
+  percentageIncrease: string;
 }
 
 export interface CatalogFormData {
-  email: string;
   categories: string[];
   subcategories: string[];
   logo?: File;
   priceAdjustments: PriceAdjustment[];
+  inStock?: boolean;
+  showPrices?: boolean;
 }
 
 // ============================================================================
@@ -46,30 +47,48 @@ export interface CatalogFormData {
 // ============================================================================
 
 export interface GenerateCatalogRequest {
-  email: string;
   categories?: string[];
   subcategories?: string[];
   priceAdjustments?: PriceAdjustment[];
+  inStock?: boolean;
+  showPrices?: boolean;
 }
 
 export interface GenerateCatalogResponse {
-  message: string;
-  pdfUrl: string;
-  fileName: string;
+  roomId: string;
 }
 
 // ============================================================================
-// COMPONENT STATE INTERFACES - Interfaces para estado de componentes
+// SOCKET INTERFACES - Interfaces para eventos de Socket.IO
 // ============================================================================
+
+export interface CatalogProgressEvent {
+  step: string;
+  progress: number;
+  data?: {
+    message?: string;
+    fileName?: string;
+  };
+}
+
+export interface CatalogErrorEvent {
+  message: string;
+  error: string;
+}
 
 export interface CatalogPageState {
   loading: boolean;
   error: string | null;
   logoFile: File | null;
   logoPreview: string | null;
-  generatedPdfUrl: string | null;
-  emailSent: boolean;
-  emailAddress: string | null;
+  progress: number;
+  roomId: string | null;
+  pdfFileName: string | null;
+  currentStep?: string;
+  progressMessage?: string;
+  isProgressModalOpen: boolean;
+  modalError?: string | null;
+  completed?: boolean;
 }
 
 export interface LogoUploadState {
@@ -101,9 +120,12 @@ export interface UseCatalogReturn {
     handleSubcategoryChange: (subcategoryId: string, checked: boolean) => void;
     clearError: () => void;
     clearSuccess: () => void;
+    clearModalError: () => void;
     addPriceAdjustment: () => void;
     removePriceAdjustment: (index: number) => void;
     updatePriceAdjustment: (index: number, field: keyof PriceAdjustment, value: string | number) => void;
+    downloadPdf: () => void;
+    closeProgressModal: () => void;
     onSubmit: SubmitHandler<CatalogFormData>;
   };
   
@@ -111,18 +133,12 @@ export interface UseCatalogReturn {
   selectedCategories: string[];
   selectedSubcategories: string[];
   priceAdjustments: PriceAdjustment[];
-  email: string;
+  showPrices: boolean;
 }
 
 // ============================================================================
 // HOOK OPTIONS - Opciones para configurar el hook
 // ============================================================================
-
-export interface UseCatalogOptions {
-  initialCategories?: string[];
-  initialSubcategories?: string[];
-  autoSelectAll?: boolean;
-}
 
 // ============================================================================
 // CONSTANTS - Constantes del sistema
