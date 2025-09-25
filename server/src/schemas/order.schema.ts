@@ -106,9 +106,25 @@ export const createOrderAdminBodySchema = z.object({
 export const getAllOrdersParamsSchema = z.object({
   cursor: z
     .string()
-    .refine((val) => Types.ObjectId.isValid(val), {
-      message: 'El cursor debe ser un ObjectId válido',
-    })
+    .refine(
+      (val) => {
+        // Validar formato compuesto: "timestamp_id"
+        const parts = val.split('_');
+        if (parts.length !== 2) return false;
+
+        const [timestampStr, idStr] = parts;
+
+        // Validar timestamp (debe ser un número válido)
+        const timestamp = parseInt(timestampStr, 10);
+        if (isNaN(timestamp) || timestamp <= 0) return false;
+
+        // Validar que el ID sea un ObjectId válido
+        return Types.ObjectId.isValid(idStr);
+      },
+      {
+        message: 'El cursor debe tener el formato "timestamp_id" donde timestamp es un número válido e id es un ObjectId válido',
+      },
+    )
     .optional(),
   limit: z.number().min(1, 'El límite debe ser al menos 1').optional(),
   status: z.enum(OrderStatus).optional(),

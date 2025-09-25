@@ -853,7 +853,20 @@ export class OrderService {
       query.orderStatus = status;
     }
     if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
+      // Parse cursor compuesto: "timestamp_id"
+      const [timestampStr, idStr] = cursor.split('_');
+      if (!timestampStr || !idStr) {
+        throw new AppError('Formato de cursor inválido', 400, 'fail');
+      }
+
+      const cursorCreatedAt = new Date(parseInt(timestampStr));
+      const cursorId = new Types.ObjectId(idStr);
+
+      // Usar condición OR para paginación estable con updates de fecha
+      query.$or = [
+        { createdAt: { $lt: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } }
+      ];
     }
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
     if (!orders || orders.length === 0) {
@@ -861,7 +874,12 @@ export class OrderService {
     }
 
     const mappedOrders = orders.map((order) => this.mapOrderToUserResponseDto(order));
-    const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
+
+    // Generar cursor compuesto: "timestamp_id"
+    const nextCursor = orders.length === limit
+      ? `${orders[orders.length - 1].createdAt.getTime()}_${orders[orders.length - 1]._id.toString()}`
+      : null;
+
     return { orders: mappedOrders, nextCursor };
   }
 
@@ -878,7 +896,20 @@ export class OrderService {
     }
 
     if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
+      // Parse cursor compuesto: "timestamp_id"
+      const [timestampStr, idStr] = cursor.split('_');
+      if (!timestampStr || !idStr) {
+        throw new AppError('Formato de cursor inválido', 400, 'fail');
+      }
+
+      const cursorCreatedAt = new Date(parseInt(timestampStr));
+      const cursorId = new Types.ObjectId(idStr);
+
+      // Usar condición OR para paginación estable con updates de fecha
+      query.$or = [
+        { createdAt: { $lt: cursorCreatedAt } },
+        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } }
+      ];
     }
 
     // Usar helper para obtener todas las órdenes populadas y mapearlas
@@ -886,7 +917,11 @@ export class OrderService {
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
 
     const mappedOrders = orders.map((order) => this.mapOrderToResponseDto(order));
-    const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
+
+    // Generar cursor compuesto: "timestamp_id"
+    const nextCursor = orders.length === limit
+      ? `${orders[orders.length - 1].createdAt.getTime()}_${orders[orders.length - 1]._id.toString()}`
+      : null;
 
     return { orders: mappedOrders, nextCursor };
   }

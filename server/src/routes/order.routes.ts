@@ -28,11 +28,11 @@ router.post(
   validateRequest({ body: createOrderAdminBodySchema }),
   orderController.createOrderAsAdmin,
 );
-router.get('/', orderController.getOrdersByUserId);
+router.get('/', validateRequest({ query: getAllOrdersParamsSchema }), orderController.getOrdersByUserId);
 router.get(
   '/all',
   validateRequest({
-    params: getAllOrdersParamsSchema,
+    query: getAllOrdersParamsSchema,
   }),
   orderController.getAllOrders,
 );
