@@ -49,6 +49,10 @@ interface OrderQuery {
   user?: Types.ObjectId;
   orderStatus?: OrderStatus;
   _id?: { $lt: Types.ObjectId };
+  $or?: Array<{
+    createdAt: { $lt: Date } | Date;
+    _id?: { $lt: Types.ObjectId };
+  }>;
 }
 
 // Constante para el populate de órdenes
@@ -848,16 +852,26 @@ export class OrderService {
     if (status) {
       query.orderStatus = status;
     }
+
+    // Paginación con cursor compuesto para evitar duplicaciones cuando createdAt cambia
     if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
+      const [createdAtStr, idStr] = cursor.split('_');
+      const createdAt = new Date(createdAtStr);
+      const id = new Types.ObjectId(idStr);
+
+      query.$or = [
+        { createdAt: { $lt: createdAt } },
+        { createdAt, _id: { $lt: id } }
+      ];
     }
+
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
     if (!orders || orders.length === 0) {
       return { orders: [], nextCursor: null };
     }
 
     const mappedOrders = orders.map((order) => this.mapOrderToUserResponseDto(order));
-    const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
+    const nextCursor = orders.length === limit ? `${orders[orders.length - 1].createdAt.toISOString()}_${orders[orders.length - 1]._id}` : null;
     return { orders: mappedOrders, nextCursor };
   }
 
@@ -873,8 +887,16 @@ export class OrderService {
       query.orderStatus = status;
     }
 
+    // Paginación con cursor compuesto para evitar duplicaciones cuando createdAt cambia
     if (cursor) {
-      query._id = { $lt: new Types.ObjectId(cursor) };
+      const [createdAtStr, idStr] = cursor.split('_');
+      const createdAt = new Date(createdAtStr);
+      const id = new Types.ObjectId(idStr);
+
+      query.$or = [
+        { createdAt: { $lt: createdAt } },
+        { createdAt, _id: { $lt: id } }
+      ];
     }
 
     // Usar helper para obtener todas las órdenes populadas y mapearlas
@@ -882,7 +904,7 @@ export class OrderService {
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
 
     const mappedOrders = orders.map((order) => this.mapOrderToResponseDto(order));
-    const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
+    const nextCursor = orders.length === limit ? `${orders[orders.length - 1].createdAt.toISOString()}_${orders[orders.length - 1]._id}` : null;
 
     return { orders: mappedOrders, nextCursor };
   }
