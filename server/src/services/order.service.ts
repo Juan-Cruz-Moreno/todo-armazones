@@ -852,26 +852,16 @@ export class OrderService {
     if (status) {
       query.orderStatus = status;
     }
-
-    // Paginación con cursor compuesto para evitar duplicaciones cuando createdAt cambia
     if (cursor) {
-      const [createdAtStr, idStr] = cursor.split('_');
-      const createdAt = new Date(createdAtStr);
-      const id = new Types.ObjectId(idStr);
-
-      query.$or = [
-        { createdAt: { $lt: createdAt } },
-        { createdAt, _id: { $lt: id } }
-      ];
+      query._id = { $lt: new Types.ObjectId(cursor) };
     }
-
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
     if (!orders || orders.length === 0) {
       return { orders: [], nextCursor: null };
     }
 
     const mappedOrders = orders.map((order) => this.mapOrderToUserResponseDto(order));
-    const nextCursor = orders.length === limit ? `${orders[orders.length - 1].createdAt.toISOString()}_${orders[orders.length - 1]._id}` : null;
+    const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
     return { orders: mappedOrders, nextCursor };
   }
 
@@ -887,16 +877,8 @@ export class OrderService {
       query.orderStatus = status;
     }
 
-    // Paginación con cursor compuesto para evitar duplicaciones cuando createdAt cambia
     if (cursor) {
-      const [createdAtStr, idStr] = cursor.split('_');
-      const createdAt = new Date(createdAtStr);
-      const id = new Types.ObjectId(idStr);
-
-      query.$or = [
-        { createdAt: { $lt: createdAt } },
-        { createdAt, _id: { $lt: id } }
-      ];
+      query._id = { $lt: new Types.ObjectId(cursor) };
     }
 
     // Usar helper para obtener todas las órdenes populadas y mapearlas
@@ -904,7 +886,7 @@ export class OrderService {
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
 
     const mappedOrders = orders.map((order) => this.mapOrderToResponseDto(order));
-    const nextCursor = orders.length === limit ? `${orders[orders.length - 1].createdAt.toISOString()}_${orders[orders.length - 1]._id}` : null;
+    const nextCursor = orders.length === limit ? orders[orders.length - 1]._id.toString() : null;
 
     return { orders: mappedOrders, nextCursor };
   }
@@ -1422,7 +1404,9 @@ export class OrderService {
             orderId: order._id,
             orderNumber: order.orderNumber,
             updatedFields: {
-              ...(updateData.deliveryWindow !== undefined && { deliveryWindow: updateData.deliveryWindow }),
+              ...(updateData.deliveryWindow !== undefined && {
+                deliveryWindow: updateData.deliveryWindow,
+              }),
               ...(updateData.declaredShippingAmount !== undefined && {
                 declaredShippingAmount: updateData.declaredShippingAmount,
               }),
