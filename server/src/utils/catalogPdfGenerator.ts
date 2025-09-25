@@ -41,6 +41,11 @@ export async function generateCatalogPDF(catalogData: CatalogDataDto, onProgress
     return formatCurrency(priceARS, 'es-AR', 'ARS');
   });
 
+  // Helper para formatear USD sin símbolo
+  handlebars.registerHelper('formatUSD', (amount: number) => {
+    return `USD ${amount.toFixed(2)}`;
+  });
+
   onProgress?.('preparing-data', 76, 'Preparando datos para el template');
 
   // Preparar datos para el template

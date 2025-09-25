@@ -5,11 +5,7 @@ import { Category, Subcategory } from "@/interfaces/catalog";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
 import PriceAdjustments from "@/components/catalog/PriceAdjustments";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  CheckCircle,
-  Users,
-  Download,
-} from "lucide-react";
+import { CheckCircle, Users, Download } from "lucide-react";
 import Image from "next/image";
 import { Controller } from "react-hook-form";
 
@@ -26,7 +22,17 @@ const CatalogPage = () => {
     showPrices,
   } = useCatalog();
 
-  const { loading, logoPreview, progress, pdfFileName, isProgressModalOpen, currentStep, progressMessage, modalError, completed } = state;
+  const {
+    loading,
+    logoPreview,
+    progress,
+    pdfFileName,
+    isProgressModalOpen,
+    currentStep,
+    progressMessage,
+    modalError,
+    completed,
+  } = state;
 
   const {
     handleLogoChange,
@@ -43,9 +49,7 @@ const CatalogPage = () => {
     onSubmit,
   } = handlers;
 
-  const {
-    handleSubmit,
-  } = form;
+  const { handleSubmit } = form;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -122,7 +126,8 @@ const CatalogPage = () => {
                         ¡Solo 4 pasos para vender más!
                       </h2>
                       <p className="text-[#666666]">
-                        Selecciona → Personaliza → Configura → ¡Genera tu catálogo!
+                        Selecciona → Personaliza → Configura → ¡Genera tu
+                        catálogo!
                       </p>
                     </div>
                   </div>
@@ -257,7 +262,9 @@ const CatalogPage = () => {
                 <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-6 rounded-xl border border-purple-100 max-w-2xl mx-auto">
                   <div className="text-center mb-4">
                     <div className="text-4xl mb-2">✨</div>
-                    <h4 className="text-lg font-bold text-[#222222] mb-2">Logo personalizado</h4>
+                    <h4 className="text-lg font-bold text-[#222222] mb-2">
+                      Logo personalizado
+                    </h4>
                     <p className="text-sm text-[#666666] mb-4">
                       Si tienes un logo, súbelo aquí. Si no, usaremos uno
                       profesional por defecto.
@@ -307,8 +314,12 @@ const CatalogPage = () => {
                 {/* Opciones del Catálogo */}
                 <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm max-w-2xl mx-auto">
                   <div className="text-center mb-4">
-                    <h4 className="text-lg font-bold text-[#222222] mb-2">Opciones del catálogo</h4>
-                    <p className="text-sm text-[#666666]">Configura cómo se mostrará tu catálogo</p>
+                    <h4 className="text-lg font-bold text-[#222222] mb-2">
+                      Opciones del catálogo
+                    </h4>
+                    <p className="text-sm text-[#666666]">
+                      Configura cómo se mostrará tu catálogo
+                    </p>
                   </div>
 
                   <div className="flex items-center gap-4">
@@ -330,7 +341,8 @@ const CatalogPage = () => {
                         Mostrar precios en el catálogo
                       </div>
                       <p className="text-sm text-[#666666]">
-                        Incluye precios en USD y ARS en el PDF generado. Si desactivas, solo se mostrarán los productos sin precios.
+                        Incluye precios en USD y ARS en el PDF generado. Si
+                        desactivas, solo se mostrarán los productos sin precios.
                       </p>
                     </div>
                   </div>
@@ -366,7 +378,9 @@ const CatalogPage = () => {
                   <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
                     <PriceAdjustments
                       priceAdjustments={priceAdjustments}
-                      categories={categories.filter(cat => selectedCategories.includes(cat.id))}
+                      categories={categories.filter((cat) =>
+                        selectedCategories.includes(cat.id)
+                      )}
                       subcategories={filteredSubcategories}
                       onAdd={addPriceAdjustment}
                       onRemove={removePriceAdjustment}
@@ -392,7 +406,8 @@ const CatalogPage = () => {
                         🎉 ¡Tu catálogo profesional está listo!
                       </div>
                       <div className="text-sm text-green-700 mb-3">
-                        Tu PDF personalizado ha sido generado exitosamente. Haz clic en el botón para descargarlo.
+                        Tu PDF personalizado ha sido generado exitosamente. Haz
+                        clic en el botón para descargarlo.
                       </div>
                       <div className="bg-green-100 p-3 rounded-lg">
                         <div className="flex items-center gap-2 text-green-800 mb-2">
@@ -402,7 +417,8 @@ const CatalogPage = () => {
                           </span>
                         </div>
                         <p className="text-sm text-green-700">
-                          Descarga tu PDF profesional y comienza a vender inmediatamente. ¡El éxito te espera! 🚀
+                          Descarga tu PDF profesional y comienza a vender
+                          inmediatamente. ¡El éxito te espera! 🚀
                         </p>
                       </div>
                       <button
@@ -447,10 +463,13 @@ const CatalogPage = () => {
                         <div className="flex items-center justify-center gap-2 md:gap-4">
                           <div className="text-left">
                             <div className="text-white text-base md:text-lg font-bold">
-                              <span className="hidden md:inline">🚀 </span>¡CREA MI CATÁLOGO GRATIS!
+                              <span className="hidden md:inline">🚀 </span>¡CREA
+                              MI CATÁLOGO GRATIS!
                             </div>
                           </div>
-                          <span className="hidden md:inline text-2xl md:text-3xl">💰</span>
+                          <span className="hidden md:inline text-2xl md:text-3xl">
+                            💰
+                          </span>
                         </div>
                       </>
                     )}
@@ -473,65 +492,6 @@ const CatalogPage = () => {
           </div>
         </motion.div>
 
-        {/* Info adicional */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
-          className="mt-12 bg-gradient-to-br from-blue-50 via-white to-purple-50 rounded-2xl shadow-lg border border-blue-100 p-8"
-        >
-          <div className="text-center mb-8">
-            <h3 className="text-3xl font-bold text-[#222222] mb-4 flex flex-col md:flex-row items-center justify-center gap-3">
-              <span className="text-5xl">🎯</span>
-              ¡Únete a miles de vendedores exitosos!
-            </h3>
-            <p className="text-[#666666] text-lg max-w-2xl mx-auto">
-              Tu catálogo está pre-configurado para{" "}
-              <span className="font-bold text-blue-600">
-                máximas conversiones
-              </span>
-              . Solo personaliza los precios y ¡empieza a vender más!
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <Users className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="font-bold text-[#222222] mb-2 text-lg">
-                1. Selección
-              </h4>
-              <p className="text-sm text-[#666666] leading-relaxed">
-                Todo está seleccionado para máximo alcance. ¡Más productos = Más
-                ventas!
-              </p>
-            </div>
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <span className="text-2xl">🎨</span>
-              </div>
-              <h4 className="font-bold text-[#222222] mb-2 text-lg">
-                2. Personalización
-              </h4>
-              <p className="text-sm text-[#666666] leading-relaxed">
-                Haz que tu catálogo luzca único con tu logo. ¡Profesionalidad que vende!
-              </p>
-            </div>
-            <div className="text-center group">
-              <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center mx-auto mb-4 group-hover:scale-110 transition-transform duration-300 shadow-lg">
-                <Download className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="font-bold text-[#222222] mb-2 text-lg">
-                3. ¡Descarga!
-              </h4>
-              <p className="text-sm text-[#666666] leading-relaxed">
-                Obtén tu PDF profesional al instante. ¡Empieza a vender inmediatamente!
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
         {/* Mensaje final */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -540,65 +500,6 @@ const CatalogPage = () => {
           className="mt-12 text-center"
         >
           <div className="max-w-4xl mx-auto">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-8 border border-blue-100 mb-8">
-              <div className="text-center mb-6">
-                <h3 className="text-3xl font-bold text-[#222222] mb-4 flex items-center justify-center gap-3">
-                  ¿Por qué miles de vendedores eligen nuestros catálogos?
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-green-500 to-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl">💰</span>
-                  </div>
-                  <h4 className="font-bold text-[#222222] mb-2 text-lg">
-                    Más Ganancias
-                  </h4>
-                  <p className="text-sm text-[#666666] leading-relaxed">
-                    Precios inteligentes que aumentan tus márgenes. ¡Cada
-                    catálogo genera más ventas!
-                  </p>
-                </div>
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl">⚡</span>
-                  </div>
-                  <h4 className="font-bold text-[#222222] mb-2 text-lg">
-                    Ultra Rápido
-                  </h4>
-                  <p className="text-sm text-[#666666] leading-relaxed">
-                    De 0 a catálogo profesional en 2 minutos. ¡Sin esperas ni
-                    complicaciones!
-                  </p>
-                </div>
-                <div className="text-center">
-                  <div className="w-16 h-16 bg-gradient-to-r from-purple-500 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4">
-                    <span className="text-3xl">🎯</span>
-                  </div>
-                  <h4 className="font-bold text-[#222222] mb-2 text-lg">
-                    Máximo Alcance
-                  </h4>
-                  <p className="text-sm text-[#666666] leading-relaxed">
-                    Todas las categorías incluidas por defecto. ¡Más productos =
-                    Más oportunidades!
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-8 text-center">
-                <div className="flex flex-col md:flex-row items-center justify-center gap-3 bg-white px-6 py-3 rounded-full border border-blue-200 shadow-lg">
-                  <span className="text-2xl">👥</span>
-                  <span className="font-bold text-[#222222]">
-                    1,247 vendedores
-                  </span>
-                  <span className="text-[#666666]">
-                    ya aumentaron sus ganancias esta semana
-                  </span>
-                </div>
-              </div>
-            </div>
-
             <div className="text-6xl mb-6">🚀💰</div>
             <h2 className="text-4xl font-bold text-[#222222] mb-4">
               ¿Listo para{" "}
@@ -651,9 +552,7 @@ const CatalogPage = () => {
                     <h3 className="text-2xl font-bold text-red-600 mb-4">
                       ¡Oops! Algo salió mal
                     </h3>
-                    <p className="text-[#666666] mb-6">
-                      {modalError}
-                    </p>
+                    <p className="text-[#666666] mb-6">{modalError}</p>
                     <div className="flex flex-col gap-3 items-center">
                       <button
                         onClick={clearModalError}
@@ -710,7 +609,8 @@ const CatalogPage = () => {
                       {progressMessage || "Procesando tu solicitud..."}
                     </p>
                     <p className="text-sm text-orange-600 font-medium mb-4">
-                      ⚠️ Por favor, no cierres esta página mientras se genera tu catálogo.
+                      ⚠️ Por favor, no cierres esta página mientras se genera tu
+                      catálogo.
                     </p>
 
                     {/* Barra de progreso */}

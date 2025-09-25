@@ -28,8 +28,7 @@
       column; justify-content: center; } .product-model { font-size: 1.5rem;
       font-weight: 600; margin-bottom: 8px; color: #000; } .product-size { font-size: 0.9rem; color: #444;
       margin-bottom: 8px; } .product-price { font-size: 1.2rem; color: #000;
-      font-weight: 600; margin-bottom: 8px; } .price-container { display: flex; align-items: baseline; gap: 10px; } .product-price-ars { font-size: 0.9rem; color: #444;
-      margin-bottom: 0; } /* VARIANTS */ .variants-inline { display: flex;
+      font-weight: 600; margin-bottom: 8px; } .price-container { display: flex; align-items: baseline; gap: 10px; } .product-price-ars { font-size: 1.2rem; color: #666; font-weight: 400; margin-bottom: 8px; } /* VARIANTS */ .variants-inline { display: flex;
       flex-direction: row; flex-wrap: wrap; gap: 8px; margin-top: auto; } .variant-item { 
       display: flex; align-items: center; gap: 8px; } .variant-color { width:
       14px; height: 14px; border-radius: 50%; border: 1px solid #ccc; flex-shrink: 0; position: relative; } .variant-color.out-of-stock::before { content: ''; position: absolute; top: 50%; left: 50%; width: 100%; height: 2px; background: red; transform: translate(-50%, -50%) rotate(45deg); } 
@@ -40,7 +39,7 @@
       color: #000; } .header { padding: 20px 10px; margin-bottom: 15px; }
       .category { margin: 0 0 20px 0; page-break-before: auto; } .subcategory {
       margin: 8px 0; } .product-row { padding: 12px 0; page-break-inside: auto;
-      } .product-image { width: 220px; height: 160px; } .price-container { display: flex; align-items: baseline; gap: 8px; } .product-price-ars { font-size: 0.8rem; } .variant-item { gap: 6px; } 
+      } .product-image { width: 220px; height: 160px; } .price-container { display: flex; align-items: baseline; gap: 8px; }  .variant-item { gap: 6px; } 
       .variant-color { width: 12px; height: 12px; position: relative; } .variant-name { font-size: 0.8rem; } .header-date { position: absolute; top: -20px; right: 0; font-size: 0.8rem; } }
     </style>
   </head>
@@ -82,9 +81,9 @@
                         {{#if variants.length}}
                           {{#if @root.showPrices}}
                           <div class="price-container">
-                            <div class="product-price">{{formatCurrency (maxPrice variants)}}</div>
+                            <div class="product-price">{{formatUSD (maxPrice variants)}}</div>
                             -
-                            <div class="product-price-ars">{{maxPriceARS variants @root.dollarBaseValue}}</div>
+                            <div class="product-price-ars">{{maxPriceARS variants @root.dollarBaseValue}} pesos</div>
                           </div>
                           {{/if}}
                           <div class="variants-inline">
