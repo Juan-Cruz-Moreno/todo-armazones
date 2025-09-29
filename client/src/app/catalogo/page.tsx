@@ -5,7 +5,7 @@ import { Category, Subcategory } from "@/interfaces/catalog";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
 import PriceAdjustments from "@/components/catalog/PriceAdjustments";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Users, Download } from "lucide-react";
+import { CheckCircle } from "lucide-react";
 import Image from "next/image";
 import { Controller } from "react-hook-form";
 

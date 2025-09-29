@@ -49,10 +49,11 @@ export class DollarService {
     return isPercentage ? baseValue * (1 + addedValue / 100) : baseValue + addedValue;
   }
 
-  public async updateDollarValue(): Promise<dollarResponseDTO> {
+  public async updateDollarValue(): Promise<{ data: dollarResponseDTO; updated: boolean }> {
     const { baseValue, source, apiUpdatedAt } = await this.fetchDollarBaseValue();
 
     let dollar = await Dollar.findOne();
+    let updated = false;
 
     if (!dollar) {
       dollar = new Dollar({
@@ -63,6 +64,7 @@ export class DollarService {
         source,
         apiUpdatedAt,
       });
+      updated = true;
       logger.info('Nuevo registro de dólar creado en la base de datos', {
         baseValue,
       });
@@ -71,34 +73,28 @@ export class DollarService {
         logger.info('El valor base obtenido es igual al almacenado. No se realizaron cambios.', {
           baseValue,
         });
-        return {
-          baseValue: dollar.baseValue,
-          value: dollar.value,
-          addedValue: dollar.addedValue,
-          isPercentage: dollar.isPercentage,
-          source: dollar.source,
-          apiUpdatedAt: dollar.apiUpdatedAt,
-          updatedAt: dollar.updatedAt,
-        };
+        updated = false;
+      } else {
+        dollar.baseValue = baseValue;
+        dollar.source = source;
+        dollar.apiUpdatedAt = apiUpdatedAt;
+        dollar.value = this.applyAddedValue(baseValue, dollar.addedValue, dollar.isPercentage);
+        updated = true;
       }
-
-      dollar.baseValue = baseValue;
-      dollar.source = source;
-      dollar.apiUpdatedAt = apiUpdatedAt;
-      dollar.value = this.applyAddedValue(baseValue, dollar.addedValue, dollar.isPercentage);
     }
 
-    await dollar.save();
+    if (updated) {
+      await dollar.save();
+      logger.info('Valor del dólar actualizado en la base de datos', {
+        finalValue: dollar.value,
+        addedValue: dollar.addedValue,
+        isPercentage: dollar.isPercentage,
+        source,
+        apiUpdatedAt,
+      });
+    }
 
-    logger.info('Valor del dólar actualizado en la base de datos', {
-      finalValue: dollar.value,
-      addedValue: dollar.addedValue,
-      isPercentage: dollar.isPercentage,
-      source,
-      apiUpdatedAt,
-    });
-
-    return {
+    const responseData = {
       baseValue: dollar.baseValue,
       value: dollar.value,
       addedValue: dollar.addedValue,
@@ -107,6 +103,8 @@ export class DollarService {
       apiUpdatedAt: dollar.apiUpdatedAt,
       updatedAt: dollar.updatedAt,
     };
+
+    return { data: responseData, updated };
   }
 
   public async updateDollarConfig(dto: updateDollarAddedValueDTO): Promise<dollarResponseDTO> {
@@ -171,12 +169,6 @@ export class DollarService {
         hint: 'Ejecuta primero la actualización desde las APIs externas',
       });
     }
-
-    logger.info('Valor del dólar obtenido de la base de datos', {
-      value: dollar.value,
-      addedValue: dollar.addedValue,
-      isPercentage: dollar.isPercentage,
-    });
 
     return {
       baseValue: dollar.baseValue,

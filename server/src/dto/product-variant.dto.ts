@@ -22,6 +22,7 @@ export interface CreateProductVariantResponseDto {
   stock: number;
   averageCostUSD: number;
   priceUSD: number;
+  priceARS: number; // Precio en ARS
   thumbnail: string;
   images: string[];
 }
@@ -43,6 +44,7 @@ export interface ProductVariantSummaryDto {
   stock: number;
   averageCostUSD: number;
   priceUSD: number;
+  priceARS: number; // Precio en ARS
   thumbnail: string;
   images: string[];
 }

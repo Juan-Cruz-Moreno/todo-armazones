@@ -26,6 +26,7 @@ const productVariantSchema = new Schema<IProductVariantDocument>(
     stock: { type: Number, required: true },
     averageCostUSD: { type: Number, required: true, min: 0 },
     priceUSD: { type: Number, required: true, min: 0 },
+    priceARS: { type: Number, required: false, min: 0 }, // Precio en ARS, calculado en backend
     thumbnail: { type: String, required: true },
     images: [{ type: String }],
   },

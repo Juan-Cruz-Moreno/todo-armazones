@@ -13,6 +13,8 @@ import {
 import { useEventListener } from "@/hooks/useEventBus";
 import { uiEvents } from "@/utils/eventBus";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDollar } from "@/hooks/useDollar";
+import { formatCurrency } from "@/utils/formatCurrency";
 
 const categories = [
   {
@@ -53,6 +55,7 @@ const MobileSidebar = () => {
   const [openCategories, setOpenCategories] = useState<string[]>([]);
 
   const pathname = usePathname();
+  const { dollar } = useDollar();
 
   // Función para obtener información de categoría y subcategoría
   const getCurrentCategoryInfo = () => {
@@ -259,6 +262,21 @@ const MobileSidebar = () => {
                 </motion.div>
               )}
             </AnimatePresence>
+          </div>
+
+          {/* Información del dólar */}
+          <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+            <div className="text-sm text-gray-600 mb-2">
+              Tipo de Cambio {dollar?.updatedAt ? `(${new Date(dollar.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })})` : ''}
+            </div>
+            <div className="text-lg font-semibold text-gray-800 mb-4">
+              {dollar?.value ? formatCurrency(dollar.value, "es-AR", "ARS") : "Cargando..."}
+            </div>
+            <div className="text-xs text-gray-500 leading-relaxed">
+              Precios sugeridos en pesos argentinos,<br />
+              sujetos a modificaciones<br />
+              según la cotización de dólar al momento de pago
+            </div>
           </div>
         </div>
       </aside>

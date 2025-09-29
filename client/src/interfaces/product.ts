@@ -22,6 +22,7 @@ export interface ProductVariant {
   thumbnail: string;
   images: string[];
   priceUSD: number;
+  priceARS: number;
   averageCostUSD: number;
 }
 

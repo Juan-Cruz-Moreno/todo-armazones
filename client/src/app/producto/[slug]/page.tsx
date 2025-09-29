@@ -255,11 +255,15 @@ const ProductPage = () => {
           </h1>
           <div className="mb-4">
             <p className="text-[#555555] text-xl font-normal mb-4">
-              {formatCurrency(
-                productDetail.variants[0].priceUSD,
-                "en-US",
-                "USD"
-              )}
+              USD {productDetail.variants[0].priceUSD.toFixed(2)} -{" "}
+              <span className="text-lg text-gray-500">
+                {formatCurrency(
+                  productDetail.variants[0].priceARS,
+                  "es-AR",
+                  "ARS"
+                )}{" "}
+                pesos
+              </span>
             </p>
             {productDetail.size && (
               <p className="font-normal text-sm text-[#555555] font-dm mb-2">
@@ -288,8 +292,13 @@ const ProductPage = () => {
                     className="flex items-center gap-1 focus:outline-none relative"
                     onClick={() => {
                       if (!isOutOfStock) {
-                        setSelectedColor(c.hex);
-                        // Limpiar error al seleccionar un nuevo color
+                        // Si el color ya está seleccionado, deseleccionarlo
+                        if (selectedColor === c.hex) {
+                          setSelectedColor(null);
+                        } else {
+                          setSelectedColor(c.hex);
+                        }
+                        // Limpiar error al seleccionar/deseleccionar un color
                         clearSpecificError("addItem");
                       }
                     }}
@@ -321,6 +330,19 @@ const ProductPage = () => {
                   </button>
                 );
               })}
+              {/* Botón Clear - solo visible cuando hay color seleccionado */}
+              {selectedColor && (
+                <button
+                  type="button"
+                  className="text-xs text-gray-400 hover:text-gray-600 bg-transparent hover:bg-gray-50 px-2 py-1 rounded transition-colors duration-200 focus:outline-none underline"
+                  onClick={() => {
+                    setSelectedColor(null);
+                    clearSpecificError("addItem");
+                  }}
+                >
+                  clear
+                </button>
+              )}
             </div>
           </div>
           <div className="mb-4">

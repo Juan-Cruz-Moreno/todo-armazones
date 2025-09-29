@@ -863,10 +863,7 @@ export class OrderService {
       const cursorId = new Types.ObjectId(idStr);
 
       // Usar condición OR para paginación estable con updates de fecha
-      query.$or = [
-        { createdAt: { $lt: cursorCreatedAt } },
-        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } }
-      ];
+      query.$or = [{ createdAt: { $lt: cursorCreatedAt } }, { createdAt: cursorCreatedAt, _id: { $lt: cursorId } }];
     }
     const orders = await Order.find(query).populate(ORDER_POPULATE).sort({ createdAt: -1, _id: -1 }).limit(limit);
     if (!orders || orders.length === 0) {
@@ -876,9 +873,10 @@ export class OrderService {
     const mappedOrders = orders.map((order) => this.mapOrderToUserResponseDto(order));
 
     // Generar cursor compuesto: "timestamp_id"
-    const nextCursor = orders.length === limit
-      ? `${orders[orders.length - 1].createdAt.getTime()}_${orders[orders.length - 1]._id.toString()}`
-      : null;
+    const nextCursor =
+      orders.length === limit
+        ? `${orders[orders.length - 1].createdAt.getTime()}_${orders[orders.length - 1]._id.toString()}`
+        : null;
 
     return { orders: mappedOrders, nextCursor };
   }
@@ -906,10 +904,7 @@ export class OrderService {
       const cursorId = new Types.ObjectId(idStr);
 
       // Usar condición OR para paginación estable con updates de fecha
-      query.$or = [
-        { createdAt: { $lt: cursorCreatedAt } },
-        { createdAt: cursorCreatedAt, _id: { $lt: cursorId } }
-      ];
+      query.$or = [{ createdAt: { $lt: cursorCreatedAt } }, { createdAt: cursorCreatedAt, _id: { $lt: cursorId } }];
     }
 
     // Usar helper para obtener todas las órdenes populadas y mapearlas
@@ -919,9 +914,10 @@ export class OrderService {
     const mappedOrders = orders.map((order) => this.mapOrderToResponseDto(order));
 
     // Generar cursor compuesto: "timestamp_id"
-    const nextCursor = orders.length === limit
-      ? `${orders[orders.length - 1].createdAt.getTime()}_${orders[orders.length - 1]._id.toString()}`
-      : null;
+    const nextCursor =
+      orders.length === limit
+        ? `${orders[orders.length - 1].createdAt.getTime()}_${orders[orders.length - 1]._id.toString()}`
+        : null;
 
     return { orders: mappedOrders, nextCursor };
   }

@@ -86,8 +86,17 @@ const ProductCard = ({
     >
       <motion.div
         className="card-body"
-        whileHover={{ scale: 1.03 }}
-        transition={{ type: "spring", stiffness: 180, damping: 18, mass: 0.7 }}
+        whileHover={{
+          scale: 1.02,
+          y: -2,
+          transition: {
+            type: "spring",
+            stiffness: 180,
+            damping: 18,
+            mass: 0.7,
+          },
+        }}
+        style={{ transformOrigin: "center" }}
       >
         <Link href={`/producto/${slug}`}>
           <Image
@@ -127,14 +136,18 @@ const ProductCard = ({
           </h2>
         </Link>
         {size && <p className="text-xs text-gray-600 font-medium">{size}</p>}
-        <p className="text-xs font-bold text-gray-800">
-          {formatCurrency(
-            selectedVariant?.priceUSD ?? variants[0]?.priceUSD,
-            "en-US",
-            "USD"
-          )}
+        <p className="text-xs font-bold text-gray-800 flex flex-col md:flex-row items-center md:items-baseline gap-1 md:gap-2">
+          USD {(selectedVariant?.priceUSD ?? variants[0]?.priceUSD).toFixed(2)}
+          <span className="text-xs text-gray-500 md:before:content-['-'] md:before:mr-2">
+            {formatCurrency(
+              selectedVariant?.priceARS ?? variants[0]?.priceARS,
+              "es-AR",
+              "ARS"
+            )}{" "}
+            pesos
+          </span>
         </p>
-        <div className="text-sm text-gray-500 flex items-center gap-2">
+        <div className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
           {uniqueColors.map((c) => {
             // Encontrar la variante correspondiente a este color para verificar stock
             const variantForColor = variants.find((v) => v.color.hex === c.hex);
@@ -152,8 +165,13 @@ const ProductCard = ({
                 }`}
                 onClick={() => {
                   if (!isOutOfStock) {
-                    setSelectedColor(c.hex);
-                    // Limpiar error al seleccionar un nuevo color
+                    // Si el color ya está seleccionado, deseleccionarlo
+                    if (selectedColor === c.hex) {
+                      setSelectedColor(null);
+                    } else {
+                      setSelectedColor(c.hex);
+                    }
+                    // Limpiar error al seleccionar/deseleccionar un color
                     clearSpecificError("addItem");
                   }
                 }}
@@ -185,6 +203,19 @@ const ProductCard = ({
               </button>
             );
           })}
+          {/* Botón Clear - solo visible cuando hay color seleccionado */}
+          {selectedColor && (
+            <button
+              type="button"
+              className="text-xs text-gray-400 hover:text-gray-600 bg-transparent hover:bg-gray-50 px-2 py-1 rounded transition-colors duration-200 focus:outline-none underline"
+              onClick={() => {
+                setSelectedColor(null);
+                clearSpecificError("addItem");
+              }}
+            >
+              clear
+            </button>
+          )}
         </div>
         <div className="card-actions justify-center">
           <div

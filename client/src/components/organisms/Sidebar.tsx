@@ -11,6 +11,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useDollar } from "@/hooks/useDollar";
+import { formatCurrency } from "@/utils/formatCurrency";
 
 const categories = [
   {
@@ -50,6 +52,7 @@ const Sidebar = () => {
   const [openCategories, setOpenCategories] = useState<string[]>([]);
 
   const pathname = usePathname();
+  const { dollar } = useDollar();
 
   // Función para obtener información de categoría y subcategoría
   const getCurrentCategoryInfo = () => {
@@ -82,7 +85,7 @@ const Sidebar = () => {
   }, [pathname]);
 
   return (
-    <aside className="h-full w-64 bg-white hidden sm:block">
+    <aside className="w-64 bg-white hidden sm:block sticky top-[4rem] h-[calc(100vh-4rem)] overflow-y-auto z-5">
       <div className="flex flex-col h-full px-4 py-6">
         {/* Breadcrumb y título - Solo en desktop */}
         {categoryInfo?.category && (
@@ -222,6 +225,21 @@ const Sidebar = () => {
               </motion.div>
             )}
           </AnimatePresence>
+        </div>
+
+        {/* Información del dólar */}
+        <div className="mt-6 pt-4 border-t border-gray-200 text-center">
+          <div className="text-sm text-gray-600 mb-2">
+            Tipo de Cambio {dollar?.updatedAt ? `(${new Date(dollar.updatedAt).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })})` : ''}
+          </div>
+          <div className="text-lg font-semibold text-gray-800 mb-4">
+            {dollar?.value ? formatCurrency(dollar.value, "es-AR", "ARS") : "Cargando..."}
+          </div>
+          <div className="text-xs text-gray-500 leading-relaxed">
+            Precios sugeridos en pesos argentinos,<br />
+            sujetos a modificaciones<br />
+            según la cotización de dólar al momento de pago
+          </div>
         </div>
       </div>
     </aside>

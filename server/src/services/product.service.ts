@@ -31,7 +31,9 @@ import logger from '@config/logger';
 import { FilterQuery, Types } from 'mongoose';
 import { generateProductSlug } from '@helpers/product-slug.helper';
 import { StockMovementReason } from '@interfaces/stockMovement';
-import { InventoryService } from './inventory.service';
+import { InventoryService } from '@services/inventory.service';
+import { DollarService } from '@services/dollar.service';
+import { IProductVariant } from '@interfaces/productVariant';
 
 // Interfaces internas para organizar los filtros y opciones
 interface ProductFilters {
@@ -49,6 +51,7 @@ interface QueryBuildResult {
 
 export class ProductService {
   private inventoryService = new InventoryService();
+  private dollarService = new DollarService();
 
   /**
    * Valida los datos de entrada del producto
@@ -204,6 +207,14 @@ export class ProductService {
     }
   }
 
+  /**
+   * Calcula el precio en ARS basado en el precio en USD usando la cotización actual del dólar
+   */
+  private async calculatePriceARS(priceUSD: number): Promise<number> {
+    const dollar = await this.dollarService.getDollar();
+    return Math.round(priceUSD * dollar.value * 100) / 100; // Redondear a 2 decimales
+  }
+
   public async createProductWithVariants(
     productDto: CreateProductRequestDto,
     variantsDto: CreateProductVariantRequestDto[],
@@ -268,15 +279,18 @@ export class ProductService {
           productModel: productDto.productModel,
         });
         const variantDocs = await ProductVariant.insertMany(
-          variantsDto.map((variant) => ({
-            product: product._id,
-            color: variant.color,
-            stock: 0, // Inicializamos en 0, luego se agrega con movimiento de inventario
-            averageCostUSD: variant.initialCostUSD, // Costo inicial
-            priceUSD: variant.priceUSD, // Precio de venta
-            thumbnail: variant.thumbnail,
-            images: variant.images,
-          })),
+          await Promise.all(
+            variantsDto.map(async (variant) => ({
+              product: product._id,
+              color: variant.color,
+              stock: 0, // Inicializamos en 0, luego se agrega con movimiento de inventario
+              averageCostUSD: variant.initialCostUSD, // Costo inicial
+              priceUSD: variant.priceUSD, // Precio de venta
+              priceARS: await this.calculatePriceARS(variant.priceUSD), // Precio en ARS calculado
+              thumbnail: variant.thumbnail,
+              images: variant.images,
+            })),
+          ),
           { session },
         );
 
@@ -318,6 +332,7 @@ export class ProductService {
                 stock: updatedVariant?.stock || variantDto.stock,
                 averageCostUSD: updatedVariant?.averageCostUSD || variantDto.initialCostUSD,
                 priceUSD: variant.priceUSD,
+                priceARS: await this.calculatePriceARS(variant.priceUSD),
                 thumbnail: variant.thumbnail,
                 images: variant.images,
               });
@@ -330,6 +345,7 @@ export class ProductService {
                 stock: 0,
                 averageCostUSD: variant.averageCostUSD,
                 priceUSD: variant.priceUSD,
+                priceARS: await this.calculatePriceARS(variant.priceUSD),
                 thumbnail: variant.thumbnail,
                 images: variant.images,
               });
@@ -436,16 +452,19 @@ export class ProductService {
     return { id: '', name: '', slug: '' };
   }
 
-  private mapVariants(variants: IProductVariantDocument[]): ProductVariantSummaryDto[] {
-    return variants.map((variant) => ({
-      id: variant._id.toString(),
-      color: variant.color,
-      stock: variant.stock,
-      averageCostUSD: variant.averageCostUSD,
-      priceUSD: variant.priceUSD,
-      thumbnail: variant.thumbnail,
-      images: variant.images,
-    }));
+  private async mapVariants(variants: IProductVariantDocument[]): Promise<ProductVariantSummaryDto[]> {
+    return Promise.all(
+      variants.map(async (variant) => ({
+        id: variant._id.toString(),
+        color: variant.color,
+        stock: variant.stock,
+        averageCostUSD: variant.averageCostUSD,
+        priceUSD: variant.priceUSD,
+        priceARS: await this.calculatePriceARS(variant.priceUSD),
+        thumbnail: variant.thumbnail,
+        images: variant.images,
+      })),
+    );
   }
 
   /**
@@ -542,7 +561,7 @@ export class ProductService {
       // Agrupa las variantes por producto
       for (const productId of productIds) {
         const variants = variantsByProduct.filter((variant) => variant.product.toString() === productId.toString());
-        variantsMap.set(productId.toString(), this.mapVariants(variants as IProductVariantDocument[]));
+        variantsMap.set(productId.toString(), await this.mapVariants(variants as IProductVariantDocument[]));
       }
     }
 
@@ -897,7 +916,7 @@ export class ProductService {
         sku: product.sku,
         size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
         description: product.description ?? '',
-        variants: this.mapVariants(variants as IProductVariantDocument[]),
+        variants: await this.mapVariants(variants as IProductVariantDocument[]),
       };
 
       return { product: productResponse };
@@ -992,9 +1011,15 @@ export class ProductService {
                 data: variantUpdate.data,
               });
 
+              const updateData: Partial<Omit<IProductVariant, 'product'>> & { priceARS?: number } = {
+                ...variantUpdate.data,
+              };
+              if (variantUpdate.data.priceUSD !== undefined) {
+                updateData.priceARS = await this.calculatePriceARS(variantUpdate.data.priceUSD);
+              }
               const variant = await ProductVariant.findOneAndUpdate(
                 { _id: variantUpdate.id, product: product._id },
-                { $set: variantUpdate.data },
+                { $set: updateData },
                 { new: true, session },
               );
               if (!variant) {
@@ -1013,10 +1038,13 @@ export class ProductService {
                 stock: 0, // Inicializar en 0, luego agregar stock si es necesario
                 averageCostUSD: variantUpdate.data.averageCostUSD || variantUpdate.data.initialCostUSD || 0,
                 priceUSD: variantUpdate.data.priceUSD,
+                priceARS: await this.calculatePriceARS(variantUpdate.data.priceUSD || 0), // Precio en ARS calculado
                 thumbnail: variantUpdate.data.thumbnail,
                 images: variantUpdate.data.images || [],
               };
-              const newVariant = await ProductVariant.create([newVariantData], { session });
+              const newVariant = await ProductVariant.create([newVariantData], {
+                session,
+              });
               const createdVariant = newVariant[0];
               createdVariantIds.push(createdVariant._id.toString());
 
@@ -1103,7 +1131,7 @@ export class ProductService {
           sku: product.sku,
           size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
           description: product.description ?? '',
-          variants: this.mapVariants(remainingVariants),
+          variants: await this.mapVariants(remainingVariants),
         } as ProductListItemDto;
       });
 
@@ -1166,7 +1194,7 @@ export class ProductService {
       const variantsMap = new Map<string, ProductVariantSummaryDto[]>();
       for (const productId of productIds) {
         const variants = variantsByProduct.filter((variant) => variant.product.toString() === productId.toString());
-        variantsMap.set(productId.toString(), this.mapVariants(variants as IProductVariantDocument[]));
+        variantsMap.set(productId.toString(), await this.mapVariants(variants as IProductVariantDocument[]));
       }
 
       let result: ProductListItemDto[] = products.map((product) => {
@@ -1255,7 +1283,7 @@ export class ProductService {
         const bulkOperations: Array<{
           updateOne: {
             filter: { _id: Types.ObjectId };
-            update: { $set: { priceUSD: number } };
+            update: { $set: { priceUSD: number; priceARS: number } };
           };
         }> = [];
 
@@ -1288,7 +1316,12 @@ export class ProductService {
             bulkOperations.push({
               updateOne: {
                 filter: { _id: variant._id },
-                update: { $set: { priceUSD: newPrice } },
+                update: {
+                  $set: {
+                    priceUSD: newPrice,
+                    priceARS: await this.calculatePriceARS(newPrice),
+                  },
+                },
               },
             });
           } else {
@@ -1424,5 +1457,28 @@ export class ProductService {
       averagePriceIncrease: Math.round(averagePriceIncrease * 100) / 100, // Redondear a 2 decimales
       totalValueIncrease: Math.round(totalValueIncrease * 100) / 100,
     };
+  }
+
+  /**
+   * Actualiza el campo priceARS de todas las variantes de productos basado en la cotización actual del dólar
+   */
+  public async updateAllProductVariantsPriceARS(): Promise<void> {
+    const dollar = await this.dollarService.getDollar();
+    const dollarValue = dollar.value;
+
+    // Usar aggregation pipeline para actualizar en bulk
+    await ProductVariant.updateMany({}, [
+      {
+        $set: {
+          priceARS: {
+            $round: [{ $multiply: ['$priceUSD', dollarValue] }, 2],
+          },
+        },
+      },
+    ]);
+
+    logger.info('Precios en ARS de todas las variantes de productos actualizados con el valor del dólar actual.', {
+      dollarValue,
+    });
   }
 }

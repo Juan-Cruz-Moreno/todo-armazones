@@ -29,7 +29,7 @@ export class DollarController {
    */
   public updateDollarValue = async (_req: Request, res: Response<ApiResponse>, next: NextFunction) => {
     try {
-      const data = await this.dollarService.updateDollarValue();
+      const { data } = await this.dollarService.updateDollarValue();
       const response: ApiResponse<typeof data> = {
         status: 'success',
         message: 'Valor del dólar actualizado correctamente',

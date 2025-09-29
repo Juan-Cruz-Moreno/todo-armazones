@@ -122,7 +122,8 @@ export const getAllOrdersParamsSchema = z.object({
         return Types.ObjectId.isValid(idStr);
       },
       {
-        message: 'El cursor debe tener el formato "timestamp_id" donde timestamp es un número válido e id es un ObjectId válido',
+        message:
+          'El cursor debe tener el formato "timestamp_id" donde timestamp es un número válido e id es un ObjectId válido',
       },
     )
     .optional(),

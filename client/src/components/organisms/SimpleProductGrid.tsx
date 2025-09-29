@@ -71,7 +71,7 @@ const SimpleProductGrid = ({
         <>
           <div className="relative">
             <div 
-              className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-0 mb-8 overflow-x-hidden"
+              className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-0 mb-8 overflow-x-hidden p-2"
               role="grid"
               aria-label={`Grilla de productos - ${products.length} productos`}
               aria-rowcount={Math.ceil(products.length / 4)}

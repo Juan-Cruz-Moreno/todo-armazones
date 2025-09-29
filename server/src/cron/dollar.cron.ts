@@ -3,9 +3,11 @@ import logger from '@config/logger';
 import { AppError } from '@utils/AppError';
 import { DollarService } from '@services/dollar.service';
 import { OrderService } from '@services/order.service';
+import { ProductService } from '@services/product.service';
 
 const dollarService: DollarService = new DollarService();
 const orderService: OrderService = new OrderService();
+const productService: ProductService = new ProductService();
 
 // Programar la tarea para ejecutarse cada 30 minutos
 cron.schedule('*/30 * * * *', async () => {
@@ -15,7 +17,11 @@ cron.schedule('*/30 * * * *', async () => {
     logger.info('Tarea programada completada: Actualización del dólar');
 
     // Actualizar las órdenes solo si el dólar fue actualizado
-    if (dollarUpdated) {
+    if (dollarUpdated.updated) {
+      logger.info('Iniciando actualización de precios en ARS de variantes de productos con el nuevo valor del dólar');
+      await productService.updateAllProductVariantsPriceARS();
+      logger.info('Precios en ARS de variantes de productos actualizados con el nuevo valor del dólar');
+
       logger.info('Iniciando actualización de órdenes con el nuevo valor del dólar');
       await orderService.updateOrdersWithDollarValue();
       logger.info('Órdenes actualizadas con el nuevo valor del dólar');
@@ -27,7 +33,8 @@ cron.schedule('*/30 * * * *', async () => {
       'error',
       true,
       {
-        cause: 'Fallo en la ejecución de updateDollarValue o updateOrdersWithDollarValue',
+        cause:
+          'Fallo en la ejecución de updateDollarValue, updateAllProductVariantsPriceARS o updateOrdersWithDollarValue',
         context: { error },
       },
     );
