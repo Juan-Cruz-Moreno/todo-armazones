@@ -1,9 +1,10 @@
 // src/app/orders/page.tsx
 "use client";
 
-import { useEffect, useRef, useCallback, useState, useMemo } from "react";
+import { useEffect, useCallback, useState, useRef } from "react";
 import Link from "next/link";
 import { OrderStatusBadge } from "@/components/atoms/OrderStatusBadge";
+import Pagination from "@/components/molecules/Pagination";
 import {
   DeliveryType,
   OrderStatus,
@@ -11,71 +12,164 @@ import {
   ShippingMethod,
 } from "@/enums/order.enum";
 import useOrders from "@/hooks/useOrders";
-import { debounce } from "@/utils/debounce";
+import { useUsers } from "@/hooks/useUsers";
 import { formatCurrency } from "@/utils/formatCurrency";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
-import { Eye, X } from "lucide-react";
+import { Eye, X, Trash, Search, UserCircle } from "lucide-react";
 import { Order, OrderItem } from "@/interfaces/order";
 import { downloadOrderPDF } from "@/utils/downloadOrderPDF";
 import Image from "next/image";
 
 const OrdersPage = () => {
+  const ORDERS_PER_PAGE = 2; // Número de órdenes por página
+
   const {
-    orders,
-    nextCursor,
+    ordersByPage,
+    pagination,
     loading,
     bulkUpdateLoading,
     error,
     statusFilter,
-    getOrders,
     setFilter,
     clearOrders,
     bulkUpdateOrderStatusData,
+    counts,
+    getOrdersCount,
+    fetchOrdersByPage,
+    hideOrder,
+    hideOrderLoading,
+    searchResults,
+    searchPagination,
+    searchLoading,
+    searchError,
+    searchOrdersData,
+    clearSearch,
   } = useOrders();
+
+  const {
+    searchResults: userSearchResults,
+    searchLoading: userSearchLoading,
+    searchUsersByQuery,
+    clearSearch: clearUserSearch,
+  } = useUsers();
 
   const [previewOrder, setPreviewOrder] = useState<Order | null>(null); // Orden para modal
   const [selectedOrders, setSelectedOrders] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<OrderStatus | "">("");
+  const [currentPage, setCurrentPage] = useState(1);
 
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
+  const [orderToHide, setOrderToHide] = useState<Order | null>(null); // Orden para modal de confirmación de ocultar
+  const [hideSuccess, setHideSuccess] = useState<boolean>(false); // Estado para mostrar mensaje de éxito en el modal
 
-  const observer = useRef<IntersectionObserver | null>(null);
-  const lastOrderRef = useRef<HTMLTableRowElement | null>(null);
-  const isLoadingMore = loading && orders.length > 0;
-
-  const debouncedLoadMore = useMemo(
-    () =>
-      debounce(() => {
-        if (nextCursor && !loading) {
-          getOrders({ status: statusFilter, cursor: nextCursor });
-        }
-      }, 300),
-    [nextCursor, loading, statusFilter, getOrders]
-  );
-
-  const loadMore = useCallback(() => {
-    debouncedLoadMore();
-  }, [debouncedLoadMore]);
-
-  useEffect(() => {
-    if (!nextCursor || loading) return;
-    if (observer.current) observer.current.disconnect();
-    observer.current = new window.IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        loadMore();
-      }
-    });
-    if (lastOrderRef.current) {
-      observer.current.observe(lastOrderRef.current);
-    }
-    return () => observer.current?.disconnect();
-  }, [orders, nextCursor, loading, loadMore]);
+  // Estados para búsqueda de usuarios y órdenes
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showUserDropdown, setShowUserDropdown] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{
+    id: string;
+    displayName: string;
+    email: string;
+    firstName?: string;
+    lastName?: string;
+    dni?: string;
+  } | null>(null);
+  const [searchOrderPage, setSearchOrderPage] = useState(1);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     clearOrders();
-    getOrders(statusFilter ? { status: statusFilter } : undefined);
+    fetchOrdersByPage({
+      page: 1,
+      status: statusFilter,
+      limit: ORDERS_PER_PAGE,
+    });
+    setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
+
+  useEffect(() => {
+    getOrdersCount();
+  }, [getOrdersCount]);
+
+  // Efecto para búsqueda de usuarios con debounce
+  useEffect(() => {
+    if (searchQuery.trim().length >= 2) {
+      const timer = setTimeout(() => {
+        searchUsersByQuery(
+          searchQuery,
+          "email,displayName,firstName,lastName,dni",
+          10
+        );
+        setShowUserDropdown(true);
+      }, 300);
+      return () => clearTimeout(timer);
+    } else {
+      clearUserSearch();
+      setShowUserDropdown(false);
+    }
+  }, [searchQuery, searchUsersByQuery, clearUserSearch]);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target as Node)
+      ) {
+        setShowUserDropdown(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleUserSelect = (user: {
+    id: string;
+    displayName: string;
+    email: string;
+  }) => {
+    setSelectedUser(user);
+    setSearchQuery("");
+    setShowUserDropdown(false);
+    clearUserSearch();
+    setSearchOrderPage(1);
+
+    // Buscar órdenes del usuario seleccionado
+    searchOrdersData({
+      userId: user.id,
+      page: 1,
+      limit: ORDERS_PER_PAGE,
+    });
+  };
+
+  const handleClearSearch = () => {
+    setSelectedUser(null);
+    setSearchQuery("");
+    clearSearch();
+    clearUserSearch();
+    setShowUserDropdown(false);
+    setSearchOrderPage(1);
+  };
+
+  const handleSearchOrderPageChange = useCallback(
+    (pageNumber: number) => {
+      if (!selectedUser) return;
+
+      window.scrollTo({ top: 0, behavior: "instant" });
+      setSearchOrderPage(pageNumber);
+
+      searchOrdersData({
+        userId: selectedUser.id,
+        page: pageNumber,
+        limit: ORDERS_PER_PAGE,
+      });
+    },
+    [selectedUser, searchOrdersData]
+  );
 
   const handleCheckboxChange = (orderId: string, isChecked: boolean) => {
     setSelectedOrders((prev) =>
@@ -92,21 +186,16 @@ const OrdersPage = () => {
         },
         (response) => {
           // Manejar éxito
-          const { successfulUpdates, failedUpdates } = response;
+          const { successfulUpdates } = response;
 
           if (successfulUpdates.length > 0) {
-            alert(
-              `✅ ${successfulUpdates.length} órdenes actualizadas exitosamente.`
-            );
-          }
-
-          if (failedUpdates.length > 0) {
-            const errorMessages = failedUpdates
-              .map((f) => `#${f.orderId}: ${f.error}`)
-              .join("\n");
-            alert(
-              `⚠️ ${failedUpdates.length} órdenes fallaron:\n${errorMessages}`
-            );
+            // Recargar la página actual
+            fetchOrdersByPage({
+              page: currentPage,
+              status: statusFilter,
+              limit: ORDERS_PER_PAGE,
+            });
+            getOrdersCount();
           }
 
           // Limpiar selección
@@ -116,11 +205,27 @@ const OrdersPage = () => {
         (error) => {
           // Manejar error
           console.error("Error en bulk update:", error);
-          alert("❌ Error al actualizar las órdenes. Intenta de nuevo.");
+          setSelectedOrders([]);
+          setBatchAction("");
         }
       );
     }
   };
+
+  const handlePageChange = useCallback(
+    (pageNumber: number) => {
+      // Scroll hacia arriba inmediatamente cuando cambie de página
+      window.scrollTo({ top: 0, behavior: "instant" });
+
+      setCurrentPage(pageNumber);
+      fetchOrdersByPage({
+        page: pageNumber,
+        status: statusFilter,
+        limit: ORDERS_PER_PAGE,
+      });
+    },
+    [fetchOrdersByPage, statusFilter]
+  );
 
   const handleDownloadPDF = async (
     orderId: string,
@@ -137,6 +242,52 @@ const OrdersPage = () => {
     }
   };
 
+  const handleHideOrder = () => {
+    if (orderToHide) {
+      hideOrder(
+        orderToHide.id,
+        (response) => {
+          if (response.success) {
+            // Mostrar mensaje de éxito en el modal
+            setHideSuccess(true);
+            // Recargar la página actual
+            fetchOrdersByPage({
+              page: currentPage,
+              status: statusFilter,
+              limit: ORDERS_PER_PAGE,
+            });
+            getOrdersCount();
+          }
+          // No cerrar el modal aquí, se cerrará cuando el usuario haga click en "Cerrar"
+        },
+        (error) => {
+          console.error("Error al eliminar orden:", error);
+          // Mantener el modal abierto para mostrar el error si es necesario
+        }
+      );
+    }
+  };
+
+  const handleCloseHideModal = () => {
+    setOrderToHide(null);
+    setHideSuccess(false);
+  };
+
+  // Verificar si hay órdenes canceladas para mostrar la columna de acciones
+  const hasCancelledOrders = ordersByPage.some(
+    (order) => order.orderStatus === OrderStatus.Cancelled
+  );
+
+  // Determinar qué órdenes y paginación mostrar
+  const displayOrders = selectedUser ? searchResults : ordersByPage;
+  const displayPagination = selectedUser ? searchPagination : pagination;
+  const displayLoading = selectedUser ? searchLoading : loading;
+  const displayError = selectedUser ? searchError : error;
+  const displayPage = selectedUser ? searchOrderPage : currentPage;
+  const handleDisplayPageChange = selectedUser
+    ? handleSearchOrderPageChange
+    : handlePageChange;
+
   return (
     <div className="px-4 py-6">
       {/* Header con título y botón */}
@@ -152,123 +303,245 @@ const OrdersPage = () => {
         </Link>
       </div>
 
-      {error && <div className="p-4 text-center text-error">{error}</div>}
+      {/* Barra de búsqueda de usuarios */}
+      <div className="mb-6">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-medium text-[#111111]">
+            Buscar órdenes por usuario
+          </label>
+          <div className="relative">
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                type="text"
+                placeholder="Buscar por email, nombre, apellido o DNI..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 pl-10 pr-10 border border-[#e1e1e1] rounded-md focus:outline-none focus:border-[#2271B1] text-[#222222]"
+                disabled={!!selectedUser}
+              />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#666666]" />
+              {userSearchLoading && (
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  <div className="w-4 h-4 border-2 border-[#2271B1] border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              )}
+            </div>
 
-      {/* Filtro */}
-      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-          <span className="text-[#666666] text-sm">Filtrar por estado:</span>
-          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                !statusFilter
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(undefined)}
-            >
-              Todos
-            </button>
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                statusFilter === OrderStatus.Processing
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(OrderStatus.Processing)}
-            >
-              Processing
-            </button>
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                statusFilter === OrderStatus.OnHold
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(OrderStatus.OnHold)}
-            >
-              On Hold
-            </button>
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                statusFilter === OrderStatus.PendingPayment
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(OrderStatus.PendingPayment)}
-            >
-              Pending Payment
-            </button>
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                statusFilter === OrderStatus.Completed
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(OrderStatus.Completed)}
-            >
-              Completed
-            </button>
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                statusFilter === OrderStatus.Cancelled
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(OrderStatus.Cancelled)}
-            >
-              Cancelled
-            </button>
-            <button
-              className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                statusFilter === OrderStatus.Refunded
-                  ? "bg-[#2271B1] text-white"
-                  : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-              }`}
-              onClick={() => setFilter(OrderStatus.Refunded)}
-            >
-              Refunded
-            </button>
+            {/* Dropdown de resultados de usuarios */}
+            {showUserDropdown && userSearchResults.length > 0 && (
+              <div
+                ref={dropdownRef}
+                className="absolute z-50 w-full mt-1 bg-white border border-[#e1e1e1] rounded-md shadow-lg max-h-64 overflow-y-auto"
+              >
+                {userSearchResults.map((user) => (
+                  <button
+                    key={user.id}
+                    onClick={() => handleUserSelect(user)}
+                    className="w-full px-4 py-3 text-left hover:bg-[#f0f0f0] transition-colors border-b border-[#e1e1e1] last:border-b-0"
+                  >
+                    <div className="flex items-center gap-3">
+                      <UserCircle className="w-5 h-5 text-[#666666] flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-[#111111] truncate">
+                          {user.firstName && user.lastName
+                            ? `${user.firstName} ${user.lastName}`
+                            : user.displayName}
+                        </div>
+                        <div className="text-sm text-[#666666] truncate">
+                          {user.email}
+                        </div>
+                        {user.dni && (
+                          <div className="text-xs text-[#999999]">
+                            DNI: {user.dni}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Mensaje cuando no hay resultados */}
+            {showUserDropdown &&
+              searchQuery.trim().length >= 2 &&
+              userSearchResults.length === 0 &&
+              !userSearchLoading && (
+                <div
+                  ref={dropdownRef}
+                  className="absolute z-50 w-full mt-1 bg-white border border-[#e1e1e1] rounded-md shadow-lg p-4 text-center text-sm text-[#666666]"
+                >
+                  No se encontraron usuarios con &quot;{searchQuery}&quot;
+                </div>
+              )}
           </div>
-        </div>
-      </div>
 
-      {/* Acciones en lote */}
-      <div className="hidden sm:flex items-center gap-4 mb-4">
-        <div className="flex items-center gap-2">
-          <select
-            className="select rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] px-3 py-2"
-            value={batchAction}
-            onChange={(e) => setBatchAction(e.target.value as OrderStatus | "")}
-          >
-            <option value="">Acciones en lote</option>
-            <option value={OrderStatus.Processing}>
-              Marcar como Processing
-            </option>
-            <option value={OrderStatus.OnHold}>Marcar como On Hold</option>
-            <option value={OrderStatus.PendingPayment}>
-              Marcar como Pending Payment
-            </option>
-            <option value={OrderStatus.Completed}>Marcar como Completed</option>
-            <option value={OrderStatus.Cancelled}>Marcar como Cancelled</option>
-            <option value={OrderStatus.Refunded}>Marcar como Refunded</option>
-          </select>
-          {selectedOrders.length > 0 && (
-            <span className="text-sm text-[#666666]">
-              ({selectedOrders.length} seleccionadas)
-            </span>
+          {/* Usuario seleccionado */}
+          {selectedUser && (
+            <div className="flex items-center gap-2 p-3 bg-[#f0f0f0] border border-[#e1e1e1] rounded-md">
+              <UserCircle className="w-5 h-5 text-[#2271B1] flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-[#111111]">
+                  Mostrando órdenes de:{" "}
+                  {selectedUser.firstName && selectedUser.lastName
+                    ? `${selectedUser.firstName} ${selectedUser.lastName}`
+                    : selectedUser.displayName}
+                </div>
+                <div className="text-xs text-[#666666]">
+                  {selectedUser.email}
+                </div>
+                {selectedUser.dni && (
+                  <div className="text-xs text-[#999999]">
+                    DNI: {selectedUser.dni}
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={handleClearSearch}
+                className="p-1 hover:bg-[#e1e1e1] rounded-md transition-colors"
+                title="Limpiar búsqueda"
+              >
+                <X className="w-4 h-4 text-[#666666]" />
+              </button>
+            </div>
           )}
         </div>
-        <button
-          className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none"
-          onClick={handleBatchAction}
-          disabled={
-            !batchAction || selectedOrders.length === 0 || bulkUpdateLoading
-          }
-        >
-          {bulkUpdateLoading ? "Aplicando..." : "Aplicar"}
-        </button>
       </div>
+
+      {displayError && (
+        <div className="p-4 text-center text-error">{displayError}</div>
+      )}
+
+      {/* Filtro - Solo mostrar si no hay búsqueda activa */}
+      {!selectedUser && (
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+            <span className="text-[#666666] text-sm">Filtrar por estado:</span>
+            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  !statusFilter
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(undefined)}
+              >
+                Todos (
+                {counts
+                  ? Object.values(counts).reduce((sum, count) => sum + count, 0)
+                  : 0}
+                )
+              </button>
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  statusFilter === OrderStatus.Processing
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(OrderStatus.Processing)}
+              >
+                Processing ({counts?.[OrderStatus.Processing] || 0})
+              </button>
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  statusFilter === OrderStatus.OnHold
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(OrderStatus.OnHold)}
+              >
+                On Hold ({counts?.[OrderStatus.OnHold] || 0})
+              </button>
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  statusFilter === OrderStatus.PendingPayment
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(OrderStatus.PendingPayment)}
+              >
+                Pending Payment ({counts?.[OrderStatus.PendingPayment] || 0})
+              </button>
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  statusFilter === OrderStatus.Completed
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(OrderStatus.Completed)}
+              >
+                Completed ({counts?.[OrderStatus.Completed] || 0})
+              </button>
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  statusFilter === OrderStatus.Cancelled
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(OrderStatus.Cancelled)}
+              >
+                Cancelled ({counts?.[OrderStatus.Cancelled] || 0})
+              </button>
+              <button
+                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                  statusFilter === OrderStatus.Refunded
+                    ? "bg-[#2271B1] text-white"
+                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                }`}
+                onClick={() => setFilter(OrderStatus.Refunded)}
+              >
+                Refunded ({counts?.[OrderStatus.Refunded] || 0})
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Acciones en lote - Solo mostrar si no hay búsqueda activa */}
+      {!selectedUser && (
+        <div className="hidden sm:flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-2">
+            <select
+              className="select rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] px-3 py-2"
+              value={batchAction}
+              onChange={(e) =>
+                setBatchAction(e.target.value as OrderStatus | "")
+              }
+            >
+              <option value="">Acciones en lote</option>
+              <option value={OrderStatus.Processing}>
+                Marcar como Processing
+              </option>
+              <option value={OrderStatus.OnHold}>Marcar como On Hold</option>
+              <option value={OrderStatus.PendingPayment}>
+                Marcar como Pending Payment
+              </option>
+              <option value={OrderStatus.Completed}>
+                Marcar como Completed
+              </option>
+              <option value={OrderStatus.Cancelled}>
+                Marcar como Cancelled
+              </option>
+              <option value={OrderStatus.Refunded}>Marcar como Refunded</option>
+            </select>
+            {selectedOrders.length > 0 && (
+              <span className="text-sm text-[#666666]">
+                ({selectedOrders.length} seleccionadas)
+              </span>
+            )}
+          </div>
+          <button
+            className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none"
+            onClick={handleBatchAction}
+            disabled={
+              !batchAction || selectedOrders.length === 0 || bulkUpdateLoading
+            }
+          >
+            {bulkUpdateLoading ? "Aplicando..." : "Aplicar"}
+          </button>
+        </div>
+      )}
 
       {/* Tabla */}
       <div className="overflow-x-auto">
@@ -281,28 +554,32 @@ const OrdersPage = () => {
                   className="checkbox checkbox-neutral"
                   onChange={(e) =>
                     setSelectedOrders(
-                      e.target.checked ? orders.map((o) => o.id) : []
+                      e.target.checked ? displayOrders.map((o) => o.id) : []
                     )
                   }
                   checked={
                     selectedOrders.length > 0 &&
-                    selectedOrders.length === orders.length
+                    selectedOrders.length === displayOrders.length
                   }
                 />
               </th>
               <th className="text-[#222222]">Orden</th>
               <th className="hidden sm:table-cell text-[#222222]">Fecha</th>
               <th className="text-[#222222]">Estado</th>
-              <th className="hidden sm:table-cell text-[#222222]">Total</th>
+              <th className="hidden sm:table-cell text-[#222222]">Total USD</th>
+              <th className="hidden sm:table-cell text-[#222222]">Total ARS</th>
+              {hasCancelledOrders && (
+                <th className="hidden sm:table-cell text-[#222222]">
+                  Acciones
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {orders.map((order, idx) => {
-              const isLast = idx === orders.length - 1;
+            {displayOrders.map((order) => {
               return (
                 <tr
                   key={order.id}
-                  ref={isLast && nextCursor ? lastOrderRef : undefined}
                   className="text-[#333333] border-b border-[#e1e1e1]"
                 >
                   <td className="hidden sm:table-cell">
@@ -322,8 +599,8 @@ const OrdersPage = () => {
                           href={`orders/edit/${order.id}`}
                           className="font-bold text-[#2271B1]"
                         >
-                          #{order.orderNumber} -{" "}
-                          {order.shippingAddress.firstName}
+                          #{order.orderNumber} - {order.user.firstName}{" "}
+                          {order.user.lastName}
                         </Link>
                       </div>
                       <button
@@ -375,8 +652,37 @@ const OrdersPage = () => {
                     <OrderStatusBadge status={order.orderStatus} />
                   </td>
                   <td className="hidden sm:table-cell text-[#555555]">
-                    {formatCurrency(order.totalAmount, "en-US", "USD")}
+                    {order.refund && order.refund.originalSubTotal ? (
+                      <>
+                        <span className="line-through">
+                          {formatCurrency(
+                            order.refund.originalSubTotal,
+                            "en-US",
+                            "USD"
+                          )}
+                        </span>{" "}
+                        {formatCurrency(order.totalAmount, "en-US", "USD")}
+                      </>
+                    ) : (
+                      formatCurrency(order.totalAmount, "en-US", "USD")
+                    )}
                   </td>
+                  <td className="hidden sm:table-cell text-[#555555]">
+                    {formatCurrency(order.totalAmountARS, "es-AR", "ARS")}
+                  </td>
+                  {hasCancelledOrders && (
+                    <td className="hidden sm:table-cell">
+                      {order.orderStatus === OrderStatus.Cancelled && (
+                        <button
+                          className="btn btn-xs bg-red-500 hover:bg-red-600 text-white border-none shadow-none"
+                          onClick={() => setOrderToHide(order)}
+                          title="Eliminar orden"
+                        >
+                          <Trash size={14} />
+                        </button>
+                      )}
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -384,27 +690,46 @@ const OrdersPage = () => {
         </table>
       </div>
 
-      {loading && orders.length === 0 && (
+      {displayLoading && displayOrders.length === 0 && (
         <div className="p-4 text-center text-[#666666]">
           <LoadingSpinner />
         </div>
       )}
 
-      {isLoadingMore && (
-        <div className="flex justify-center py-4 text-[#666666]">
-          <LoadingSpinner />
+      {displayOrders.length === 0 && !displayLoading && (
+        <div className="p-4 text-center text-sm text-[#222222] opacity-60">
+          {selectedUser
+            ? `No hay órdenes para ${
+                selectedUser.firstName && selectedUser.lastName
+                  ? `${selectedUser.firstName} ${selectedUser.lastName}`
+                  : selectedUser.displayName
+              }`
+            : "No hay órdenes"}
         </div>
       )}
 
-      {!nextCursor && !loading && orders.length > 0 && (
-        <div className="p-4 text-center text-sm text-[#222222] opacity-60">
-          No hay más órdenes.
-        </div>
+      {/* Componente de paginación */}
+      {displayPagination && displayPagination.totalPages > 1 && (
+        <Pagination
+          currentPage={displayPage}
+          totalPages={displayPagination.totalPages}
+          onPageChange={handleDisplayPageChange}
+          loading={displayLoading}
+          className="mt-6"
+        />
       )}
 
-      {orders.length === 0 && !loading && (
-        <div className="p-4 text-center text-sm text-[#222222] opacity-60">
-          No hay órdenes
+      {/* Información de resultados */}
+      {displayPagination && (
+        <div className="mt-4 text-sm text-[#666666] text-center">
+          Mostrando {displayOrders.length} de {displayPagination.totalCount}{" "}
+          órdenes
+          {selectedUser &&
+            ` de ${
+              selectedUser.firstName && selectedUser.lastName
+                ? `${selectedUser.firstName} ${selectedUser.lastName}`
+                : selectedUser.displayName
+            }`}
         </div>
       )}
 
@@ -447,8 +772,7 @@ const OrdersPage = () => {
                 </p>
                 {previewOrder.user.dni && (
                   <p className="mb-2 text-[#333333]">
-                    <strong>DNI:</strong>{" "}
-                    {previewOrder.user.dni || "N/A"}
+                    <strong>DNI:</strong> {previewOrder.user.dni || "N/A"}
                   </p>
                 )}
                 {previewOrder.user.cuit && (
@@ -566,23 +890,67 @@ const OrdersPage = () => {
                               className="text-[#333333] border-b border-[#e1e1e1]"
                             >
                               <td>
-                                <div className="flex flex-col">
-                                  <strong>
-                                    {item.productVariant.product.productModel}
-                                  </strong>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-sm text-gray-500">
-                                      Color: {item.productVariant.color.name}
-                                    </span>
-                                    <span
-                                      className="w-4 h-4 rounded-full border border-gray-300"
-                                      style={{
-                                        backgroundColor:
-                                          item.productVariant.color.hex,
-                                      }}
-                                    ></span>
+                                <a
+                                  href={`https://tienda.todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    {/* Imagen del producto (responsive) */}
+                                    <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
+                                      <Image
+                                        src={`${
+                                          process.env.NEXT_PUBLIC_API_URL
+                                        }/${
+                                          item.productVariant.images?.[0] ||
+                                          "placeholder-image.jpg"
+                                        }`}
+                                        alt={`${
+                                          item.productVariant.product
+                                            .productModel
+                                        } - ${
+                                          item.productVariant.color?.name ||
+                                          "variant"
+                                        }`}
+                                        width={64}
+                                        height={64}
+                                        className="object-cover w-full h-full"
+                                      />
+                                    </div>
+
+                                    {/* Información del producto (truncate en pantallas pequeñas) */}
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <span
+                                        className="font-medium text-[#222222] truncate block"
+                                        title={`${item.productVariant.product.productModel} ${item.productVariant.product.sku}`}
+                                      >
+                                        {
+                                          item.productVariant.product
+                                            .productModel
+                                        }
+                                      </span>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span
+                                          className="text-sm text-gray-500 truncate"
+                                          title={`Color: ${item.productVariant.color?.name}`}
+                                        >
+                                          Color:{" "}
+                                          {item.productVariant.color?.name}
+                                        </span>
+                                        <span
+                                          className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                          style={{
+                                            backgroundColor:
+                                              item.productVariant.color?.hex ||
+                                              "transparent",
+                                          }}
+                                          aria-hidden
+                                        />
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                </a>
                               </td>
                               <td>
                                 {formatCurrency(
@@ -603,7 +971,11 @@ const OrdersPage = () => {
                                 {formatCurrency(item.subTotal, "en-US", "USD")}
                               </td>
                               <td>
-                                {formatCurrency(item.contributionMarginUSD, "en-US", "USD")}
+                                {formatCurrency(
+                                  item.contributionMarginUSD,
+                                  "en-US",
+                                  "USD"
+                                )}
                               </td>
                             </tr>
                           )
@@ -613,6 +985,28 @@ const OrdersPage = () => {
                   </div>
                 </div>
               )}
+              {previewOrder.refund && previewOrder.refund.originalSubTotal && (
+                <p className="mb-2 text-[#333333]">
+                  <strong>Subtotal:</strong>{" "}
+                  <span style={{ textDecoration: "line-through" }}>
+                    {formatCurrency(
+                      previewOrder.refund.originalSubTotal,
+                      "en-US",
+                      "USD"
+                    )}
+                  </span>
+                </p>
+              )}
+              {previewOrder.refund && (
+                <p className="mb-2 text-[#A00000]">
+                  <strong>Reembolso:</strong> -
+                  {formatCurrency(
+                    previewOrder.refund.appliedAmount,
+                    "en-US",
+                    "USD"
+                  )}
+                </p>
+              )}
               <p className="mb-2 text-[#333333]">
                 <strong>Subtotal:</strong>{" "}
                 {formatCurrency(previewOrder.subTotal, "en-US", "USD")}
@@ -620,7 +1014,7 @@ const OrdersPage = () => {
               {previewOrder.bankTransferExpense &&
                 previewOrder.paymentMethod === PaymentMethod.BankTransfer && (
                   <p className="mb-2 text-[#333333]">
-                    <strong>Gastos de Transferencia Bancaria:</strong>{" "}
+                    <strong>Gasto por Transferencia bancaria:</strong>{" "}
                     {formatCurrency(
                       previewOrder.bankTransferExpense,
                       "en-US",
@@ -638,16 +1032,94 @@ const OrdersPage = () => {
               </p>
               <p className="mb-2 text-[#333333]">
                 <strong>Cost of Goods:</strong>{" "}
+                {formatCurrency(previewOrder.totalCogsUSD, "en-US", "USD")}
+              </p>
+              <p className="mb-2 text-[#333333]">
+                <strong>Contribución Marginal:</strong>{" "}
                 {formatCurrency(
-                  previewOrder.subTotal - previewOrder.totalContributionMarginUSD, //JUAN REVISA ESTO!
+                  previewOrder.totalContributionMarginUSD,
                   "en-US",
                   "USD"
                 )}
               </p>
-              <p className="mb-2 text-[#333333]">
-                <strong>Contribución Marginal:</strong>{" "}
-                {formatCurrency(previewOrder.totalContributionMarginUSD, "en-US", "USD")}
-              </p>
+            </div>
+          </div>
+        </dialog>
+      )}
+
+      {/* Modal de confirmación para ocultar orden */}
+      {orderToHide && (
+        <dialog id="hide_order_modal" className="modal modal-open">
+          <div className="modal-box rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222]">
+            <h3 className="font-bold text-lg text-[#111111] mb-4">
+              {hideSuccess ? "Eliminación completada" : "Confirmar eliminación"}
+            </h3>
+            {hideSuccess ? (
+              <div className="py-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg
+                      className="w-5 h-5 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-[#333333] font-medium">
+                    La orden #{orderToHide.orderNumber} ha sido eliminada
+                    exitosamente.
+                  </p>
+                </div>
+                <p className="text-sm text-[#666666]">
+                  La orden ya no aparecerá en los listados pero los datos se
+                  mantienen para auditoría.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="py-4 text-[#333333]">
+                  ¿Estás seguro de que quieres eliminar la orden{" "}
+                  <strong>#{orderToHide.orderNumber}</strong> de{" "}
+                  <strong>
+                    {orderToHide.user.firstName} {orderToHide.user.lastName}
+                  </strong>
+                  ?
+                </p>
+                <p className="text-sm text-[#666666] mb-6">
+                  Esta acción eliminará la orden de los listados pero mantendrá
+                  los datos para auditoría. Solo se puede hacer con órdenes
+                  canceladas.
+                </p>
+              </>
+            )}
+            <div className="modal-action">
+              <button
+                className={`btn border-none shadow-none ${
+                  hideSuccess
+                    ? "bg-[#2271B1] text-white hover:bg-[#1a5a8a]"
+                    : "bg-transparent text-[#666666] hover:text-[#333333]"
+                }`}
+                onClick={handleCloseHideModal}
+                disabled={hideOrderLoading}
+              >
+                {hideSuccess ? "Cerrar" : "Cancelar"}
+              </button>
+              {!hideSuccess && (
+                <button
+                  className="btn bg-red-500 hover:bg-red-600 text-white border-none shadow-none"
+                  onClick={handleHideOrder}
+                  disabled={hideOrderLoading}
+                >
+                  {hideOrderLoading ? "Eliminando..." : "Eliminar orden"}
+                </button>
+              )}
             </div>
           </div>
         </dialog>

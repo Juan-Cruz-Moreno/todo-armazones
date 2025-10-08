@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch } from "@/redux/slices/userSlice";
+import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch, updateUserAsAdmin, UpdateUserByAdminPayload, resetUpdateUser } from "@/redux/slices/userSlice";
 
 export const useUsers = () => {
   const dispatch = useAppDispatch();
@@ -17,6 +17,9 @@ export const useUsers = () => {
     searchNextCursor,
     searchLoading,
     searchError,
+    // Campos para actualización
+    updatingUser,
+    updateUserError,
   } = useAppSelector((state) => state.users);
 
   const findUserByEmail = useCallback(
@@ -62,6 +65,19 @@ export const useUsers = () => {
     dispatch(resetSearch());
   }, [dispatch]);
 
+  // Nuevo método para actualizar usuario como admin
+  const updateUser = useCallback(
+    async (payload: UpdateUserByAdminPayload) => {
+      const action = await dispatch(updateUserAsAdmin(payload));
+      return action;
+    },
+    [dispatch]
+  );
+
+  const clearUpdateUserError = useCallback(() => {
+    dispatch(resetUpdateUser());
+  }, [dispatch]);
+
   return {
     users,
     nextCursor,
@@ -81,5 +97,10 @@ export const useUsers = () => {
     searchError,
     searchUsersByQuery,
     clearSearch,
+    // Nuevos para actualización
+    updateUser,
+    updatingUser,
+    updateUserError,
+    clearUpdateUserError,
   };
 };

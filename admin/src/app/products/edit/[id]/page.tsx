@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useProducts } from "@/hooks/useProducts";
@@ -64,6 +64,9 @@ export default function EditProductPage({
   // Estados para cachear URLs de object y evitar memory leaks
   const [primaryImageURLs, setPrimaryImageURLs] = useState<string[]>([]);
   const [variantImageURLs, setVariantImageURLs] = useState<Record<string, string[]>>({});
+
+  // Estado para el orden de primaryImage
+  const [primaryImageOrder, setPrimaryImageOrder] = useState<number[] | undefined>(undefined);
 
   // Funciones helper para manejar errores en toast
   const addToastError = (
@@ -173,17 +176,17 @@ export default function EditProductPage({
   const watchedVariantImages = watch("files.variantImages");
 
   // Función para revocar todas las URLs de object
-  const revokeAllURLs = () => {
+  const revokeAllURLs = useCallback(() => {
     primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
     Object.values(variantImageURLs).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
     setPrimaryImageURLs([]);
     setVariantImageURLs({});
-  };
+  }, [primaryImageURLs, variantImageURLs]);
 
   // Revocar URLs al desmontar el componente
   useEffect(() => {
     return () => revokeAllURLs();
-  }, []);
+  }, [revokeAllURLs]);
 
   // Handlers para categorías y subcategorías
   const handleCategoryChange = (catId: string) => {
@@ -238,12 +241,29 @@ export default function EditProductPage({
   const toggleExpand = (idx: number) =>
     setExpanded((prev) => prev.map((v, i) => (i === idx ? !v : v)));
 
+  // Función para manejar click en imagen principal (cambiar orden)
+  const handlePrimaryImageClick = (clickedIndex: number) => {
+    if (primaryImageOrder) {
+      const newOrder = [...primaryImageOrder];
+      const currentPos = newOrder.indexOf(clickedIndex);
+      if (currentPos > 0) {
+        // Mover al principio
+        newOrder.splice(currentPos, 1);
+        newOrder.unshift(clickedIndex);
+        setPrimaryImageOrder(newOrder);
+      }
+    }
+  };
+
   const onSubmit = async (data: UpdateProductFormData) => {
     if (!product) return;
     try {
       const updatedProduct = await updateProduct({
         productId: data.productId,
-        product: data.product,
+        product: {
+          ...data.product,
+          primaryImageOrder: primaryImageOrder,
+        },
         variants: data.variants || [],
         files: data.files,
       }).unwrap();
@@ -278,6 +298,7 @@ export default function EditProductPage({
       setExpanded(updatedProduct.variants.map(() => false));
       // Revocar todas las URLs después de reset
       revokeAllURLs();
+      setPrimaryImageOrder(undefined);
     } catch (error) {
       console.error("Error al actualizar producto:", error);
       // Mostrar error en toast
@@ -354,6 +375,11 @@ export default function EditProductPage({
                 newFiles
               );
               trigger("files.primaryImage");
+
+              // Inicializar primaryImageOrder si no está definido
+              if (!primaryImageOrder || primaryImageOrder.length !== newFiles.length) {
+                setPrimaryImageOrder(newFiles.map((_, idx) => idx));
+              }
             }}
           />
           {errors.files?.primaryImage && (
@@ -688,15 +714,19 @@ export default function EditProductPage({
                 Nuevas imágenes:
               </span>
               <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-1">
-                {primaryImageURLs.map((url, index) => (
-                  <Image
-                    key={`new-${index}`}
-                    src={url}
-                    alt={`Nueva imagen principal ${index + 1}`}
-                    width={150}
-                    height={150}
-                    className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
-                  />
+                {primaryImageOrder?.map((originalIndex, orderIndex) => (
+                  <div key={`new-${originalIndex}`} className="relative cursor-pointer" onClick={() => handlePrimaryImageClick(originalIndex)}>
+                    <Image
+                      src={primaryImageURLs[originalIndex]}
+                      alt={`Nueva imagen principal ${originalIndex + 1}`}
+                      width={150}
+                      height={150}
+                      className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                      <span className="text-white font-bold text-lg">{orderIndex + 1}</span>
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>
@@ -846,7 +876,7 @@ export default function EditProductPage({
               </div>
             ))}
             {/* Nuevas imágenes subidas */}
-            {Object.entries(watchedVariantImages || {}).map(([key, files]) => (
+            {Object.entries(watchedVariantImages || {}).map(([key]) => (
               <div key={`new-${key}`} className="mb-4">
                 <span className="text-sm text-[#7A7A7A] font-medium">
                   {key.replace("images_", "")} (nuevas):

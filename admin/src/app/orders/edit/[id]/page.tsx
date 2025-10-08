@@ -210,7 +210,7 @@ const EditOrderPage = () => {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [addItemsModal.productQuery]); // Solo dependemos del query, no de las funciones
+  }, [addItemsModal.productQuery, clearSearchResults, searchProducts]); // Incluir dependencias para evitar stale closures
 
   // Funciones helper para manejar errores
   const addError = (
@@ -464,11 +464,6 @@ const EditOrderPage = () => {
     } finally {
       setIsAllowViewInvoiceUpdating(false);
     }
-  };
-
-  // Buscar productos/variantes para el modal
-  const handleProductSearch = (query: string) => {
-    if (query) searchProducts({ q: query, inStock: true });
   };
 
   // Agregar ProductVariant a la orden
@@ -801,7 +796,7 @@ const EditOrderPage = () => {
         // para asegurar que los campos requeridos estén incluidos
         // Limpiar campos vacíos antes de enviar al backend
         const cleanedShippingAddress = { ...form.shippingAddress };
-        
+
         // Convertir campos opcionales vacíos a undefined para que no se guarden como strings vacías
         if (cleanedShippingAddress.cuit === "") {
           cleanedShippingAddress.cuit = undefined;
@@ -821,7 +816,7 @@ const EditOrderPage = () => {
         if (cleanedShippingAddress.pickupPointAddress === "") {
           cleanedShippingAddress.pickupPointAddress = undefined;
         }
-        
+
         updatePayload.shippingAddress = cleanedShippingAddress;
         hasChanges = true;
       }
@@ -881,7 +876,7 @@ const EditOrderPage = () => {
       if (hasAddressChanges && !hasDeliveryTypeChanges) {
         // Limpiar campos vacíos antes de enviar al backend
         const cleanedShippingAddress = { ...form.shippingAddress };
-        
+
         // Convertir campos opcionales vacíos a undefined para que no se guarden como strings vacías
         if (cleanedShippingAddress.cuit === "") {
           cleanedShippingAddress.cuit = undefined;
@@ -901,7 +896,7 @@ const EditOrderPage = () => {
         if (cleanedShippingAddress.pickupPointAddress === "") {
           cleanedShippingAddress.pickupPointAddress = undefined;
         }
-        
+
         updatePayload.shippingAddress = cleanedShippingAddress;
         hasChanges = true;
       }
@@ -1619,55 +1614,67 @@ const EditOrderPage = () => {
                               className="text-[#222222]"
                             >
                               <td>
-                                <div className="flex items-start gap-3">
-                                  {/* Imagen del producto (responsive) */}
-                                  <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
-                                    <Image
-                                      src={`${
-                                        process.env.NEXT_PUBLIC_API_URL
-                                      }/${
-                                        item.productVariant.images?.[0] ||
-                                        "placeholder-image.jpg"
-                                      }`}
-                                      alt={`${
-                                        item.productVariant.product.productModel
-                                      } - ${
-                                        item.productVariant.color?.name ||
-                                        "variant"
-                                      }`}
-                                      width={64}
-                                      height={64}
-                                      className="object-cover w-full h-full"
-                                    />
-                                  </div>
-
-                                  {/* Información del producto (truncate en pantallas pequeñas) */}
-                                  <div className="flex flex-col min-w-0 flex-1">
-                                    <span
-                                      className="font-medium text-[#222222] truncate block"
-                                      title={`${item.productVariant.product.productModel} ${item.productVariant.product.sku}`}
-                                    >
-                                      {item.productVariant.product.productModel}
-                                    </span>
-                                    <div className="flex items-center gap-2 mt-1">
-                                      <span
-                                        className="text-sm text-gray-500 truncate"
-                                        title={`Color: ${item.productVariant.color?.name}`}
-                                      >
-                                        Color: {item.productVariant.color?.name}
-                                      </span>
-                                      <span
-                                        className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
-                                        style={{
-                                          backgroundColor:
-                                            item.productVariant.color?.hex ||
-                                            "transparent",
-                                        }}
-                                        aria-hidden
+                                <a
+                                  href={`https://tienda.todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    {/* Imagen del producto (responsive) */}
+                                    <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
+                                      <Image
+                                        src={`${
+                                          process.env.NEXT_PUBLIC_API_URL
+                                        }/${
+                                          item.productVariant.images?.[0] ||
+                                          "placeholder-image.jpg"
+                                        }`}
+                                        alt={`${
+                                          item.productVariant.product
+                                            .productModel
+                                        } - ${
+                                          item.productVariant.color?.name ||
+                                          "variant"
+                                        }`}
+                                        width={64}
+                                        height={64}
+                                        className="object-cover w-full h-full"
                                       />
                                     </div>
+
+                                    {/* Información del producto (truncate en pantallas pequeñas) */}
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <span
+                                        className="font-medium text-[#222222] truncate block"
+                                        title={`${item.productVariant.product.productModel} ${item.productVariant.product.sku}`}
+                                      >
+                                        {
+                                          item.productVariant.product
+                                            .productModel
+                                        }
+                                      </span>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span
+                                          className="text-sm text-gray-500 truncate"
+                                          title={`Color: ${item.productVariant.color?.name}`}
+                                        >
+                                          Color:{" "}
+                                          {item.productVariant.color?.name}
+                                        </span>
+                                        <span
+                                          className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                          style={{
+                                            backgroundColor:
+                                              item.productVariant.color?.hex ||
+                                              "transparent",
+                                          }}
+                                          aria-hidden
+                                        />
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                </a>
                               </td>
                               <td>
                                 {formatCurrency(item.cogsUSD, "en-US", "USD")}
@@ -1789,7 +1796,36 @@ const EditOrderPage = () => {
                 )}
                 {/* Subtotal y Total */}
                 <div className="mt-4">
-                  <div className="flex justify-between items-center">
+                  {form.refund && form.refund.originalSubTotal && (
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-sm font-semibold text-[#222222]">
+                        Subtotal:
+                      </span>
+                      <span className="text-sm text-[#222222] line-through">
+                        {formatCurrency(
+                          form.refund.originalSubTotal,
+                          "en-US",
+                          "USD"
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  {form.refund && (
+                    <div className="flex justify-between items-center mt-2">
+                      <span className="text-sm font-semibold text-[#A00000]">
+                        Reembolso:
+                      </span>
+                      <span className="text-sm text-[#A00000]">
+                        -
+                        {formatCurrency(
+                          form.refund.appliedAmount,
+                          "en-US",
+                          "USD"
+                        )}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center mt-2">
                     <span className="text-sm font-semibold text-[#222222]">
                       Subtotal:
                     </span>
@@ -1828,21 +1864,6 @@ const EditOrderPage = () => {
                       {formatCurrency(form.totalAmountARS, "es-AR", "ARS")}
                     </span>
                   </div>
-                  {form.refund && (
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-sm font-semibold text-[#A00000]">
-                        Reembolso:
-                      </span>
-                      <span className="text-sm text-[#A00000]">
-                        -
-                        {formatCurrency(
-                          form.refund.appliedAmount,
-                          "en-US",
-                          "USD"
-                        )}
-                      </span>
-                    </div>
-                  )}
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-sm font-semibold text-[#222222]">
                       Cost of Goods:

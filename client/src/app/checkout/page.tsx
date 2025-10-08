@@ -7,7 +7,11 @@ import { addressSchema, AddressFormData } from "@/schemas/order.schema";
 import { useCart } from "@/hooks/useCart";
 import { useAuth } from "@/hooks/useAuth";
 import { useOrders } from "@/hooks/useOrders";
-import { CartSyncError, FinalStockVerificationError, createOrder } from "@/redux/slices/orderSlice";
+import {
+  CartSyncError,
+  FinalStockVerificationError,
+  createOrder,
+} from "@/redux/slices/orderSlice";
 import type { CreateOrderPayload } from "@/interfaces/order";
 import { formatCurrency } from "@/utils/formatCurrency";
 import {
@@ -33,7 +37,9 @@ const CheckoutPage = () => {
     PaymentMethod.CashOnDelivery
   );
   const [deliveryType, setDeliveryType] = useState(DeliveryType.HomeDelivery);
-  const [syncError, setSyncError] = useState<CartSyncError | FinalStockVerificationError | null>(null);
+  const [syncError, setSyncError] = useState<
+    CartSyncError | FinalStockVerificationError | null
+  >(null);
 
   const {
     register,
@@ -147,7 +153,7 @@ const CheckoutPage = () => {
     console.log("================================");
 
     const result = await placeOrder(payload);
-    
+
     if (createOrder.fulfilled.match(result)) {
       // Reset cart and redirect to order received page with order id
       resetCart();
@@ -174,7 +180,7 @@ const CheckoutPage = () => {
         result.payload &&
         typeof result.payload === "object" &&
         "code" in result.payload &&
-        result.payload.code === 'FINAL_STOCK_VERIFICATION_FAILED'
+        result.payload.code === "FINAL_STOCK_VERIFICATION_FAILED"
       ) {
         setSyncError(result.payload as FinalStockVerificationError);
         fetchCart(); // Refresca el carrito para mostrar stock actualizado
@@ -477,6 +483,7 @@ const CheckoutPage = () => {
                     {...register("declaredShippingAmount")}
                     className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
                     style={{ borderColor: "#e1e1e1" }}
+                    placeholder="Ej: Mínimo, 30%, 50%, 100%"
                   />
                   {errors.declaredShippingAmount && (
                     <span className="text-red-500 text-sm">
@@ -743,12 +750,14 @@ const CheckoutPage = () => {
       <dialog id="cart_sync_modal" className="modal" ref={cartSyncModalRef}>
         <div className="modal-box bg-white text-[#111111] rounded-none">
           <h3 className="font-bold text-lg">
-            {'changes' in (syncError || {}) ? 'El carrito fue actualizado' : 'Stock insuficiente'}
+            {"changes" in (syncError || {})
+              ? "El carrito fue actualizado"
+              : "Stock insuficiente"}
           </h3>
           <p className="py-4">{syncError?.message}</p>
-          
+
           {/* Mostrar cambios del carrito si es CartSyncError */}
-          {'changes' in (syncError || {}) && (
+          {"changes" in (syncError || {}) && (
             <ul className="py-2">
               {(syncError as CartSyncError)?.changes.map((change, idx) => {
                 const variant = change.productVariant;
@@ -781,23 +790,31 @@ const CheckoutPage = () => {
               })}
             </ul>
           )}
-          
+
           {/* Mostrar conflictos de stock si es FinalStockVerificationError */}
-          {'code' in (syncError || {}) && (syncError as FinalStockVerificationError)?.code === 'FINAL_STOCK_VERIFICATION_FAILED' && (
-            <ul className="py-2">
-              {(syncError as FinalStockVerificationError)?.stockConflicts.map((conflict, idx) => (
-                <li key={idx} className="mb-2 p-3 bg-red-50 border border-red-200 rounded">
-                  <div className="font-semibold text-red-800">
-                    {conflict.productInfo}
-                  </div>
-                  <div className="text-sm text-red-600">
-                    Solicitado: {conflict.requestedQuantity}, Disponible: {conflict.availableStock}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-          
+          {"code" in (syncError || {}) &&
+            (syncError as FinalStockVerificationError)?.code ===
+              "FINAL_STOCK_VERIFICATION_FAILED" && (
+              <ul className="py-2">
+                {(syncError as FinalStockVerificationError)?.stockConflicts.map(
+                  (conflict, idx) => (
+                    <li
+                      key={idx}
+                      className="mb-2 p-3 bg-red-50 border border-red-200 rounded"
+                    >
+                      <div className="font-semibold text-red-800">
+                        {conflict.productInfo}
+                      </div>
+                      <div className="text-sm text-red-600">
+                        Solicitado: {conflict.requestedQuantity}, Disponible:{" "}
+                        {conflict.availableStock}
+                      </div>
+                    </li>
+                  )
+                )}
+              </ul>
+            )}
+
           <div className="modal-action">
             <button
               className="btn rounded-none shadow-none border-none transition-colors duration-300 ease-in-out h-12 text-base px-6 w-full"

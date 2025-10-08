@@ -1,3 +1,4 @@
+import { useCallback } from "react";
 import {
   CreateProductPayload,
   UpdateProductPayload,
@@ -15,6 +16,8 @@ import {
   bulkUpdatePrices,
   clearBulkUpdateError,
   resetPagination,
+  fetchProductBySlug,
+  clearProductDetail,
 } from "../redux/slices/productSlice";
 
 export const useProducts = () => {
@@ -32,6 +35,7 @@ export const useProducts = () => {
     paginationInfoLoading,
     paginationInfoError,
     lastCreatedProduct,
+    productDetail,
   } = useAppSelector((state) => state.products);
 
   return {
@@ -47,6 +51,7 @@ export const useProducts = () => {
     paginationInfoLoading,
     paginationInfoError,
     lastCreatedProduct,
+    productDetail,
     
     // Derived state for convenience
     hasNextPage: pagination?.hasNextPage || false,
@@ -91,8 +96,8 @@ export const useProducts = () => {
       inStock?: boolean;
     }) => dispatch(fetchProductsPaginationInfo(params)),
     
-    searchProducts: (params: { q: string; inStock?: boolean }) => dispatch(searchProducts(params)),
-    clearSearchResults: () => dispatch(clearSearchResults()),
+    searchProducts: useCallback((params: { q: string; inStock?: boolean }) => dispatch(searchProducts(params)), [dispatch]),
+    clearSearchResults: useCallback(() => dispatch(clearSearchResults()), [dispatch]),
     createProduct: (payload: CreateProductPayload) =>
       dispatch(createProduct(payload)),
     updateProduct: (payload: UpdateProductPayload) =>
@@ -101,6 +106,8 @@ export const useProducts = () => {
       dispatch(bulkUpdatePrices(payload)),
     clearBulkUpdateError: () => dispatch(clearBulkUpdateError()),
     resetPagination: () => dispatch(resetPagination()),
+    fetchProductBySlug: (slug: string) => dispatch(fetchProductBySlug(slug)),
+    clearProductDetail: () => dispatch(clearProductDetail()),
     
     // Utility methods for pagination
     loadNextPage: () => {

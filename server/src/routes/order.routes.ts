@@ -6,6 +6,7 @@ import {
   createOrderBodySchema,
   createOrderAdminBodySchema,
   getAllOrdersParamsSchema,
+  getAllOrdersByPageParamsSchema,
   updateOrderParamsSchema,
   updateOrderBodySchema,
   bulkUpdateOrderStatusBodySchema,
@@ -14,6 +15,7 @@ import {
   applyRefundParamsSchema,
   applyRefundBodySchema,
   cancelRefundParamsSchema,
+  searchOrdersQuerySchema,
 } from 'schemas/order.schema';
 import { updateItemPricesBodySchema } from 'schemas/updateItemPrices.schema';
 
@@ -35,6 +37,24 @@ router.get(
     params: getAllOrdersParamsSchema,
   }),
   orderController.getAllOrders,
+);
+router.get(
+  '/all-by-page',
+  validateRequest({
+    query: getAllOrdersByPageParamsSchema,
+  }),
+  orderController.getAllOrdersByPage,
+);
+router.get('/counts', checkAdmin, orderController.getOrdersCount);
+
+// Ruta para búsqueda de órdenes (admin)
+router.get(
+  '/search',
+  checkAdmin,
+  validateRequest({
+    query: searchOrdersQuerySchema,
+  }),
+  orderController.searchOrders,
 );
 
 router.patch(
@@ -128,6 +148,16 @@ router.get(
     params: cancelRefundParamsSchema,
   }),
   orderController.canCancelRefund,
+);
+
+// Ocultar orden cancelada (solo admin)
+router.patch(
+  '/admin/:orderId/hide',
+  checkAdmin,
+  validateRequest({
+    params: updateOrderParamsSchema,
+  }),
+  orderController.hideCancelledOrder,
 );
 
 export default router;

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import Image from "next/image";
 import { useInventory } from "../../hooks/useInventory";
 import { StockSummaryCard } from "./StockSummaryCard";
 import { StockMovementHistoryCard } from "./StockMovementHistoryCard";
@@ -124,6 +125,48 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
               >
                 Cerrar
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Información del Producto */}
+      {stockSummary.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">
+            Información del Producto
+          </h3>
+          <div className="flex flex-col md:flex-row gap-6">
+            {/* Imagen del producto */}
+            <div className="flex-shrink-0">
+              <Image
+                src={`${process.env.NEXT_PUBLIC_API_URL}/${stockSummary[0].product.thumbnail}`}
+                alt={`Thumbnail de ${stockSummary[0].product.productModel}`}
+                width={120}
+                height={120}
+                className="rounded-lg object-cover border"
+              />
+            </div>
+            {/* Detalles del producto */}
+            <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <span className="text-gray-600">Modelo:</span>
+                <div className="font-semibold text-gray-900">
+                  {stockSummary[0].product.productModel}
+                </div>
+              </div>
+              <div>
+                <span className="text-gray-600">SKU:</span>
+                <div className="font-semibold text-gray-900">
+                  {stockSummary[0].product.sku}
+                </div>
+              </div>
+              <div>
+                <span className="text-gray-600">ID del Producto:</span>
+                <div className="font-semibold text-gray-900">
+                  {stockSummary[0].product.id}
+                </div>
+              </div>
             </div>
           </div>
         </div>

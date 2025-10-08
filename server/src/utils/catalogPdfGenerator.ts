@@ -27,18 +27,19 @@ export async function generateCatalogPDF(catalogData: CatalogDataDto, onProgress
     return a === b;
   });
 
-  // Helper para obtener el precio máximo de las variantes
-  handlebars.registerHelper('maxPrice', (variants: Array<{ priceUSD: number }>) => {
+  // Helper para obtener el precio mínimo de las variantes
+  handlebars.registerHelper('minPrice', (variants: Array<{ priceUSD: number }>) => {
     if (!variants || variants.length === 0) return 0;
-    return Math.max(...variants.map((v) => v.priceUSD));
+    return Math.min(...variants.map((v) => v.priceUSD));
   });
 
-  // Helper para obtener el precio máximo en ARS
-  handlebars.registerHelper('maxPriceARS', (variants: Array<{ priceUSD: number }>, dollarBaseValue: number) => {
-    if (!variants || variants.length === 0 || !dollarBaseValue) return formatCurrency(0, 'es-AR', 'ARS');
-    const maxUSD = Math.max(...variants.map((v) => v.priceUSD));
-    const priceARS = maxUSD * dollarBaseValue;
-    return formatCurrency(priceARS, 'es-AR', 'ARS');
+  // Helper para obtener el precio mínimo en ARS
+  handlebars.registerHelper('minPriceARS', (variants: Array<{ priceARS?: number }>) => {
+    if (!variants || variants.length === 0) return formatCurrency(0, 'es-AR', 'ARS');
+    const arsPrices = variants.map((v) => v.priceARS).filter((p) => p !== undefined) as number[];
+    if (arsPrices.length === 0) return formatCurrency(0, 'es-AR', 'ARS');
+    const minARS = Math.min(...arsPrices);
+    return formatCurrency(minARS, 'es-AR', 'ARS');
   });
 
   // Helper para formatear USD sin símbolo

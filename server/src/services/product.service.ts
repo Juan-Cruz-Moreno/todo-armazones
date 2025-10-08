@@ -485,22 +485,29 @@ export class ProductService {
       }
       categoryId = category._id;
       baseQuery.category = { $in: [category._id] };
+    }
 
-      // Filtro por subcategoría (solo si existe categoría)
-      if (filters.subcategorySlug) {
-        const subcategory = await Subcategory.findOne({
-          slug: filters.subcategorySlug,
-          category: { $in: [category._id] },
-        })
-          .select('_id')
-          .lean();
+    // Filtro por subcategoría (puede ser independiente o combinado con categoría)
+    if (filters.subcategorySlug) {
+      const subcategoryQuery: FilterQuery<ISubcategoryDocument> = { slug: filters.subcategorySlug };
 
-        if (!subcategory) {
-          throw new AppError('Subcategoría no encontrada en la categoría indicada', 404, 'fail', false);
-        }
-        subcategoryId = subcategory._id;
-        baseQuery.subcategory = { $in: [subcategory._id] };
+      // Si hay categoría seleccionada, validar que la subcategoría pertenezca a ella
+      if (categoryId) {
+        subcategoryQuery.category = { $in: [categoryId] };
       }
+
+      const subcategory = await Subcategory.findOne(subcategoryQuery).select('_id').lean();
+
+      if (!subcategory) {
+        const errorMsg = categoryId
+          ? 'Subcategoría no encontrada en la categoría indicada'
+          : 'Subcategoría no encontrada';
+        throw new AppError(errorMsg, 404, 'fail', false);
+      }
+
+      subcategoryId = subcategory._id;
+      // En Product, subcategory es un ObjectId único, no un array
+      baseQuery.subcategory = subcategory._id;
     }
 
     // Filtro por stock - optimizado para evitar doble filtrado

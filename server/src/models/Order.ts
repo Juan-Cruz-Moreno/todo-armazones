@@ -69,6 +69,11 @@ const refundSchema = new Schema(
       ref: 'User',
       required: false,
     },
+    originalSubTotal: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
   },
   {
     _id: false,
@@ -126,6 +131,9 @@ const orderSchema = new Schema<IOrderDocument>(
       type: refundSchema,
       required: false,
     },
+    exchangeRate: { type: Number, required: true, default: 1 }, // Tasa de cambio USD a ARS
+    itemsCount: { type: Number, required: true, default: 0 }, // Total de unidades físicas
+    isVisible: { type: Boolean, required: true, default: true }, // Indica si la orden es visible en listados
   },
   {
     timestamps: true,

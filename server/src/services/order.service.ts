@@ -18,6 +18,9 @@ import {
   RefundResponse,
   ApplyRefundResultDto,
   CancelRefundResultDto,
+  PaginationMetadata,
+  SearchOrdersDto,
+  SearchOrdersResultDto,
 } from '@dto/order.dto';
 import Address, { IAddressDocument } from '@models/Address';
 import Cart from '@models/Cart';
@@ -53,6 +56,7 @@ interface OrderQuery {
     createdAt: { $lt: Date } | Date;
     _id?: { $lt: Types.ObjectId };
   }>;
+  isVisible?: boolean;
 }
 
 // Constante para el populate de órdenes
@@ -268,6 +272,16 @@ export class OrderService {
     return { bankTransferExpense, totalAmount };
   }
 
+  // Helper: Calcula el total de unidades físicas en una orden
+  private calculateItemsCount(items: IOrder['items']): number {
+    return items.reduce((total, item) => total + item.quantity, 0);
+  }
+
+  // Helper: Calcula el total de unidades físicas desde items de documento
+  private calculateItemsCountFromDocument(items: Types.DocumentArray<IOrderItemDocument>): number {
+    return items.reduce((total, item) => total + item.quantity, 0);
+  }
+
   // Helper: Obtiene el próximo número de orden
   private async getNextOrderNumber(session: mongoose.ClientSession) {
     const counter = await CounterModel.findOneAndUpdate(
@@ -290,6 +304,7 @@ export class OrderService {
     totalAmount: number,
     totalContributionMarginUSD: number,
     totalCogsUSD: number,
+    exchangeRate: number,
   ): IOrder {
     // Determinar el estado inicial basado en el método de pago
     const initialStatus: OrderStatus = OrderStatus.Processing;
@@ -308,6 +323,9 @@ export class OrderService {
       totalCogsUSD,
       orderStatus: initialStatus,
       allowViewInvoice: 'allowViewInvoice' in orderData ? (orderData.allowViewInvoice ?? false) : false,
+      exchangeRate,
+      itemsCount: this.calculateItemsCount(items),
+      isVisible: true,
     };
   }
 
@@ -413,6 +431,7 @@ export class OrderService {
       type: refund.type,
       amount: refund.amount,
       appliedAmount: refund.appliedAmount,
+      originalSubTotal: refund.originalSubTotal,
       ...(refund.reason && { reason: refund.reason }),
       processedAt: refund.processedAt instanceof Date ? refund.processedAt.toISOString() : String(refund.processedAt),
       ...(refund.processedBy && { processedBy: refund.processedBy.toString() }),
@@ -450,6 +469,9 @@ export class OrderService {
       refund: this.mapRefundToResponse(order.refund),
       createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : String(order.createdAt),
       updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : String(order.updatedAt),
+      exchangeRate: order.exchangeRate,
+      itemsCount: order.itemsCount,
+      isVisible: order.isVisible,
     };
   }
 
@@ -481,6 +503,9 @@ export class OrderService {
       refund: this.mapRefundToResponse(order.refund),
       createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : String(order.createdAt),
       updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : String(order.updatedAt),
+      exchangeRate: order.exchangeRate,
+      itemsCount: order.itemsCount,
+      isVisible: order.isVisible,
     };
   }
 
@@ -598,6 +623,7 @@ export class OrderService {
         totalAmount,
         totalContributionMarginUSD,
         totalCogsUSD,
+        dollar.value, // exchangeRate
       );
 
       // Asignar el totalAmountARS al objeto de orden
@@ -722,6 +748,7 @@ export class OrderService {
         totalAmount,
         totalContributionMarginUSD,
         totalCogsUSD,
+        dollar.value, // exchangeRate
       );
 
       // Asignar el totalAmountARS al objeto de orden
@@ -787,6 +814,100 @@ export class OrderService {
     return this.mapOrderToResponseDto(order);
   }
 
+  /**
+   * Valida y corrige la consistencia del campo itemsCount en una orden
+   * Útil para migraciones o corrección de datos inconsistentes
+   * @param orderId - ID de la orden a validar
+   * @returns Información sobre la validación y corrección
+   */
+  public async validateAndFixItemsCount(orderId: Types.ObjectId): Promise<{
+    isValid: boolean;
+    expectedCount: number;
+    actualCount: number;
+    wasFixed: boolean;
+  }> {
+    const order = await Order.findById(orderId);
+    if (!order) {
+      throw new AppError('Orden no encontrada', 404, 'fail');
+    }
+
+    const expectedCount = this.calculateItemsCountFromDocument(order.items);
+    const actualCount = order.itemsCount;
+    const isValid = expectedCount === actualCount;
+
+    if (!isValid) {
+      // Corregir el itemsCount
+      order.itemsCount = expectedCount;
+      await order.save();
+
+      logger.info('ItemsCount corregido en orden', {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        expectedCount,
+        actualCount,
+        difference: expectedCount - actualCount,
+      });
+
+      return {
+        isValid: false,
+        expectedCount,
+        actualCount,
+        wasFixed: true,
+      };
+    }
+
+    return {
+      isValid: true,
+      expectedCount,
+      actualCount,
+      wasFixed: false,
+    };
+  }
+
+  /**
+   * Valida y corrige itemsCount en múltiples órdenes
+   * @param orderIds - IDs de las órdenes a procesar
+   * @returns Resumen de las validaciones y correcciones
+   */
+  public async bulkValidateAndFixItemsCount(orderIds: Types.ObjectId[]): Promise<{
+    totalProcessed: number;
+    validOrders: number;
+    fixedOrders: number;
+    errors: { orderId: string; error: string }[];
+  }> {
+    const results = {
+      totalProcessed: orderIds.length,
+      validOrders: 0,
+      fixedOrders: 0,
+      errors: [] as { orderId: string; error: string }[],
+    };
+
+    for (const orderId of orderIds) {
+      try {
+        const validation = await this.validateAndFixItemsCount(orderId);
+        if (validation.isValid) {
+          results.validOrders++;
+        } else if (validation.wasFixed) {
+          results.fixedOrders++;
+        }
+      } catch (error) {
+        results.errors.push({
+          orderId: orderId.toString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    logger.info('Validación masiva de itemsCount completada', {
+      totalProcessed: results.totalProcessed,
+      validOrders: results.validOrders,
+      fixedOrders: results.fixedOrders,
+      errorsCount: results.errors.length,
+    });
+
+    return results;
+  }
+
   public async cancelOrder(orderId: Types.ObjectId, userId?: Types.ObjectId) {
     return withTransaction(async (session) => {
       const order = await Order.findById(orderId).session(session);
@@ -828,6 +949,7 @@ export class OrderService {
       order.totalContributionMarginUSD = 0;
       order.totalCogsUSD = 0; // Resetear total COGS
       order.totalAmount = 0;
+      // itemsCount permanece sin cambios ya que representa las unidades físicas solicitadas originalmente
       order.orderStatus = OrderStatus.Cancelled;
       await order.save({ session });
 
@@ -842,13 +964,80 @@ export class OrderService {
     });
   }
 
+  /**
+   * Oculta una orden cancelada cambiando isVisible a false
+   * Solo funciona para órdenes con orderStatus Cancelled
+   * @param orderId - ID de la orden a ocultar
+   * @param hiddenBy - Usuario que oculta la orden (opcional, para trazabilidad)
+   * @returns Resultado de la operación
+   */
+  public async hideCancelledOrder(
+    orderId: Types.ObjectId,
+    hiddenBy?: Types.ObjectId,
+  ): Promise<{ success: boolean; message: string; order?: OrderResponseDto }> {
+    try {
+      const result = await withTransaction(async (session) => {
+        const order = await Order.findById(orderId).session(session);
+        if (!order) {
+          throw new AppError('Orden no encontrada', 404, 'fail');
+        }
+
+        if (order.orderStatus !== OrderStatus.Cancelled) {
+          throw new AppError('Solo se pueden ocultar órdenes canceladas', 400, 'fail');
+        }
+
+        if (!order.isVisible) {
+          throw new AppError('La orden ya está oculta', 400, 'fail');
+        }
+
+        order.isVisible = false;
+        await order.save({ session });
+
+        logger.info('Orden cancelada oculta exitosamente', {
+          orderId: order._id.toString(),
+          orderNumber: order.orderNumber,
+          hiddenBy: hiddenBy?.toString(),
+        });
+
+        // Retornar la orden populada
+        const populatedOrder = await this.getPopulatedOrderResponse(order._id, session);
+
+        return {
+          success: true,
+          message: `Orden ${order.orderNumber} oculta exitosamente`,
+          order: populatedOrder,
+        };
+      });
+
+      return result;
+    } catch (error) {
+      logger.error('Error al ocultar orden cancelada', {
+        orderId: orderId.toString(),
+        error: error instanceof Error ? error.message : String(error),
+        hiddenBy: hiddenBy?.toString(),
+      });
+
+      if (error instanceof AppError) {
+        return {
+          success: false,
+          message: error.message,
+        };
+      }
+
+      return {
+        success: false,
+        message: 'Error interno del servidor al ocultar la orden',
+      };
+    }
+  }
+
   public async getOrdersByUserId(
     userId: Types.ObjectId,
     cursor: string | null = null,
     limit: number = 10,
     status?: OrderStatus,
   ): Promise<{ orders: OrderUserResponseDto[]; nextCursor: string | null }> {
-    const query: OrderQuery = { user: userId };
+    const query: OrderQuery = { user: userId, isVisible: true };
     if (status) {
       query.orderStatus = status;
     }
@@ -881,13 +1070,16 @@ export class OrderService {
     return { orders: mappedOrders, nextCursor };
   }
 
-  // Get all orders for admin with cursor pagination and filter by status
+  /**
+   * Método de paginación por cursor - Deprecated
+   * @deprecated Considera usar getAllOrdersByPage para mejor performance
+   */
   public async getAllOrders(
     cursor: string | null = null,
     limit: number = 10,
     status?: OrderStatus,
   ): Promise<{ orders: OrderResponseDto[]; nextCursor: string | null }> {
-    const query: OrderQuery = {};
+    const query: OrderQuery = { isVisible: true };
 
     if (status) {
       query.orderStatus = status;
@@ -920,6 +1112,333 @@ export class OrderService {
         : null;
 
     return { orders: mappedOrders, nextCursor };
+  }
+
+  /**
+   * Obtiene el conteo de órdenes por cada estado de OrderStatus
+   * Método optimizado que usa aggregation para agrupar por estado
+   */
+  public async getOrdersCount(): Promise<Record<OrderStatus, number>> {
+    try {
+      // Inicializar objeto con todos los estados en 0
+      const statusCounts: Record<OrderStatus, number> = {
+        [OrderStatus.Processing]: 0,
+        [OrderStatus.OnHold]: 0,
+        [OrderStatus.PendingPayment]: 0,
+        [OrderStatus.Completed]: 0,
+        [OrderStatus.Cancelled]: 0,
+        [OrderStatus.Refunded]: 0,
+      };
+
+      // Usar aggregation para contar por estado
+      const aggregationResult = await Order.aggregate([
+        {
+          $match: {
+            isVisible: true,
+          },
+        },
+        {
+          $group: {
+            _id: '$orderStatus',
+            count: { $sum: 1 },
+          },
+        },
+      ]); // Actualizar el objeto con los resultados
+      aggregationResult.forEach((result) => {
+        if (result._id in statusCounts) {
+          statusCounts[result._id as OrderStatus] = result.count;
+        }
+      });
+
+      return statusCounts;
+    } catch (error) {
+      logger.error('Error al obtener conteo de órdenes por estado', { error });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener conteo de órdenes por estado.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
+   * Obtiene solo los metadatos de paginación para todas las órdenes sin cargar las órdenes
+   * Método optimizado que usa la nueva arquitectura centralizada
+   */
+  public async getAllOrdersPaginationInfo(
+    limit: number = 10,
+    status?: OrderStatus,
+  ): Promise<Omit<PaginationMetadata, 'nextCursor' | 'previousCursor' | 'itemsInCurrentPage'>> {
+    try {
+      const query: OrderQuery = { isVisible: true };
+      if (status) {
+        query.orderStatus = status;
+      }
+
+      // Obtener total count
+      const totalCount = await Order.countDocuments(query);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      return {
+        totalCount,
+        totalPages,
+        currentPage: 1,
+        hasNextPage: totalPages > 1,
+        hasPreviousPage: false,
+        limit,
+      };
+    } catch (error) {
+      logger.error('Error al obtener información de paginación de órdenes', {
+        error,
+        limit,
+        status,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener información de paginación de órdenes.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
+   * Obtiene órdenes para una página específica por número
+   * Método optimizado que usa la nueva arquitectura centralizada
+   */
+  public async getAllOrdersByPage(
+    page: number = 1,
+    limit: number = 10,
+    status?: OrderStatus,
+  ): Promise<{ orders: OrderResponseDto[]; pagination: PaginationMetadata }> {
+    try {
+      if (page < 1) {
+        throw new AppError('El número de página debe ser mayor a 0', 400, 'fail', false);
+      }
+
+      const query: OrderQuery = { isVisible: true };
+      if (status) {
+        query.orderStatus = status;
+      }
+
+      // Calcular skip para la página específica
+      const skip = (page - 1) * limit;
+
+      // Obtener total count
+      const totalCount = await Order.countDocuments(query);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      // Validar que la página solicitada existe
+      if (page > totalPages && totalCount > 0) {
+        throw new AppError(`La página ${page} no existe. Máximo: ${totalPages}`, 404, 'fail', false);
+      }
+
+      // Obtener órdenes con skip y limit
+      const orders = await Order.find(query)
+        .populate(ORDER_POPULATE)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit + 1) // +1 para determinar si hay siguiente página
+        .lean();
+
+      const hasNextPage = orders.length > limit;
+      const actualOrders = hasNextPage ? orders.slice(0, limit) : orders;
+      const itemsInCurrentPage = actualOrders.length;
+
+      // Mapear órdenes a DTOs
+      const mappedOrders = actualOrders.map((order) => this.mapOrderToResponseDto(order as unknown as IOrderDocument));
+
+      // Calcular cursors para compatibilidad con navegación cursor-based
+      const lastOrder = actualOrders[actualOrders.length - 1] as {
+        _id: Types.ObjectId;
+        createdAt: Date;
+      };
+      const nextCursor =
+        hasNextPage && actualOrders.length > 0 ? `${lastOrder.createdAt.getTime()}_${lastOrder._id.toString()}` : null;
+
+      // Para previous cursor, calcular el ID del primer elemento de la página anterior
+      let previousCursor: string | null = null;
+      if (page > 1) {
+        const previousSkip = Math.max(0, (page - 2) * limit);
+        const previousPageOrder = await Order.findOne(query)
+          .sort({ createdAt: -1, _id: -1 })
+          .skip(previousSkip)
+          .select('_id createdAt')
+          .lean();
+        previousCursor = previousPageOrder
+          ? `${previousPageOrder.createdAt.getTime()}_${previousPageOrder._id.toString()}`
+          : null;
+      }
+
+      const pagination: PaginationMetadata = {
+        totalCount,
+        totalPages,
+        currentPage: page,
+        hasNextPage,
+        hasPreviousPage: page > 1,
+        nextCursor,
+        previousCursor,
+        limit,
+        itemsInCurrentPage,
+      };
+
+      return {
+        orders: mappedOrders,
+        pagination,
+      };
+    } catch (error) {
+      logger.error('Error al obtener órdenes por página', {
+        error,
+        page,
+        limit,
+        status,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener órdenes por página.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
+   * Busca órdenes basándose en criterios específicos
+   * Por ahora soporta búsqueda por usuario, diseñado para ser extensible
+   * Incluye paginación para manejar grandes volúmenes de resultados
+   * @param searchCriteria - Criterios de búsqueda y paginación
+   * @returns Órdenes que coinciden con los criterios, paginación y metadatos
+   */
+  public async searchOrders(searchCriteria: SearchOrdersDto): Promise<SearchOrdersResultDto> {
+    try {
+      // Validar que se proporcione al menos un criterio de búsqueda
+      if (!searchCriteria.userId) {
+        throw new AppError('Debe proporcionar al menos un criterio de búsqueda', 400, 'fail', false);
+      }
+
+      // Parámetros de paginación con valores por defecto
+      const page = searchCriteria.page && searchCriteria.page > 0 ? searchCriteria.page : 1;
+      const limit = searchCriteria.limit && searchCriteria.limit > 0 ? searchCriteria.limit : 10;
+
+      // Validar límite máximo razonable
+      if (limit > 100) {
+        throw new AppError('El límite máximo de resultados por página es 100', 400, 'fail', false);
+      }
+
+      // Construir query dinámicamente basado en los criterios
+      const query: OrderQuery = { isVisible: true };
+
+      // Filtro por usuario
+      if (searchCriteria.userId) {
+        // Validar que el userId sea un ObjectId válido
+        let userObjectId: Types.ObjectId;
+        try {
+          userObjectId = new Types.ObjectId(searchCriteria.userId);
+        } catch (_error) {
+          throw new AppError('El ID de usuario proporcionado no es válido', 400, 'fail', false);
+        }
+
+        // Verificar que el usuario existe
+        const userExists = await User.findById(userObjectId).select('_id').lean();
+        if (!userExists) {
+          throw new AppError('El usuario especificado no existe', 404, 'fail', false);
+        }
+
+        query.user = userObjectId;
+      }
+
+      // Futuros filtros se agregarían aquí:
+      // if (searchCriteria.orderStatus) {
+      //   query.orderStatus = searchCriteria.orderStatus;
+      // }
+      // if (searchCriteria.orderNumber) {
+      //   query.orderNumber = searchCriteria.orderNumber;
+      // }
+
+      // Calcular skip para paginación
+      const skip = (page - 1) * limit;
+
+      // Obtener total count
+      const totalCount = await Order.countDocuments(query);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      // Validar que la página solicitada existe
+      if (page > totalPages && totalCount > 0) {
+        throw new AppError(`La página ${page} no existe. Máximo: ${totalPages}`, 404, 'fail', false);
+      }
+
+      // Ejecutar búsqueda con populate y paginación
+      const orders = await Order.find(query)
+        .populate(ORDER_POPULATE)
+        .sort({ createdAt: -1, _id: -1 })
+        .skip(skip)
+        .limit(limit + 1) // +1 para determinar si hay siguiente página
+        .lean();
+
+      const hasNextPage = orders.length > limit;
+      const actualOrders = hasNextPage ? orders.slice(0, limit) : orders;
+      const itemsInCurrentPage = actualOrders.length;
+
+      // Mapear órdenes a DTOs
+      const mappedOrders = actualOrders.map((order) => this.mapOrderToResponseDto(order as unknown as IOrderDocument));
+
+      // Calcular cursors para compatibilidad con navegación cursor-based
+      const lastOrder = actualOrders[actualOrders.length - 1] as
+        | {
+            _id: Types.ObjectId;
+            createdAt: Date;
+          }
+        | undefined;
+      const nextCursor =
+        hasNextPage && lastOrder ? `${lastOrder.createdAt.getTime()}_${lastOrder._id.toString()}` : null;
+
+      // Para previous cursor, calcular el ID del primer elemento de la página anterior
+      let previousCursor: string | null = null;
+      if (page > 1) {
+        const previousSkip = Math.max(0, (page - 2) * limit);
+        const previousPageOrder = await Order.findOne(query)
+          .sort({ createdAt: -1, _id: -1 })
+          .skip(previousSkip)
+          .select('_id createdAt')
+          .lean();
+        previousCursor = previousPageOrder
+          ? `${previousPageOrder.createdAt.getTime()}_${previousPageOrder._id.toString()}`
+          : null;
+      }
+
+      const pagination: PaginationMetadata = {
+        totalCount,
+        totalPages,
+        currentPage: page,
+        hasNextPage,
+        hasPreviousPage: page > 1,
+        nextCursor,
+        previousCursor,
+        limit,
+        itemsInCurrentPage,
+      };
+
+      logger.info('Búsqueda de órdenes completada exitosamente', {
+        searchCriteria,
+        totalCount,
+        page,
+        itemsInCurrentPage,
+      });
+
+      return {
+        orders: mappedOrders,
+        pagination,
+        searchCriteria,
+      };
+    } catch (error) {
+      logger.error('Error al buscar órdenes', {
+        error,
+        searchCriteria,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al buscar órdenes.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
   }
 
   /**
@@ -1497,6 +2016,10 @@ export class OrderService {
   /**
    * Procesa las actualizaciones de items de la orden
    * Valida las acciones y ejecuta los cambios correspondientes
+   *
+   * ⚠️ IMPORTANTE: Los cambios en items NO afectan reembolsos aquí.
+   * El método updateOrder() llama a recalculateOrderTotals() después de este método,
+   * que recalculará y reaplicará automáticamente cualquier reembolso existente.
    */
   private async processOrderItemUpdates(
     order: IOrderDocument,
@@ -1643,6 +2166,9 @@ export class OrderService {
       contributionMarginUSD,
       cogsUSD,
     } as IOrderItemDocument);
+
+    // Recalcular itemsCount
+    order.itemsCount = this.calculateItemsCountFromDocument(order.items);
   }
 
   /**
@@ -1714,6 +2240,9 @@ export class OrderService {
     item.subTotal = item.priceUSDAtPurchase * item.quantity;
     item.contributionMarginUSD = (item.priceUSDAtPurchase - item.costUSDAtPurchase) * item.quantity;
     item.cogsUSD = item.costUSDAtPurchase * item.quantity;
+
+    // Recalcular itemsCount
+    order.itemsCount = this.calculateItemsCountFromDocument(order.items);
   }
 
   /**
@@ -1781,6 +2310,9 @@ export class OrderService {
     item.subTotal = item.priceUSDAtPurchase * item.quantity;
     item.contributionMarginUSD = (item.priceUSDAtPurchase - item.costUSDAtPurchase) * item.quantity;
     item.cogsUSD = item.costUSDAtPurchase * item.quantity;
+
+    // Recalcular itemsCount
+    order.itemsCount = this.calculateItemsCountFromDocument(order.items);
   }
 
   /**
@@ -1869,7 +2401,7 @@ export class OrderService {
           userId,
         );
 
-        logger.info('Stock devuelto por disminución de cantidad', {
+        logger.info('Stock devuelto por reducción de cantidad', {
           orderId: order._id,
           orderNumber: order.orderNumber,
           orderStatus: order.orderStatus,
@@ -1895,6 +2427,9 @@ export class OrderService {
     item.subTotal = item.priceUSDAtPurchase * item.quantity;
     item.contributionMarginUSD = (item.priceUSDAtPurchase - item.costUSDAtPurchase) * item.quantity;
     item.cogsUSD = item.costUSDAtPurchase * item.quantity;
+
+    // Recalcular itemsCount
+    order.itemsCount = this.calculateItemsCountFromDocument(order.items);
   }
 
   /**
@@ -1947,6 +2482,9 @@ export class OrderService {
 
     // Eliminar el item del array
     order.items.splice(itemIndex, 1);
+
+    // Recalcular itemsCount
+    order.itemsCount = this.calculateItemsCountFromDocument(order.items);
   }
 
   /**
@@ -2147,44 +2685,123 @@ export class OrderService {
         cogsUSD: item.cogsUSD,
         userId: userId?.toString(),
       });
+
+      // Recalcular itemsCount si cambió la cantidad
+      if (update.quantity !== undefined && update.quantity !== oldQuantity) {
+        order.itemsCount = this.calculateItemsCountFromDocument(order.items);
+      }
     }
   }
 
   /**
-   * Recalcula todos los totales de la orden
-   * Calcula subtotal, ganancias, COGS, total final y totalAmountARS
+   * Recalcula todos los totales de la orden desde los items base
+   * 📊 Flujo de cálculo:
+   * 1. Suma totales desde items: subTotal, contributionMargin, COGS
+   * 2. Si existe reembolso, aplica descuento:
+   *    - finalSubTotal = baseSubTotal - refundAmount
+   *    - finalMargin = baseMargin - refundAmount (puede ser negativo)
+   *    - COGS permanece sin cambios
+   * 3. Recalcula gastos bancarios basados en el nuevo subTotal
+   * 4. Actualiza totalAmountARS con la tasa de cambio actual
+   *
+   * ⚠️ IMPORTANTE: Este método es el ÚNICO punto de cálculo de totales.
+   * Todos los cambios (items, reembolsos, método de pago) deben usar este método.
+   *
+   * @param order - Documento de la orden a recalcular
    */
   private async recalculateOrderTotals(order: IOrderDocument): Promise<void> {
-    // Calcular subtotal
-    order.subTotal = order.items.reduce((total, item) => total + item.subTotal, 0);
+    // 1️⃣ CALCULAR TOTALES BASE DESDE ITEMS (valores originales)
+    const baseSubTotal = order.items.reduce((total, item) => total + item.subTotal, 0);
+    const baseContributionMarginUSD = order.items.reduce((total, item) => total + item.contributionMarginUSD, 0);
+    const baseCOGS = order.items.reduce((total, item) => total + item.cogsUSD, 0);
 
-    // Calcular ganancia total
-    order.totalContributionMarginUSD = order.items.reduce((total, item) => total + item.contributionMarginUSD, 0);
+    // Calcular total de unidades físicas
+    order.itemsCount = this.calculateItemsCountFromDocument(order.items);
 
-    // Calcular total COGS
-    order.totalCogsUSD = order.items.reduce((total, item) => total + item.cogsUSD, 0);
+    // 2️⃣ VERIFICAR SI EXISTE REEMBOLSO Y APLICARLO
+    let finalSubTotal = baseSubTotal;
+    let finalContributionMarginUSD = baseContributionMarginUSD;
+    let finalCOGS = baseCOGS;
 
-    // Recalcular totales con gastos bancarios
+    if (order.refund) {
+      // Recalcular el monto del reembolso basado en el nuevo subtotal base
+      // Esto es crítico cuando los items cambian (agregar/quitar productos)
+      // - Si es 'fixed': usa el monto fijo (máx. baseSubTotal)
+      // - Si es 'percentage': calcula el % del nuevo baseSubTotal
+      const refundAmount = this.calculateRefundAmount(baseSubTotal, {
+        type: order.refund.type,
+        amount: order.refund.amount,
+      });
+
+      // Actualizar el monto aplicado (puede cambiar si cambiaron los items)
+      order.refund.appliedAmount = refundAmount;
+
+      // 🎯 ACTUALIZAR originalSubTotal cuando cambian los items
+      // Esto asegura que el frontend siempre muestre el precio correcto "antes del descuento"
+      // Ejemplo: Si items cambian de $30 → $40, originalSubTotal debe ser $40 (no $30)
+      order.refund.originalSubTotal = baseSubTotal;
+
+      // 💰 LÓGICA DE REEMBOLSO:
+      // El reembolso es un DESCUENTO sobre el precio de venta (subTotal)
+      // NO es una reconstrucción desde costos
+      finalSubTotal = baseSubTotal - refundAmount;
+
+      // El margen de contribución absorbe el impacto del reembolso
+      // Puede ser NEGATIVO si el reembolso excede el margen (pérdida)
+      // Ejemplo: margin $14.80 - refund $18 = -$3.20 (pérdida neta)
+      finalContributionMarginUSD = baseContributionMarginUSD - refundAmount;
+
+      // ⚠️ COGS NO cambia: son costos reales ya incurridos
+      // El reembolso afecta la ganancia, no el costo de los productos
+      finalCOGS = baseCOGS;
+
+      logger.info('Reembolso aplicado automáticamente durante recálculo', {
+        orderId: order._id.toString(),
+        orderNumber: order.orderNumber,
+        refundType: order.refund.type,
+        refundAmount: order.refund.amount,
+        appliedAmount: refundAmount,
+        baseSubTotal,
+        finalSubTotal,
+        baseContributionMargin: baseContributionMarginUSD,
+        finalContributionMargin: finalContributionMarginUSD,
+        cogsUnchanged: baseCOGS,
+      });
+    }
+
+    // 3️⃣ ASIGNAR TOTALES FINALES
+    order.subTotal = finalSubTotal;
+    order.totalContributionMarginUSD = finalContributionMarginUSD;
+    order.totalCogsUSD = finalCOGS;
+
+    // 4️⃣ RECALCULAR GASTOS BANCARIOS Y TOTAL AMOUNT
     const { bankTransferExpense, totalAmount } = this.calculateTotals(order.subTotal, order.paymentMethod);
 
     // Asignar bankTransferExpense solo si existe, sino lo deja como undefined
     if (bankTransferExpense !== undefined) {
       order.bankTransferExpense = bankTransferExpense;
+    } else {
+      order.set('bankTransferExpense', undefined);
     }
     order.totalAmount = totalAmount;
 
-    // Recalcular totalAmountARS con el valor actual del dólar
+    // 5️⃣ RECALCULAR TOTAL AMOUNT ARS CON VALOR ACTUAL DEL DÓLAR
     try {
       const dollar = await Dollar.findOne();
       if (dollar) {
-        order.totalAmountARS = order.totalAmount * dollar.value;
+        order.exchangeRate = dollar.value;
+        order.totalAmountARS = order.totalAmount * order.exchangeRate;
 
-        logger.info('Total ARS recalculado', {
+        logger.info('Totales recalculados completamente', {
           orderId: order._id.toString(),
           orderNumber: order.orderNumber,
+          hasRefund: !!order.refund,
+          baseSubTotal: baseSubTotal,
+          finalSubTotal: order.subTotal,
           totalAmountUSD: order.totalAmount,
-          dollarValue: dollar.value,
+          exchangeRate: order.exchangeRate,
           totalAmountARS: order.totalAmountARS,
+          itemsCount: order.itemsCount,
         });
       } else {
         logger.warn('No se pudo recalcular totalAmountARS: valor del dólar no encontrado', {
@@ -2281,11 +2898,45 @@ export class OrderService {
     return { buffer, orderNumber: order.orderNumber };
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  // 🎁 SISTEMA DE REEMBOLSOS (REFUNDS)
+  // ═══════════════════════════════════════════════════════════════════════════════════
+  //
+  // 🏗️ ARQUITECTURA:
+  // El sistema de reembolsos está completamente integrado con recalculateOrderTotals().
+  // Esto garantiza que cualquier cambio en la orden (items, método de pago, etc.)
+  // respete automáticamente el reembolso aplicado.
+  //
+  // 📊 FLUJO DE APLICACIÓN:
+  // 1. applyRefund(): Agrega refund → recalculateOrderTotals() → Aplica descuento
+  // 2. cancelRefund(): Elimina refund → recalculateOrderTotals() → Restaura valores
+  // 3. updateOrder() con items: Modifica items → recalculateOrderTotals() → Reaplica refund
+  //
+  // 💡 VENTAJAS:
+  // ✅ Un solo punto de cálculo (recalculateOrderTotals)
+  // ✅ Sin lógica duplicada
+  // ✅ Integridad financiera garantizada
+  // ✅ Reembolsos se ajustan automáticamente cuando cambian items
+  //
+  // 📐 LÓGICA DE CÁLCULO:
+  // - subTotal: Se resta el monto del reembolso directamente
+  // - contributionMargin: Absorbe el impacto del reembolso (puede ser negativo)
+  // - COGS: NO cambia (costos ya incurridos)
+  // ═══════════════════════════════════════════════════════════════════════════════════
+
   /**
    * Calcula el monto de reembolso basado en el tipo y cantidad especificada
-   * @param subTotal - Subtotal original de la orden
+   *
+   * 💵 Tipos de reembolso:
+   * - 'fixed': Monto fijo en USD (limitado al subtotal para evitar negativos)
+   * - 'percentage': Porcentaje del subtotal (0-100%)
+   *
+   * 🔄 Este método se llama en cada recálculo cuando hay items modificados
+   * para ajustar proporcionalmente el reembolso al nuevo subtotal
+   *
+   * @param subTotal - Subtotal actual de la orden (puede cambiar si se modifican items)
    * @param refundData - Datos del reembolso (tipo y cantidad)
-   * @returns Monto aplicado del reembolso en USD
+   * @returns Monto aplicado del reembolso en USD (redondeado a 2 decimales)
    */
   private calculateRefundAmount(subTotal: number, refundData: RefundDto): number {
     if (refundData.type === 'fixed') {
@@ -2299,12 +2950,23 @@ export class OrderService {
   }
 
   /**
-   * Aplica un reembolso a una orden completada
-   * Recalcula automáticamente el subtotal, gastos bancarios y total
+   * Aplica un reembolso a una orden
+   *
+   * 📋 Proceso:
+   * 1. Valida que la orden no tenga un reembolso previo
+   * 2. Calcula el monto del reembolso (fixed o percentage)
+   * 3. Agrega el objeto refund a la orden
+   * 4. Llama a recalculateOrderTotals() que aplica el descuento automáticamente
+   * 5. Guarda y retorna la orden actualizada
+   *
+   * � Ventaja de esta estrategia:
+   * Al agregar el reembolso ANTES de recalcular, garantizamos que cualquier
+   * modificación futura de items respetará el reembolso automáticamente.
+   *
    * @param orderId - ID de la orden
-   * @param refundData - Datos del reembolso
-   * @param processedBy - Usuario que procesa el reembolso
-   * @returns Resultado detallado del reembolso aplicado
+   * @param refundData - Datos del reembolso (tipo: 'fixed'|'percentage', amount, reason opcional)
+   * @param processedBy - Usuario que procesa el reembolso (opcional)
+   * @returns Resultado con orden actualizada y detalles del reembolso aplicado
    */
   public async applyRefund(
     orderId: Types.ObjectId,
@@ -2328,8 +2990,9 @@ export class OrderService {
         const originalSubTotal = order.subTotal;
         const originalBankTransferExpense = order.bankTransferExpense;
         const originalTotalAmount = order.totalAmount;
+        const originalContributionMargin = order.totalContributionMarginUSD;
 
-        // Calcular el monto del reembolso
+        // Calcular el monto del reembolso basado en los valores actuales
         const refundAmount = this.calculateRefundAmount(order.subTotal, refundData);
 
         // Validar que el reembolso sea válido
@@ -2341,73 +3004,41 @@ export class OrderService {
           throw new AppError('El monto del reembolso no puede ser mayor al subtotal de la orden', 400, 'fail');
         }
 
-        // Lógica correcta de reembolso:
-        // 1. El reembolso se descuenta primero del margen de contribución
-        // 2. Si el reembolso excede el margen, el exceso se descuenta de COGS (pero COGS normalmente no se toca)
-        // 3. El nuevo subtotal = totalCogsUSD + nuevo margen de contribución
-
-        const originalContributionMargin = order.totalContributionMarginUSD;
-        const originalCogs = order.totalCogsUSD;
-
-        // Descontar el reembolso directamente del margen de contribución
-        const newContributionMargin = Math.max(originalContributionMargin - refundAmount, 0);
-
-        // Calcular el nuevo subtotal basado en COGS + nuevo margen
-        // (COGS permanece sin cambios ya que representa costos reales ya incurridos)
-        const newSubTotal = originalCogs + newContributionMargin;
-
-        // Recalcular gastos bancarios basado en el nuevo subtotal
-        const { bankTransferExpense: newBankTransferExpense, totalAmount: newTotalAmount } = this.calculateTotals(
-          newSubTotal,
-          order.paymentMethod,
-        );
-
-        // Actualizar la orden con los nuevos valores
-        order.subTotal = newSubTotal;
-        if (newBankTransferExpense !== undefined) {
-          order.bankTransferExpense = newBankTransferExpense;
-        } else {
-          // Usar set para remover el campo cuando es undefined
-          order.set('bankTransferExpense', undefined);
-        }
-        order.totalAmount = newTotalAmount;
-        order.totalContributionMarginUSD = newContributionMargin;
-        // totalCogsUSD permanece sin cambios
-
-        // Recalcular totalAmountARS con el valor actual del dólar
-        const dollar = await Dollar.findOne().session(session);
-        if (dollar) {
-          order.totalAmountARS = newTotalAmount * dollar.value;
-        }
-
-        // Agregar información del reembolso
+        // 🎯 ESTRATEGIA CENTRALIZADA:
+        // 1. Agregar el reembolso a la orden PRIMERO
+        // 2. recalculateOrderTotals() detectará automáticamente el refund y aplicará el descuento
+        // 3. Esto garantiza consistencia en todos los escenarios (items cambiados, método de pago, etc.)
         order.refund = {
           type: refundData.type,
           amount: refundData.amount,
-          appliedAmount: refundAmount,
+          appliedAmount: refundAmount, // Se actualizará en recalculateOrderTotals si es necesario
+          originalSubTotal: order.subTotal, // Guardar subtotal original
           ...(refundData.reason && { reason: refundData.reason }),
           processedAt: new Date(),
           ...(processedBy && { processedBy }),
         };
 
+        // Recalcular todos los totales (aplicará el reembolso automáticamente)
+        await this.recalculateOrderTotals(order);
+
         // Guardar la orden
         await order.save({ session });
 
-        logger.info('Reembolso aplicado exitosamente', {
+        logger.info('Reembolso aplicado exitosamente usando lógica centralizada', {
           orderId: order._id.toString(),
           orderNumber: order.orderNumber,
-          orderStatus: order.orderStatus, // Estado actual (no modificado)
+          orderStatus: order.orderStatus,
           refundType: refundData.type,
           refundAmount: refundData.amount,
-          appliedAmount: refundAmount,
+          appliedAmount: order.refund.appliedAmount,
           originalSubTotal,
-          newSubTotal,
+          newSubTotal: order.subTotal,
           originalTotalAmount,
-          newTotalAmount,
+          newTotalAmount: order.totalAmount,
           newTotalAmountARS: order.totalAmountARS,
           originalContributionMargin,
           newContributionMargin: order.totalContributionMarginUSD,
-          cogsUnchanged: order.totalCogsUSD, // COGS permanece igual
+          cogsUnchanged: order.totalCogsUSD,
           processedBy: processedBy?.toString(),
         });
 
@@ -2417,22 +3048,22 @@ export class OrderService {
         return {
           success: true,
           order: populatedOrder,
-          message: `Reembolso de $${refundAmount.toFixed(2)} USD aplicado exitosamente`,
+          message: `Reembolso de $${order.refund.appliedAmount.toFixed(2)} USD aplicado exitosamente`,
           refundDetails: {
             originalSubTotal,
-            refundAmount,
-            newSubTotal,
+            refundAmount: order.refund.appliedAmount,
+            newSubTotal: order.subTotal,
             ...(originalBankTransferExpense !== undefined && {
               originalBankTransferExpense,
             }),
-            ...(newBankTransferExpense !== undefined && {
-              newBankTransferExpense,
+            ...(order.bankTransferExpense !== undefined && {
+              newBankTransferExpense: order.bankTransferExpense,
             }),
             originalTotalAmount,
-            newTotalAmount,
+            newTotalAmount: order.totalAmount,
             originalContributionMarginUSD: originalContributionMargin,
             newContributionMarginUSD: order.totalContributionMarginUSD,
-            cogsUSD: order.totalCogsUSD, // COGS permanece sin cambios
+            cogsUSD: order.totalCogsUSD,
           },
         };
       });
@@ -2461,11 +3092,26 @@ export class OrderService {
   }
 
   /**
-   * Cancela/elimina un reembolso de una orden
-   * Restaura los valores originales recalculando desde los items base para evitar corrupción financiera
+   * Cancela y elimina un reembolso de una orden
+   *
+   * 📋 Proceso:
+   * 1. Valida que la orden tenga un reembolso aplicado
+   * 2. Guarda valores actuales para el resultado
+   * 3. Elimina el objeto refund de la orden
+   * 4. Llama a recalculateOrderTotals() que restaura totales desde items base
+   * 5. Guarda y retorna la orden restaurada
+   *
+   * 🔄 Restauración automática:
+   * Al eliminar el reembolso ANTES de recalcular, el método recalculateOrderTotals()
+   * detecta la ausencia de refund y calcula totales desde items originales sin
+   * necesidad de lógica manual compleja.
+   *
+   * ⚠️ Los valores restaurados son siempre los correctos porque se calculan
+   * directamente desde los items, evitando cualquier corrupción de datos.
+   *
    * @param orderId - ID de la orden
-   * @param cancelledBy - Usuario que cancela el reembolso
-   * @returns Resultado detallado de la cancelación del reembolso
+   * @param cancelledBy - Usuario que cancela el reembolso (opcional)
+   * @returns Resultado con orden restaurada y detalles de la cancelación
    */
   public async cancelRefund(orderId: Types.ObjectId, cancelledBy?: Types.ObjectId): Promise<CancelRefundResultDto> {
     try {
@@ -2488,70 +3134,19 @@ export class OrderService {
         const currentContributionMarginUSD = order.totalContributionMarginUSD;
         const cancelledRefundAmount = order.refund.appliedAmount;
 
-        // 🔧 LÓGICA CORREGIDA: Recalcular desde los items originales
-        // En lugar de sumar al margen actual (potencialmente corrupto),
-        // recalculamos todo desde los valores base de los items
-
-        // Recalcular totales originales desde los items (valores verdaderos)
-        const originalSubTotalFromItems = order.items.reduce((total, item) => total + item.subTotal, 0);
-        const originalCogsFromItems = order.items.reduce((total, item) => total + item.cogsUSD, 0);
-        const originalContributionMarginFromItems = order.items.reduce(
-          (total, item) => total + item.contributionMarginUSD,
-          0,
-        );
-
-        // Validación de integridad: Verificar que los valores calculados sean consistentes
-        const expectedSubTotal = originalCogsFromItems + originalContributionMarginFromItems;
-        if (Math.abs(originalSubTotalFromItems - expectedSubTotal) > 0.01) {
-          logger.warn('Inconsistencia detectada en valores de items', {
-            orderId: order._id.toString(),
-            orderNumber: order.orderNumber,
-            originalSubTotalFromItems,
-            expectedSubTotal: expectedSubTotal,
-            originalCogsFromItems,
-            originalContributionMarginFromItems,
-          });
-        }
-
-        // Usar los valores más precisos (suma directa de items)
-        const restoredSubTotal = originalSubTotalFromItems;
-        const restoredContributionMargin = originalContributionMarginFromItems;
-        const restoredCogs = originalCogsFromItems;
-
-        // Validación de seguridad: El subtotal restaurado no debe exceder la suma real de items
-        if (restoredSubTotal < 0) {
-          throw new AppError('Error en el cálculo: El subtotal restaurado es negativo', 500, 'error');
-        }
-
-        // Recalcular gastos bancarios basado en el subtotal restaurado
-        const { bankTransferExpense: restoredBankTransferExpense, totalAmount: restoredTotalAmount } =
-          this.calculateTotals(restoredSubTotal, order.paymentMethod);
-
-        // Actualizar la orden con los valores originales restaurados
-        order.subTotal = restoredSubTotal;
-        order.totalContributionMarginUSD = restoredContributionMargin;
-        order.totalCogsUSD = restoredCogs; // Asegurar consistencia
-
-        if (restoredBankTransferExpense !== undefined) {
-          order.bankTransferExpense = restoredBankTransferExpense;
-        } else {
-          order.set('bankTransferExpense', undefined);
-        }
-        order.totalAmount = restoredTotalAmount;
-
-        // Recalcular totalAmountARS con el valor actual del dólar
-        const dollar = await Dollar.findOne().session(session);
-        if (dollar) {
-          order.totalAmountARS = restoredTotalAmount * dollar.value;
-        }
-
-        // Eliminar la información del reembolso
+        // 🎯 ESTRATEGIA CENTRALIZADA:
+        // 1. Eliminar el reembolso de la orden PRIMERO
+        // 2. recalculateOrderTotals() NO detectará refund y calculará totales desde items base
+        // 3. Los valores se restauran automáticamente sin lógica manual compleja
         order.set('refund', undefined);
+
+        // Recalcular todos los totales (restaurará valores originales automáticamente)
+        await this.recalculateOrderTotals(order);
 
         // Guardar la orden
         await order.save({ session });
 
-        logger.info('Reembolso cancelado exitosamente con recálculo desde items originales', {
+        logger.info('Reembolso cancelado exitosamente usando lógica centralizada', {
           orderId: order._id.toString(),
           orderNumber: order.orderNumber,
           orderStatus: order.orderStatus,
@@ -2561,16 +3156,11 @@ export class OrderService {
           originalTotalAmount: currentTotalAmount,
           originalContributionMargin: currentContributionMarginUSD,
           // Valores restaurados (recalculados desde items)
-          restoredSubTotal,
-          restoredTotalAmount,
-          restoredContributionMargin,
-          restoredCogs,
+          restoredSubTotal: order.subTotal,
+          restoredTotalAmount: order.totalAmount,
+          restoredContributionMargin: order.totalContributionMarginUSD,
+          restoredCogs: order.totalCogsUSD,
           restoredTotalAmountARS: order.totalAmountARS,
-          // Validación de integridad
-          originalSubTotalFromItems,
-          originalCogsFromItems,
-          originalContributionMarginFromItems,
-          integrityCheck: Math.abs(restoredSubTotal - (restoredCogs + restoredContributionMargin)) < 0.01,
           cancelledBy: cancelledBy?.toString(),
         });
 
@@ -2583,19 +3173,19 @@ export class OrderService {
           message: `Reembolso de $${cancelledRefundAmount.toFixed(2)} USD cancelado exitosamente`,
           refundCancellationDetails: {
             cancelledRefundAmount,
-            originalSubTotal: currentSubTotal, // SubTotal antes de cancelar (con reembolso aplicado)
-            restoredSubTotal,
+            originalSubTotal: currentSubTotal,
+            restoredSubTotal: order.subTotal,
             ...(currentBankTransferExpense !== undefined && {
               originalBankTransferExpense: currentBankTransferExpense,
             }),
-            ...(restoredBankTransferExpense !== undefined && {
-              restoredBankTransferExpense,
+            ...(order.bankTransferExpense !== undefined && {
+              restoredBankTransferExpense: order.bankTransferExpense,
             }),
-            originalTotalAmount: currentTotalAmount, // Total antes de cancelar (con reembolso aplicado)
-            restoredTotalAmount,
+            originalTotalAmount: currentTotalAmount,
+            restoredTotalAmount: order.totalAmount,
             originalContributionMarginUSD: currentContributionMarginUSD,
-            restoredContributionMarginUSD: restoredContributionMargin,
-            cogsUSD: restoredCogs,
+            restoredContributionMarginUSD: order.totalContributionMarginUSD,
+            cogsUSD: order.totalCogsUSD,
           },
         };
       });
@@ -2715,12 +3305,39 @@ export class OrderService {
       }).session(session);
 
       for (const order of ordersToUpdate) {
-        order.totalAmountARS = order.totalAmount * dollar.value;
+        order.exchangeRate = dollar.value;
+        order.totalAmountARS = order.totalAmount * order.exchangeRate;
         await order.save({ session });
       }
 
       logger.info('Órdenes actualizadas con el valor del dólar actual.');
       return null; // Retorna un valor explícito para evitar errores
     });
+  }
+
+  /**
+   * Actualiza el campo itemsCount en todas las órdenes existentes
+   * Útil para migraciones iniciales después de agregar el campo
+   * @returns Número de órdenes actualizadas
+   */
+  public async updateAllOrdersItemsCount(): Promise<number> {
+    const orders = await Order.find({});
+    let updatedCount = 0;
+
+    for (const order of orders) {
+      const expectedCount = this.calculateItemsCountFromDocument(order.items);
+      if (order.itemsCount !== expectedCount) {
+        order.itemsCount = expectedCount;
+        await order.save();
+        updatedCount++;
+      }
+    }
+
+    logger.info('Migración de itemsCount completada', {
+      totalOrders: orders.length,
+      updatedOrders: updatedCount,
+    });
+
+    return updatedCount;
   }
 }

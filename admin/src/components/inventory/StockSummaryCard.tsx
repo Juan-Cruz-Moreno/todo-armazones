@@ -1,4 +1,5 @@
 import React from "react";
+import Image from "next/image";
 import type { ProductVariantStockSummary } from "../../interfaces/inventory";
 
 interface StockSummaryCardProps {
@@ -62,7 +63,7 @@ export const StockSummaryCard: React.FC<StockSummaryCardProps> = ({
       <h3 className="text-lg font-semibold text-gray-800 mb-4">
         Resumen de Stock
       </h3>
-      
+
       <div className="space-y-4">
         {stockSummary.map((variant) => (
           <div
@@ -70,19 +71,31 @@ export const StockSummaryCard: React.FC<StockSummaryCardProps> = ({
             className="border rounded-lg p-4 hover:shadow-sm transition-shadow"
           >
             <div className="flex justify-between items-start mb-3">
-              <div className="flex-1">
-                <h4 className="font-medium text-gray-900">
-                  Color: {variant.color.name}
-                </h4>
-                <div className="text-sm text-gray-500 mt-1 flex items-center">
-                  <div
-                    className="w-4 h-4 rounded-full border mr-2"
-                    style={{ backgroundColor: variant.color.hex }}
-                  ></div>
-                  ID: {variant.id}
+              <div className="flex-1 flex items-center gap-4">
+                {/* Imagen de la variante */}
+                <div className="flex-shrink-0">
+                  <Image
+                    src={`${process.env.NEXT_PUBLIC_API_URL}/${variant.thumbnail}`}
+                    alt={`Thumbnail de variante ${variant.color.name}`}
+                    width={60}
+                    height={60}
+                    className="rounded-lg object-cover border"
+                  />
+                </div>
+                <div>
+                  <h4 className="font-medium text-gray-900">
+                    Color: {variant.color.name}
+                  </h4>
+                  <div className="text-sm text-gray-500 mt-1 flex items-center">
+                    <div
+                      className="w-4 h-4 rounded-full border mr-2"
+                      style={{ backgroundColor: variant.color.hex }}
+                    ></div>
+                    ID: {variant.id}
+                  </div>
                 </div>
               </div>
-              
+
               <div className="text-right">
                 <span
                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getStockStatusColor(
@@ -101,29 +114,43 @@ export const StockSummaryCard: React.FC<StockSummaryCardProps> = ({
                   {variant.currentStock}
                 </div>
               </div>
-              
+
               <div>
                 <span className="text-gray-600">Costo Promedio:</span>
                 <div className="font-semibold text-gray-900">
                   {formatCurrency(variant.averageCostUSD)}
                 </div>
               </div>
-              
+
+              <div>
+                <span className="text-gray-600">Precio:</span>
+                <div className="font-semibold text-gray-900">
+                  {formatCurrency(variant.priceUSD)}
+                </div>
+              </div>
+
               <div>
                 <span className="text-gray-600">Valor Total:</span>
                 <div className="font-semibold text-gray-900">
                   {formatCurrency(variant.totalValue)}
                 </div>
               </div>
-              
+
               <div>
                 <span className="text-gray-600">Último Movimiento:</span>
                 <div className="text-gray-800">
                   {variant.lastMovement ? (
                     <>
-                      <div className="text-gray-800">{new Date(variant.lastMovement.date).toLocaleDateString("es-AR")}</div>
+                      <div className="text-gray-800">
+                        {new Date(variant.lastMovement.date).toLocaleDateString(
+                          "es-AR"
+                        )}
+                      </div>
                       <div className="text-xs text-gray-700">
-                        {variant.lastMovement.type === "ENTRY" ? "Entrada" : "Salida"}: {variant.lastMovement.quantity}
+                        {variant.lastMovement.type === "ENTRY"
+                          ? "Entrada"
+                          : "Salida"}
+                        : {variant.lastMovement.quantity}
                       </div>
                     </>
                   ) : (
@@ -150,7 +177,9 @@ export const StockSummaryCard: React.FC<StockSummaryCardProps> = ({
                   }`}
                   style={{
                     width: `${Math.min(
-                      (variant.currentStock / Math.max(variant.currentStock, 50)) * 100,
+                      (variant.currentStock /
+                        Math.max(variant.currentStock, 50)) *
+                        100,
                       100
                     )}%`,
                   }}

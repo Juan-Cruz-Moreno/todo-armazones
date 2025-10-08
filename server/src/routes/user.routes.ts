@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { UserController } from '@controllers/user.controller';
 import { checkAdmin, checkSession } from '@middlewares/authMiddleware';
 import { validateRequest } from '@middlewares/validate-request';
-import { updateUserSchema } from 'schemas/user.schema';
+import { updateUserSchema, updateUserAsAdminSchema } from 'schemas/user.schema';
 
 const router: Router = Router();
 const userController: UserController = new UserController();
@@ -18,5 +18,13 @@ router.get('/search', checkAdmin, userController.searchUsers);
 
 // El usuario autenticado puede actualizar sus propios datos
 router.patch('/me', checkSession, validateRequest({ body: updateUserSchema }), userController.updateUser);
+
+// Solo admin puede actualizar cualquier usuario (incluyendo password, role, status)
+router.patch(
+  '/:userId',
+  checkAdmin,
+  validateRequest({ body: updateUserAsAdminSchema }),
+  userController.updateUserAsAdmin,
+);
 
 export default router;

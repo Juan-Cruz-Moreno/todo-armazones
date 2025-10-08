@@ -27,6 +27,7 @@ interface ProductsState {
   paginationInfoLoading: boolean;
   paginationInfoError: string | null;
   lastCreatedProduct: Product | null;
+  productDetail: Product | null;
 }
 
 const initialState: ProductsState = {
@@ -42,6 +43,7 @@ const initialState: ProductsState = {
   paginationInfoLoading: false,
   paginationInfoError: null,
   lastCreatedProduct: null,
+  productDetail: null,
 };
 
 // Fetch products with optional filters and pagination
@@ -149,6 +151,21 @@ export const searchProducts = createAsyncThunk<Product[], { q: string; inStock?:
         url
       );
       return data.data!.products;
+    } catch (err: unknown) {
+      return rejectWithValue(getErrorMessage(err));
+    }
+  }
+);
+
+// Fetch product by slug
+export const fetchProductBySlug = createAsyncThunk<Product, string>(
+  "products/fetchProductBySlug",
+  async (slug, { rejectWithValue }) => {
+    try {
+      const { data } = await axiosInstance.get<
+        ApiResponse<{ product: Product }>
+      >(`/products/${slug}`);
+      return data.data!.product;
     } catch (err: unknown) {
       return rejectWithValue(getErrorMessage(err));
     }
@@ -263,6 +280,9 @@ const productSlice = createSlice({
       state.products = [];
       state.pagination = null;
     },
+    clearProductDetail(state) {
+      state.productDetail = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -343,6 +363,21 @@ const productSlice = createSlice({
         state.searchLoading = false;
         state.searchError = action.payload as string;
       })
+
+      // fetchProductBySlug
+      .addCase(fetchProductBySlug.pending, (state) => {
+        state.productDetail = null;
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchProductBySlug.fulfilled, (state, action) => {
+        state.loading = false;
+        state.productDetail = action.payload;
+      })
+      .addCase(fetchProductBySlug.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
       // createProduct
       .addCase(createProduct.pending, (state) => {
         state.loading = true;
@@ -394,5 +429,5 @@ const productSlice = createSlice({
   },
 });
 
-export const { clearSearchResults, clearBulkUpdateError, resetPagination } = productSlice.actions;
+export const { clearSearchResults, clearBulkUpdateError, resetPagination, clearProductDetail } = productSlice.actions;
 export default productSlice.reducer;

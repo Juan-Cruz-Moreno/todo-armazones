@@ -5,6 +5,10 @@ import { Types } from 'mongoose';
 import { AppError } from '@utils/AppError';
 import logger from '@config/logger';
 
+import * as argon2 from 'argon2';
+import { UpdateUserByAdminRequestDto } from '@dto/user.dto';
+import { UserRole, UserStatus } from '@enums/user.enum';
+
 export class UserService {
   /**
    * Busca un usuario por su email
@@ -229,6 +233,125 @@ export class UserService {
         userId: typeof userId === 'object' && userId?.toString ? userId.toString() : String(userId),
       });
       throw new AppError('Failed to update user', 500, 'error', true);
+    }
+  }
+
+  /**
+   * Actualiza cualquier campo de un usuario (solo para administradores)
+   * @param userId ID del usuario a actualizar
+   * @param updateData Los datos a actualizar (incluyendo password, role, status)
+   */
+  public async updateUserAsAdmin(userId: string, updateData: UpdateUserByAdminRequestDto) {
+    // Validate userId format
+    if (!userId || typeof userId !== 'string') {
+      throw new AppError('Valid user ID is required', 400, 'fail', true);
+    }
+
+    // Allowed fields for admin update
+    const allowedFields: Array<keyof UpdateUserByAdminRequestDto> = [
+      'email',
+      'displayName',
+      'firstName',
+      'lastName',
+      'dni',
+      'cuit',
+      'phone',
+      'password',
+      'role',
+      'status',
+    ];
+
+    const update: Partial<Record<keyof UpdateUserByAdminRequestDto, string | UserRole | UserStatus>> = {};
+
+    for (const key of allowedFields) {
+      const value = updateData[key];
+      if (value !== undefined) {
+        if (key === 'password') {
+          // Skip password here, we'll handle it separately
+          continue;
+        }
+        update[key] = value;
+      }
+    }
+
+    // Handle password separately (needs hashing)
+    if (updateData.password) {
+      if (typeof updateData.password !== 'string' || updateData.password.length < 1) {
+        throw new AppError('Password must be a non-empty string', 400, 'fail', true);
+      }
+      const hashedPassword = await argon2.hash(updateData.password, {
+        type: argon2.argon2id,
+      });
+      update.password = hashedPassword;
+    }
+
+    // No valid fields to update
+    if (Object.keys(update).length === 0) {
+      throw new AppError('No valid fields to update', 400, 'fail', true);
+    }
+
+    // Normalize email if provided
+    if (update.email && typeof update.email === 'string') {
+      update.email = update.email.toLowerCase();
+    }
+
+    try {
+      const updatedUser = await User.findByIdAndUpdate(
+        userId,
+        { $set: update },
+        { new: true, runValidators: true },
+      ).select('-password');
+
+      if (!updatedUser) {
+        throw new AppError('User not found', 404, 'fail', true);
+      }
+
+      logger.info('User updated by admin', {
+        userId: userId,
+        adminUpdatedFields: Object.keys(update),
+      });
+
+      return {
+        id: updatedUser._id.toString(),
+        email: updatedUser.email,
+        displayName: updatedUser.displayName,
+        role: updatedUser.role,
+        status: updatedUser.status,
+        lastLogin: updatedUser.lastLogin,
+        createdAt: updatedUser.createdAt,
+        updatedAt: updatedUser.updatedAt,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        dni: updatedUser.dni,
+        cuit: updatedUser.cuit,
+        phone: updatedUser.phone,
+      };
+    } catch (_err: unknown) {
+      // If it's an AppError, rethrow it
+      if (_err instanceof AppError) {
+        throw _err;
+      }
+
+      // Handle duplicate email error
+      const err = _err as
+        | {
+            code?: number;
+            keyPattern?: Record<string, unknown>;
+            message?: string;
+          }
+        | undefined;
+
+      if (err?.code === 11000 && err?.keyPattern?.email) {
+        throw new AppError('Email already exists', 409, 'fail', true);
+      }
+
+      // Handle validation errors
+      logger.error('Error updating user by admin', {
+        error: _err,
+        userId,
+        updateData: { ...updateData, password: updateData.password ? '[REDACTED]' : undefined },
+      });
+      throw new AppError('Failed to update user', 500, 'error', false);
     }
   }
 }

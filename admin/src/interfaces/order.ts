@@ -35,6 +35,7 @@ export interface Order {
   refund?: RefundDetails | null;
   createdAt: string;
   updatedAt: string;
+  isVisible: boolean; // Indica si la orden es visible en listados
 }
 
 export interface OrderItem {
@@ -113,6 +114,35 @@ export interface OrdersResponse {
   nextCursor: string | null;
 }
 
+// Nueva interfaz para respuesta de paginación por página
+export interface OrdersByPageResponse {
+  orders: Order[];
+  pagination: PaginationMetadata;
+}
+
+// Nueva interfaz para metadatos de paginación (similar a productos)
+export interface OrdersPaginationInfo {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  limit: number;
+}
+
+// Interfaz para metadatos de paginación (compartida)
+export interface PaginationMetadata {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextCursor: string | null;
+  previousCursor: string | null;
+  limit: number;
+  itemsInCurrentPage: number;
+}
+
 // Payload para actualización masiva de estados
 export interface BulkUpdateOrderStatusPayload {
   orderIds: string[];
@@ -186,6 +216,7 @@ export interface RefundDetails {
   reason?: string;
   processedAt: string;
   processedBy?: string;
+  originalSubTotal: number;
 }
 
 export interface ApplyRefundPayload {
@@ -238,4 +269,29 @@ export interface RefundCancelEligibilityResponse {
   canCancelRefund: boolean;
   reason?: string;
   refundAmount?: number;
+}
+
+// Respuesta para ocultar orden cancelada
+export interface HideCancelledOrderResponse {
+  success: boolean;
+  message: string;
+  order?: Order;
+}
+
+// Interfaces para búsqueda de órdenes
+export interface SearchOrdersPayload {
+  userId?: string;
+  page?: number;
+  limit?: number;
+  // Campos adicionales para futuras expansiones:
+  // orderStatus?: OrderStatus;
+  // orderNumber?: number;
+  // dateFrom?: string;
+  // dateTo?: string;
+}
+
+export interface SearchOrdersResponse {
+  orders: Order[];
+  pagination: PaginationMetadata;
+  searchCriteria: SearchOrdersPayload;
 }

@@ -26,6 +26,7 @@ export interface Order {
   totalAmountARS: number;
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
+  refund?: RefundDetails | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -72,6 +73,17 @@ export interface ShippingAddress {
   deliveryWindow?: string;
   deliveryType?: DeliveryType; // Nuevo campo
   pickupPointAddress?: string; // Nuevo campo
+}
+
+// Interfaces para reembolsos
+export interface RefundDetails {
+  type: 'fixed' | 'percentage';
+  amount: number;
+  appliedAmount: number;
+  reason?: string;
+  processedAt: string;
+  processedBy?: string;
+  originalSubTotal: number;
 }
 
 export interface CreateOrderPayload {

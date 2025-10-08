@@ -38,6 +38,12 @@ const ProductCard = ({
     new Map(variants.map((v) => [v.color.hex, v.color])).values()
   );
 
+  // Filtrar variantes con stock y encontrar la más barata por priceUSD
+  const variantsWithStock = variants.filter((v) => v.stock > 0);
+  const cheapestVariant = variantsWithStock.length > 0
+    ? variantsWithStock.reduce((min, v) => (v.priceUSD < min.priceUSD ? v : min))
+    : variants[0];
+
   // Estado para el color seleccionado (ninguno al inicio)
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
@@ -137,10 +143,10 @@ const ProductCard = ({
         </Link>
         {size && <p className="text-xs text-gray-600 font-medium">{size}</p>}
         <p className="text-xs font-bold text-gray-800 flex flex-col md:flex-row items-center md:items-baseline gap-1 md:gap-2">
-          USD {(selectedVariant?.priceUSD ?? variants[0]?.priceUSD).toFixed(2)}
+          USD {(selectedVariant ? selectedVariant.priceUSD : cheapestVariant.priceUSD).toFixed(2)}
           <span className="text-xs text-gray-500 md:before:content-['-'] md:before:mr-2">
             {formatCurrency(
-              selectedVariant?.priceARS ?? variants[0]?.priceARS,
+              selectedVariant ? selectedVariant.priceARS : cheapestVariant.priceARS,
               "es-AR",
               "ARS"
             )}{" "}

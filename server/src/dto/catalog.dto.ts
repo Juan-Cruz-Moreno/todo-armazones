@@ -61,6 +61,7 @@ export interface CatalogProductVariantDto {
   thumbnail: string;
   images: string[];
   priceUSD: number;
+  priceARS: number | undefined; // Precio en ARS, tomado directamente de la base de datos
 }
 
 export interface CatalogDataDto {

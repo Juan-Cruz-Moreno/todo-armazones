@@ -6,6 +6,7 @@ import {
   UpdateOrderItemDto,
   BulkUpdateOrderStatusDto,
   RefundDto,
+  SearchOrdersDto,
 } from '@dto/order.dto';
 import { OrderService } from '@services/order.service';
 import { getSessionUserId } from '@utils/sessionUtils';
@@ -13,7 +14,7 @@ import logger from '@config/logger';
 import { AppError } from '@utils/AppError';
 import { Types } from 'mongoose';
 import { OrderStatus } from '@enums/order.enum';
-import { getAllOrdersParamsSchema } from 'schemas/order.schema';
+import { getAllOrdersParamsSchema, getAllOrdersByPageParamsSchema } from 'schemas/order.schema';
 import { ApiResponse } from '../types/response';
 
 export class OrderController {
@@ -202,7 +203,7 @@ export class OrderController {
 
       const response: ApiResponse<typeof orders> = {
         status: 'success',
-        message: 'Órdenes obtenidas exitosamente (admin)',
+        message: 'Órdenes obtenidas exitosamente (admin) - Método deprecated, considera usar /all-by-page',
         data: orders,
       };
       res.status(200).json(response);
@@ -218,6 +219,38 @@ export class OrderController {
             cause: error instanceof Error ? error.message : String(error),
           }),
         );
+      }
+
+      return next(error);
+    }
+  };
+
+  /**
+   * Nuevo método para obtener órdenes por página (reemplaza getAllOrders)
+   */
+  public getAllOrdersByPage = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { page, limit, status } = getAllOrdersByPageParamsSchema.parse(req.query);
+
+      const result = await this.orderService.getAllOrdersByPage(page ?? 1, limit ?? 10, status);
+
+      const response: ApiResponse<typeof result> = {
+        status: 'success',
+        message: 'Órdenes obtenidas exitosamente (admin)',
+        data: result,
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      logger.error('Error al obtener todas las órdenes por página (admin)', {
+        error,
+        query: req.query,
+      });
+
+      if (!(error instanceof AppError)) {
+        const appError = new AppError('Error interno del servidor', 500, 'error', false, {
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        return next(appError);
       }
 
       return next(error);
@@ -792,6 +825,128 @@ export class OrderController {
           },
         );
         return next(wrappedError);
+      }
+
+      return next(error);
+    }
+  };
+
+  /**
+   * Obtiene el conteo de órdenes por cada estado de OrderStatus (solo admin)
+   */
+  public getOrdersCount = async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const counts = await this.orderService.getOrdersCount();
+
+      const response: ApiResponse<typeof counts> = {
+        status: 'success',
+        message: 'Conteo de órdenes por estado obtenido exitosamente',
+        data: counts,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      logger.error('Error al obtener conteo de órdenes por estado', {
+        error,
+      });
+
+      if (!(error instanceof AppError)) {
+        const wrappedError = new AppError(
+          'Error inesperado al obtener conteo de órdenes por estado',
+          500,
+          'error',
+          false,
+          {
+            cause: error instanceof Error ? error.message : String(error),
+          },
+        );
+        return next(wrappedError);
+      }
+
+      return next(error);
+    }
+  };
+
+  /**
+   * Oculta una orden cancelada (solo admin)
+   */
+  public hideCancelledOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { orderId } = req.params;
+      if (!orderId) {
+        throw new AppError('El orderId es requerido', 400, 'fail');
+      }
+
+      // Obtener el userId de la sesión para trazabilidad
+      const hiddenBy = getSessionUserId(req.session);
+
+      const result = await this.orderService.hideCancelledOrder(new Types.ObjectId(orderId), hiddenBy);
+
+      const response: ApiResponse<typeof result> = {
+        status: result.success ? 'success' : 'fail',
+        message: result.message,
+        data: result,
+      };
+      res.status(result.success ? 200 : 400).json(response);
+    } catch (error) {
+      logger.error('Error al ocultar orden cancelada', {
+        error,
+        orderId: req.params?.orderId,
+        hiddenBy: req.session?.user?._id,
+      });
+
+      if (!(error instanceof AppError)) {
+        const wrappedError = new AppError('Error interno del servidor al ocultar la orden', 500, 'error', false, {
+          cause: error instanceof Error ? error.message : String(error),
+        });
+        return next(wrappedError);
+      }
+
+      return next(error);
+    }
+  };
+
+  /**
+   * Busca órdenes basándose en criterios específicos
+   * Por ahora soporta búsqueda por usuario con paginación
+   */
+  public searchOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId, page, limit } = req.query;
+
+      // Construir objeto de búsqueda
+      const searchCriteria: SearchOrdersDto = {
+        ...(userId && { userId: userId as string }),
+        ...(page && { page: Number(page) }),
+        ...(limit && { limit: Number(limit) }),
+      };
+
+      const result = await this.orderService.searchOrders(searchCriteria);
+
+      logger.info('Búsqueda de órdenes completada exitosamente', {
+        searchCriteria,
+        totalCount: result.pagination.totalCount,
+        itemsInCurrentPage: result.pagination.itemsInCurrentPage,
+      });
+
+      const response: ApiResponse<typeof result> = {
+        status: 'success',
+        message: 'Búsqueda de órdenes completada exitosamente',
+        data: result,
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      logger.error('Error al buscar órdenes', {
+        error,
+        query: req.query,
+      });
+
+      if (!(error instanceof AppError)) {
+        return next(
+          new AppError('Error inesperado al buscar órdenes', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          }),
+        );
       }
 
       return next(error);

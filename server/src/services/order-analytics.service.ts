@@ -56,15 +56,21 @@ export class OrderAnalyticsService extends BaseAnalyticsService<IOrderAnalyticsM
           orderStatus: { $nin: [OrderStatus.Cancelled, OrderStatus.Refunded] },
         },
       },
-      // Agrupación simple usando campos pre-calculados
+      // Pre-calcular la suma de items por orden para mayor claridad y legibilidad
+      {
+        $addFields: {
+          orderTotalItems: { $sum: '$items.quantity' }, // Suma items de cada orden individualmente
+        },
+      },
+      // Agrupación final usando campos pre-calculados del modelo y el campo temporal
       {
         $group: {
           _id: null,
-          totalAmount: { $sum: '$totalAmount' },
-          totalCogsUSD: { $sum: '$totalCogsUSD' }, // Campo pre-calculado
-          totalContributionMarginUSD: { $sum: '$totalContributionMarginUSD' }, // Campo pre-calculado
+          totalAmount: { $sum: '$totalAmount' }, // Campo pre-calculado del modelo
+          totalCogsUSD: { $sum: '$totalCogsUSD' }, // Campo pre-calculado del modelo
+          totalContributionMarginUSD: { $sum: '$totalContributionMarginUSD' }, // Campo pre-calculado del modelo
           orderCount: { $sum: 1 },
-          totalItems: { $sum: { $size: '$items' } }, // Contar items sin unwind
+          totalItems: { $sum: '$orderTotalItems' }, // Suma los items de todas las órdenes
         },
       },
     ];
@@ -142,7 +148,13 @@ export class OrderAnalyticsService extends BaseAnalyticsService<IOrderAnalyticsM
           orderStatus: { $nin: [OrderStatus.Cancelled, OrderStatus.Refunded] },
         },
       },
-      // Agrupación simple por período usando campos pre-calculados
+      // Pre-calcular la suma de items por orden para mayor claridad y legibilidad
+      {
+        $addFields: {
+          orderTotalItems: { $sum: '$items.quantity' }, // Suma items de cada orden individualmente
+        },
+      },
+      // Agrupación por período temporal usando campos pre-calculados del modelo y el campo temporal
       {
         $group: {
           _id: {
@@ -152,11 +164,11 @@ export class OrderAnalyticsService extends BaseAnalyticsService<IOrderAnalyticsM
               timezone: timezone,
             },
           },
-          totalAmount: { $sum: '$totalAmount' },
-          totalCogsUSD: { $sum: '$totalCogsUSD' }, // Campo pre-calculado
-          totalContributionMarginUSD: { $sum: '$totalContributionMarginUSD' }, // Campo pre-calculado
+          totalAmount: { $sum: '$totalAmount' }, // Campo pre-calculado del modelo
+          totalCogsUSD: { $sum: '$totalCogsUSD' }, // Campo pre-calculado del modelo
+          totalContributionMarginUSD: { $sum: '$totalContributionMarginUSD' }, // Campo pre-calculado del modelo
           orderCount: { $sum: 1 },
-          totalItems: { $sum: { $size: '$items' } }, // Contar items sin unwind
+          totalItems: { $sum: '$orderTotalItems' }, // Suma los items de todas las órdenes por período
         },
       },
       // Ordenar por fecha

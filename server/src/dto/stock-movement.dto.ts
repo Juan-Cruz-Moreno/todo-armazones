@@ -67,8 +67,15 @@ export interface StockMovementHistoryResponseDto {
 export interface ProductVariantStockSummaryDto {
   id: string;
   color: { name: string; hex: string };
+  thumbnail: string;
+  product: {
+    id: string;
+    productModel: string;
+    sku: string;
+  };
   currentStock: number;
   averageCostUSD: number;
+  priceUSD: number;
   totalValue: number; // currentStock * averageCostUSD
   lastMovement?:
     | {

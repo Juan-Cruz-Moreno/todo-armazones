@@ -18,6 +18,12 @@ import {
   cancelRefund,
   checkRefundCancelEligibility,
   clearRefundState,
+  fetchOrdersCount,
+  fetchOrdersByPage,
+  fetchOrdersPaginationInfo,
+  hideCancelledOrder,
+  searchOrders,
+  clearSearchResults,
   CreateOrderAdminPayload,
 } from "@/redux/slices/orderSlice";
 import type { 
@@ -32,7 +38,10 @@ import type {
   ApplyRefundResponse,
   RefundEligibilityResponse,
   CancelRefundResponse,
-  RefundCancelEligibilityResponse
+  RefundCancelEligibilityResponse,
+  HideCancelledOrderResponse,
+  SearchOrdersPayload,
+  SearchOrdersResponse
 } from "@/interfaces/order";
 import { OrderStatus } from "@/enums/order.enum";
 
@@ -41,11 +50,15 @@ const useOrders = () => {
 
   // Selectores
   const orders = useAppSelector((state) => state.orders.orders);
+  const ordersByPage = useAppSelector((state) => state.orders.ordersByPage);
+  const pagination = useAppSelector((state) => state.orders.pagination);
   const orderById = useAppSelector((state) => state.orders.orderById);
   const nextCursor = useAppSelector((state) => state.orders.nextCursor);
   const loading = useAppSelector((state) => state.orders.loading);
   const bulkUpdateLoading = useAppSelector((state) => state.orders.bulkUpdateLoading);
   const error = useAppSelector((state) => state.orders.error);
+  const paginationInfoLoading = useAppSelector((state) => state.orders.paginationInfoLoading);
+  const paginationInfoError = useAppSelector((state) => state.orders.paginationInfoError);
   const statusFilter = useAppSelector((state) => state.orders.statusFilter);
   const stockAvailability = useAppSelector((state) => state.orders.stockAvailability);
   const stockCheckLoading = useAppSelector((state) => state.orders.stockCheckLoading);
@@ -58,6 +71,16 @@ const useOrders = () => {
   const cancelRefundError = useAppSelector((state) => state.orders.cancelRefundError);
   const refundCancelEligibility = useAppSelector((state) => state.orders.refundCancelEligibility);
   const refundCancelEligibilityLoading = useAppSelector((state) => state.orders.refundCancelEligibilityLoading);
+  const counts = useAppSelector((state) => state.orders.counts);
+  const countsLoading = useAppSelector((state) => state.orders.countsLoading);
+  const countsError = useAppSelector((state) => state.orders.countsError);
+  const hideOrderLoading = useAppSelector((state) => state.orders.hideOrderLoading);
+  const hideOrderError = useAppSelector((state) => state.orders.hideOrderError);
+  const searchResults = useAppSelector((state) => state.orders.searchResults);
+  const searchPagination = useAppSelector((state) => state.orders.searchPagination);
+  const searchLoading = useAppSelector((state) => state.orders.searchLoading);
+  const searchError = useAppSelector((state) => state.orders.searchError);
+  
   const getOrderById = useCallback(
     (orderId: string) => {
       dispatch(fetchOrderById(orderId));
@@ -237,13 +260,57 @@ const useOrders = () => {
     [dispatch]
   );
 
+  const hideOrder = useCallback(
+    (
+      orderId: string,
+      onSuccess?: (response: HideCancelledOrderResponse) => void,
+      onError?: (err: unknown) => void
+    ) => {
+      dispatch(hideCancelledOrder(orderId))
+        .unwrap()
+        .then((response) => {
+          if (onSuccess) onSuccess(response);
+        })
+        .catch((err) => {
+          if (onError) onError(err);
+        });
+    },
+    [dispatch]
+  );
+
+  const searchOrdersData = useCallback(
+    (
+      payload: SearchOrdersPayload,
+      onSuccess?: (response: SearchOrdersResponse) => void,
+      onError?: (err: unknown) => void
+    ) => {
+      dispatch(searchOrders(payload))
+        .unwrap()
+        .then((response) => {
+          if (onSuccess) onSuccess(response);
+        })
+        .catch((err) => {
+          if (onError) onError(err);
+        });
+    },
+    [dispatch]
+  );
+
+  const clearSearch = useCallback(() => {
+    dispatch(clearSearchResults());
+  }, [dispatch]);
+
   return {
     orders,
+    ordersByPage,
+    pagination,
     orderById,
     nextCursor,
     loading,
     bulkUpdateLoading,
     error,
+    paginationInfoLoading,
+    paginationInfoError,
     statusFilter,
     stockAvailability,
     stockCheckLoading,
@@ -256,6 +323,15 @@ const useOrders = () => {
     cancelRefundError,
     refundCancelEligibility,
     refundCancelEligibilityLoading,
+    counts,
+    countsLoading,
+    countsError,
+    hideOrderLoading,
+    hideOrderError,
+    searchResults,
+    searchPagination,
+    searchLoading,
+    searchError,
     getOrders,
     getOrderById,
     updateOrderData,
@@ -270,8 +346,11 @@ const useOrders = () => {
     clearRefundInfo,
     cancelOrderRefund,
     checkRefundCancelEligibilityData,
+    hideOrder,
     setFilter,
     clearOrders,
+    searchOrdersData,
+    clearSearch,
     createOrderAsAdmin: useCallback(
       (
         payload: CreateOrderAdminPayload,
@@ -286,6 +365,31 @@ const useOrders = () => {
           .catch((err) => {
             if (onError) onError(err);
           });
+      },
+      [dispatch]
+    ),
+    getOrdersCount: useCallback(() => {
+      dispatch(fetchOrdersCount());
+    }, [dispatch]),
+
+    /**
+     * Método recomendado para paginación - Optimizado con mejor performance
+     * Usa paginación por número de página en lugar de cursors
+     */
+    fetchOrdersByPage: useCallback(
+      (params?: { page?: number; status?: OrderStatus; limit?: number }) => {
+        dispatch(fetchOrdersByPage(params));
+      },
+      [dispatch]
+    ),
+
+    /**
+     * Obtiene solo metadatos de paginación sin cargar órdenes
+     * Útil para contadores rápidos y indicadores de UI - Muy optimizado
+     */
+    fetchOrdersPaginationInfo: useCallback(
+      (params?: { status?: OrderStatus; limit?: number }) => {
+        dispatch(fetchOrdersPaginationInfo(params));
       },
       [dispatch]
     ),

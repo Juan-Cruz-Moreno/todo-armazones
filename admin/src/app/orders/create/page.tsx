@@ -245,6 +245,7 @@ function CreateOrderPage() {
   };
 
   // Función para cargar más resultados (debounced)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const loadMoreUsers = useCallback(
     debounce(() => {
       if (searchNextCursor && !loadingUserSearch && userQuery.trim()) {
@@ -292,7 +293,7 @@ function CreateOrderPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [userQuery]); // Solo dependemos del query, no de las funciones
+  }, [userQuery, searchUsersByQuery, clearSearch]); // Incluir funciones para evitar stale closures
 
   // useEffect para búsqueda automática de productos con debounce
   useEffect(() => {
@@ -305,7 +306,7 @@ function CreateOrderPage() {
     }, 300);
 
     return () => clearTimeout(timeoutId);
-  }, [addItemsModal.productQuery]); // Solo dependemos del query, no de las funciones
+  }, [addItemsModal.productQuery, clearSearchResults, searchProducts]); // Incluir dependencias para evitar stale closures
 
   // Reset delivery type to HomeDelivery when shipping method changes to Motorcycle
   useEffect(() => {

@@ -63,7 +63,7 @@ export interface IOrderAggregationResult {
   totalCogsUSD: number; // Usar campo pre-calculado
   totalContributionMarginUSD: number; // Usar campo pre-calculado
   orderCount: number;
-  totalItems: number; // Total de items usando $size
+  totalItems: number; // Total de items sumando cantidades
   date?: Date; // Para agregaciones con breakdown temporal
 }
 
@@ -74,7 +74,7 @@ export interface IOrderBreakdownAggregationResult {
   totalCogsUSD: number; // Usar campo pre-calculado
   totalContributionMarginUSD: number; // Usar campo pre-calculado
   orderCount: number;
-  totalItems: number; // Total de items usando $size
+  totalItems: number; // Total de items sumando cantidades
 }
 
 export interface IUserAnalyticsMetrics extends IAnalyticsMetrics {

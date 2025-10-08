@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useProducts } from "@/hooks/useProducts";
@@ -45,6 +45,9 @@ export default function CreateProductPage() {
   const [primaryImageURLs, setPrimaryImageURLs] = useState<string[]>([]);
   const [variantImageURLs, setVariantImageURLs] = useState<Record<string, string[]>>({});
 
+  // Estado para el orden de primaryImage
+  const [primaryImageOrder, setPrimaryImageOrder] = useState<number[] | undefined>(undefined);
+
   const {
     control,
     handleSubmit,
@@ -80,21 +83,19 @@ export default function CreateProductPage() {
 
   const watchedProduct = watch("product");
   const watchedVariants = watch("variants");
-  const watchedPrimaryImage = watch("files.primaryImage");
-  const watchedVariantImages = watch("files.variantImages");
 
   // Función para revocar todas las URLs de object
-  const revokeAllURLs = () => {
+  const revokeAllURLs = useCallback(() => {
     primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
     Object.values(variantImageURLs).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
     setPrimaryImageURLs([]);
     setVariantImageURLs({});
-  };
+  }, [primaryImageURLs, variantImageURLs]);
 
   // Revocar URLs al desmontar el componente
   useEffect(() => {
     return () => revokeAllURLs();
-  }, []);
+  }, [revokeAllURLs]);
 
   // Funciones helper para manejar errores en toast
   const addToastError = (
@@ -177,10 +178,28 @@ export default function CreateProductPage() {
   const toggleExpand = (idx: number) =>
     setExpanded((prev) => prev.map((v, i) => (i === idx ? !v : v)));
 
+  // Función para manejar click en imagen principal (cambiar orden)
+  const handlePrimaryImageClick = (clickedIndex: number) => {
+    if (primaryImageOrder) {
+      const newOrder = [...primaryImageOrder];
+      const currentPos = newOrder.indexOf(clickedIndex);
+      if (currentPos > 0) {
+        // Mover al principio
+        newOrder.splice(currentPos, 1);
+        newOrder.unshift(clickedIndex);
+        setPrimaryImageOrder(newOrder);
+      }
+    }
+  };
+
   const onSubmit = async (data: CreateProductFormData) => {
     // Mapear undefined a 0 para stock, initialCostUSD y priceUSD
     const mappedData = {
       ...data,
+      product: {
+        ...data.product,
+        primaryImageOrder: primaryImageOrder,
+      },
       variants: data.variants.map((variant) => ({
         ...variant,
         stock: variant.stock ?? 0,
@@ -276,6 +295,11 @@ export default function CreateProductPage() {
                 newFiles
               );
               trigger("files.primaryImage");
+
+              // Inicializar primaryImageOrder si no está definido
+              if (!primaryImageOrder || primaryImageOrder.length !== newFiles.length) {
+                setPrimaryImageOrder(newFiles.map((_, idx) => idx));
+              }
             }}
             required
           />
@@ -576,15 +600,19 @@ export default function CreateProductPage() {
         <div className="mb-4">
           {primaryImageURLs.length > 0 ? (
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {primaryImageURLs.map((url, index) => (
-                <Image
-                  key={index}
-                  src={url}
-                  alt={`Imagen principal ${index + 1}`}
-                  width={150}
-                  height={150}
-                  className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
-                />
+              {primaryImageOrder?.map((originalIndex, orderIndex) => (
+                <div key={originalIndex} className="relative cursor-pointer" onClick={() => handlePrimaryImageClick(originalIndex)}>
+                  <Image
+                    src={primaryImageURLs[originalIndex]}
+                    alt={`Imagen principal ${originalIndex + 1}`}
+                    width={150}
+                    height={150}
+                    className="rounded-none border border-[#e1e1e1] bg-[#FFFFFF] object-cover"
+                  />
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                    <span className="text-white font-bold text-lg">{orderIndex + 1}</span>
+                  </div>
+                </div>
               ))}
             </div>
           ) : (

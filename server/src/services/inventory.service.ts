@@ -51,8 +51,16 @@ type PopulatedStockMovement = {
 type ProductVariantLean = {
   _id: Types.ObjectId;
   color: { name: string; hex: string };
+  thumbnail: string;
   stock: number;
   averageCostUSD: number;
+  priceUSD: number;
+  product: {
+    _id: Types.ObjectId;
+    productModel: string;
+    sku: string;
+    thumbnail: string;
+  };
 };
 
 // Tipo para StockMovement con campos específicos usando lean()
@@ -470,7 +478,9 @@ export class InventoryService {
     offset: number = 0,
   ): Promise<StockMovementHistoryResponseDto> {
     try {
-      const movements = (await StockMovement.find({ productVariant: productVariantId })
+      const movements = (await StockMovement.find({
+        productVariant: productVariantId,
+      })
         .populate({
           path: 'productVariant',
           select: 'color product',
@@ -488,7 +498,9 @@ export class InventoryService {
         .skip(offset)
         .lean()) as unknown as PopulatedStockMovement[];
 
-      const totalMovements = await StockMovement.countDocuments({ productVariant: productVariantId });
+      const totalMovements = await StockMovement.countDocuments({
+        productVariant: productVariantId,
+      });
 
       const mappedMovements: StockMovementListItemDto[] = movements.map((movement: PopulatedStockMovement) => {
         const result: StockMovementListItemDto = {
@@ -557,13 +569,16 @@ export class InventoryService {
   public async getProductStockSummary(productId: Types.ObjectId): Promise<ProductVariantStockSummaryDto[]> {
     try {
       const variants = (await ProductVariant.find({ product: productId })
-        .select('color stock averageCostUSD')
+        .select('color stock averageCostUSD priceUSD thumbnail')
+        .populate('product', 'productModel sku thumbnail')
         .lean()) as unknown as ProductVariantLean[];
 
       const summaries: ProductVariantStockSummaryDto[] = await Promise.all(
         variants.map(async (variant: ProductVariantLean) => {
           // Obtener el último movimiento
-          const lastMovement = (await StockMovement.findOne({ productVariant: variant._id })
+          const lastMovement = (await StockMovement.findOne({
+            productVariant: variant._id,
+          })
             .sort({ createdAt: -1 })
             .select('createdAt type quantity')
             .lean()) as unknown as StockMovementLean | null;
@@ -571,8 +586,16 @@ export class InventoryService {
           return {
             id: variant._id.toString(),
             color: variant.color,
+            thumbnail: variant.thumbnail,
+            product: {
+              id: variant.product._id.toString(),
+              productModel: variant.product.productModel,
+              sku: variant.product.sku,
+              thumbnail: variant.product.thumbnail,
+            },
             currentStock: variant.stock,
             averageCostUSD: variant.averageCostUSD,
+            priceUSD: variant.priceUSD,
             totalValue: variant.stock * variant.averageCostUSD,
             lastMovement: lastMovement
               ? {

@@ -4,6 +4,7 @@ import { ProductVariantSummaryDto } from './product-variant.dto';
 export interface CreateProductRequestDto {
   thumbnail: string;
   primaryImage: string[];
+  primaryImageOrder?: number[]; // Índices para ordenar las primaryImage (opcional)
   category: Types.ObjectId[];
   subcategory: Types.ObjectId;
   productModel: string;
@@ -28,6 +29,7 @@ export interface CreateProductResponseDto {
 export interface UpdateProductRequestDto {
   thumbnail?: string;
   primaryImage?: string[];
+  primaryImageOrder?: number[]; // Índices para ordenar las primaryImage (opcional)
   category?: Types.ObjectId[];
   subcategory?: Types.ObjectId;
   productModel?: string;

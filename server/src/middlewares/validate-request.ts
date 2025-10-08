@@ -32,7 +32,8 @@ export function validateRequest<T extends ValidationSchemas>(schemas: T) {
           handleValidationError(res, parsed.error);
           return;
         }
-        req.query = parsed.data as ExtractType<T['query']>;
+        // Note: req.query is read-only in Express, so we don't assign back
+        // The controller should parse req.query directly with the schema
       }
 
       if (schemas.params) {

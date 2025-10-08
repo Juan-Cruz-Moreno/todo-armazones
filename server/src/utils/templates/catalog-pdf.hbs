@@ -81,9 +81,9 @@
                         {{#if variants.length}}
                           {{#if @root.showPrices}}
                           <div class="price-container">
-                            <div class="product-price">{{formatUSD (maxPrice variants)}}</div>
+                            <div class="product-price">{{formatUSD (minPrice variants)}}</div>
                             -
-                            <div class="product-price-ars">{{maxPriceARS variants @root.dollarBaseValue}} pesos</div>
+                            <div class="product-price-ars">{{minPriceARS variants}} pesos</div>
                           </div>
                           {{/if}}
                           <div class="variants-inline">

@@ -4,10 +4,24 @@ import { useProducts } from "@/hooks/useProducts";
 import Image from "next/image";
 import { formatCurrency } from "@/utils/formatCurrency";
 import Link from "next/link";
-import { Boxes, Plus, SquarePen, DollarSign } from "lucide-react";
+import { Boxes, Plus, SquarePen, DollarSign, Eye } from "lucide-react";
 import Pagination from "@/components/molecules/Pagination";
 
 const SKELETON_COUNT = 10;
+
+// Categorías y subcategorías hardcodeadas (mismas que en CreateProductPage)
+// NOTA: Los slugs deben coincidir con los de la base de datos
+const CATEGORIES = [
+  { id: "687817781dd5819a2483c7eb", name: "Hombres", slug: "hombres" },
+  { id: "6878179f1dd5819a2483c7ed", name: "Mujeres", slug: "mujeres" },
+  { id: "687817d71dd5819a2483c7ef", name: "Niños", slug: "ninos" },
+];
+
+const SUBCATEGORIES = [
+  { id: "687819d2cdda2752c527177b", name: "Anteojos de sol", slug: "anteojos-de-sol-polarizados" },
+  { id: "6878196acdda2752c5271779", name: "Armazón de receta", slug: "armazon-de-receta" },
+  { id: "68781a06cdda2752c527177d", name: "Clip on", slug: "clip-on" },
+];
 
 const ProductsPage = () => {
   const {
@@ -28,16 +42,24 @@ const ProductsPage = () => {
   const [searching, setSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [inStock, setInStock] = useState(false);
+  const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("");
+  const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>("");
 
-  // Cargar productos al montar o limpiar búsqueda
+  // Cargar productos al montar o cuando cambien los filtros
   useEffect(() => {
     if (!searching) {
       resetPagination();
-      fetchProductsByPage({ page: 1, limit: 20, inStock }); // 20 productos por página para admin
+      fetchProductsByPage({ 
+        page: 1, 
+        limit: 20, 
+        inStock,
+        categorySlug: selectedCategorySlug || undefined,
+        subcategorySlug: selectedSubcategorySlug || undefined,
+      });
       setCurrentPage(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searching, inStock]);
+  }, [searching, inStock, selectedCategorySlug, selectedSubcategorySlug]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,12 +84,17 @@ const ProductsPage = () => {
     window.scrollTo({ top: 0, behavior: 'instant' });
     
     setCurrentPage(pageNumber);
-    loadPageByNumber(pageNumber, { limit: 20, inStock });
-  }, [loadPageByNumber, inStock]);
+    loadPageByNumber(pageNumber, { 
+      limit: 20, 
+      inStock,
+      categorySlug: selectedCategorySlug || undefined,
+      subcategorySlug: selectedSubcategorySlug || undefined,
+    });
+  }, [loadPageByNumber, inStock, selectedCategorySlug, selectedSubcategorySlug]);
 
   // Skeleton para lista
   const SkeletonRow = () => (
-    <li className="list-row border border-[#e1e1e1] rounded-none flex items-center gap-4 p-2 animate-pulse">
+    <li className="flex flex-col gap-4 p-2 animate-pulse md:flex-row md:items-center border border-[#e1e1e1] rounded-none">
       <div className="w-10 h-10 bg-gray-200 rounded"></div>
       <div className="flex-1 space-y-2">
         <div className="h-4 w-1/2 bg-gray-200 rounded"></div>
@@ -82,8 +109,8 @@ const ProductsPage = () => {
       <h1 className="text-[#111111] font-bold text-2xl mb-4">
         Lista de productos
       </h1>
-      <div className="flex justify-between items-center mb-4 gap-2">
-        <form onSubmit={handleSearch} className="flex gap-2 w-full max-w-md">
+      <div className="flex flex-col gap-4 mb-4 md:flex-row md:justify-between md:items-center">
+        <form onSubmit={handleSearch} className="flex gap-2 w-full max-w-md md:max-w-none">
           <input
             type="search"
             placeholder="Buscar por modelo o SKU..."
@@ -108,16 +135,18 @@ const ProductsPage = () => {
             </button>
           )}
         </form>
-        <Link href="/products/create">
-          <button className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none">
-            <Plus className="size-4" /> Nuevo
-          </button>
-        </Link>
-        <Link href="/products/bulk-price-update">
-          <button className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none">
-            <DollarSign className="size-4" /> Precios Masivos
-          </button>
-        </Link>
+        <div className="flex gap-2 flex-wrap">
+          <Link href="/products/create">
+            <button className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none">
+              <Plus className="size-4" /> Nuevo
+            </button>
+          </Link>
+          <Link href="/products/bulk-price-update">
+            <button className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none">
+              <DollarSign className="size-4" /> Precios Masivos
+            </button>
+          </Link>
+        </div>
       </div>
       {/* Checkbox para filtrar por stock */}
       <div className="mb-4">
@@ -131,6 +160,55 @@ const ProductsPage = () => {
           <span className="text-sm text-[#666666]">Mostrar solo productos en stock</span>
         </label>
       </div>
+
+      {/* Filtros de categoría y subcategoría */}
+      <div className="mb-4 p-4 bg-[#ffffff] border border-[#e1e1e1] rounded-none shadow-sm">
+        <h3 className="text-sm font-semibold text-[#111111] mb-3">Filtros</h3>
+        <div className="flex flex-col md:flex-row gap-3 items-start md:items-end">
+          <div className="flex-1 w-full md:w-auto">
+            <label className="text-xs text-[#7A7A7A] mb-1 block">Categoría</label>
+            <select
+              value={selectedCategorySlug}
+              onChange={(e) => setSelectedCategorySlug(e.target.value)}
+              className="select select-bordered bg-[#FFFFFF] text-[#222222] border border-[#e1e1e1] rounded-none w-full text-sm shadow-none focus:border-[#222222] focus:outline-none"
+            >
+              <option value="">Todas las categorías</option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat.id} value={cat.slug}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex-1 w-full md:w-auto">
+            <label className="text-xs text-[#7A7A7A] mb-1 block">Subcategoría</label>
+            <select
+              value={selectedSubcategorySlug}
+              onChange={(e) => setSelectedSubcategorySlug(e.target.value)}
+              className="select select-bordered bg-[#FFFFFF] text-[#222222] border border-[#e1e1e1] rounded-none w-full text-sm shadow-none focus:border-[#222222] focus:outline-none"
+            >
+              <option value="">Todas las subcategorías</option>
+              {SUBCATEGORIES.map((sub) => (
+                <option key={sub.id} value={sub.slug}>
+                  {sub.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {(selectedCategorySlug || selectedSubcategorySlug) && (
+            <button
+              onClick={() => {
+                setSelectedCategorySlug("");
+                setSelectedSubcategorySlug("");
+              }}
+              className="btn btn-sm rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none hover:bg-[#f5f5f5]"
+            >
+              Limpiar filtros
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Resultados de búsqueda */}
       {searching && (
         <div className="mb-6">
@@ -149,7 +227,7 @@ const ProductsPage = () => {
             )}
             {searchResults.map((product) => (
               <li
-                className="list-row border border-[#e1e1e1] rounded-none flex items-center gap-4 p-2"
+                className="flex flex-col gap-4 p-2 md:flex-row md:items-center border border-[#e1e1e1] rounded-none"
                 key={product.id}
               >
                 <div>
@@ -212,6 +290,14 @@ const ProductsPage = () => {
                       <SquarePen className="size-4" />
                     </button>
                   </Link>
+                  <Link href={`/products/preview/${product.slug}`}>
+                    <button
+                      className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
+                      title="Vista Previa"
+                    >
+                      <Eye className="size-4" />
+                    </button>
+                  </Link>
                 </div>
               </li>
             ))}
@@ -233,7 +319,7 @@ const ProductsPage = () => {
         )}
         {products.map((product) => (
           <li
-            className="list-row border border-[#e1e1e1] rounded-none flex items-center gap-4 p-2"
+            className="flex flex-col gap-4 p-2 md:flex-row md:items-center border border-[#e1e1e1] rounded-none"
             key={product.id}
           >
             <div>
@@ -295,6 +381,14 @@ const ProductsPage = () => {
                   <SquarePen className="size-4" />
                 </button>
               </Link>
+              <Link href={`/products/preview/${product.slug}`}>
+                <button
+                  className="btn rounded-none bg-[#ffffff] text-[#222222] border border-[#e1e1e1] shadow-none"
+                  title="Vista Previa"
+                >
+                  <Eye className="size-4" />
+                </button>
+              </Link>
             </div>
           </li>
         ))}
@@ -315,6 +409,25 @@ const ProductsPage = () => {
       {!searching && pagination && (
         <div className="mt-4 text-sm text-[#666666] text-center">
           Mostrando {products.length} de {pagination.totalCount} productos
+          {(selectedCategorySlug || selectedSubcategorySlug || inStock) && (
+            <span className="block mt-1 text-xs">
+              {selectedCategorySlug && (
+                <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full mr-2">
+                  {CATEGORIES.find(c => c.slug === selectedCategorySlug)?.name}
+                </span>
+              )}
+              {selectedSubcategorySlug && (
+                <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full mr-2">
+                  {SUBCATEGORIES.find(s => s.slug === selectedSubcategorySlug)?.name}
+                </span>
+              )}
+              {inStock && (
+                <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full">
+                  En stock
+                </span>
+              )}
+            </span>
+          )}
         </div>
       )}
     </div>

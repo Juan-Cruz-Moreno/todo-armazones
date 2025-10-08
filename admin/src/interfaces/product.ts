@@ -23,6 +23,7 @@ export interface ProductVariant {
   images: string[];
   averageCostUSD: number;
   priceUSD: number;
+  priceARS: number;
 }
 
 export interface Product {
@@ -74,6 +75,7 @@ export interface CreateProductPayload {
     sku: string;
     size: string; // Ahora requerido para creación
     description?: string;
+    primaryImageOrder?: number[]; // Índices para ordenar las primaryImage
   };
   variants: Array<{
     color: ProductVariantColor;
@@ -101,6 +103,7 @@ export interface UpdateProductPayload {
     sku?: string;
     size?: string;
     description?: string;
+    primaryImageOrder?: number[]; // Índices para ordenar las primaryImage
   };
   variants: Array<{
     id?: string; // ID de la variante (opcional para nuevas)
@@ -114,15 +117,15 @@ export interface UpdateProductPayload {
   }>;
   files?: {
     primaryImage?: File[];
-    variantImages?: Record<string, File[]>;  
+    variantImages?: Record<string, File[]>;
   };
 }
 
 // Bulk Price Update Interfaces
 export enum PriceUpdateType {
-  FIXED_AMOUNT = 'FIXED_AMOUNT',
-  PERCENTAGE = 'PERCENTAGE',
-  SET_PRICE = 'SET_PRICE',
+  FIXED_AMOUNT = "FIXED_AMOUNT",
+  PERCENTAGE = "PERCENTAGE",
+  SET_PRICE = "SET_PRICE",
 }
 
 export interface BulkPriceUpdatePayload {

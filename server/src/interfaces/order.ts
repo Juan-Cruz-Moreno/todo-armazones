@@ -18,6 +18,7 @@ export interface IRefund {
   reason?: string;
   processedAt: Date;
   processedBy?: Types.ObjectId;
+  originalSubTotal: number; // Subtotal original antes del reembolso (para mostrar tachado en frontend)
 }
 
 export interface IOrder {
@@ -36,4 +37,36 @@ export interface IOrder {
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
   refund?: IRefund;
+  exchangeRate: number; // Tasa de cambio USD a ARS
+  itemsCount: number; // Total de unidades físicas = suma de quantity de todos los items
+  isVisible: boolean; // Indica si la orden es visible en listados
+}
+
+export interface IRefund {
+  type: 'fixed' | 'percentage';
+  amount: number; // Monto fijo en USD o porcentaje (0-100)
+  appliedAmount: number; // Monto real aplicado en USD
+  reason?: string;
+  processedAt: Date;
+  processedBy?: Types.ObjectId;
+  originalSubTotal: number; // Subtotal original antes del reembolso
+}
+
+export interface IOrder {
+  orderNumber: number;
+  user: Types.ObjectId;
+  items: IOrderItem[];
+  shippingAddress: Types.ObjectId;
+  shippingMethod: ShippingMethod;
+  paymentMethod: PaymentMethod;
+  subTotal: number;
+  bankTransferExpense?: number;
+  totalAmount: number;
+  totalAmountARS?: number;
+  totalContributionMarginUSD: number;
+  totalCogsUSD: number; // Total Cost of Goods Sold = suma de cogsUSD de todos los items
+  orderStatus: OrderStatus;
+  allowViewInvoice: boolean;
+  refund?: IRefund;
+  exchangeRate: number; // Tasa de cambio USD a ARS al momento de la orden
 }

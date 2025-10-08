@@ -131,6 +131,12 @@ export const getAllOrdersParamsSchema = z.object({
   status: z.enum(OrderStatus).optional(),
 });
 
+export const getAllOrdersByPageParamsSchema = z.object({
+  page: z.coerce.number().min(1, 'La página debe ser al menos 1').optional(),
+  limit: z.coerce.number().min(1, 'El límite debe ser al menos 1').optional(),
+  status: z.enum(OrderStatus).optional(),
+});
+
 export const updateOrderParamsSchema = z.object({
   orderId: z.string().refine((val) => Types.ObjectId.isValid(val), {
     message: 'El orderId debe ser un ObjectId válido',
@@ -331,4 +337,16 @@ export const cancelRefundParamsSchema = z.object({
   orderId: z.string().refine((val) => Types.ObjectId.isValid(val), {
     message: 'El orderId debe ser un ObjectId válido',
   }),
+});
+
+// Schema para búsqueda de órdenes
+export const searchOrdersQuerySchema = z.object({
+  userId: z
+    .string()
+    .refine((val) => Types.ObjectId.isValid(val), {
+      message: 'El userId debe ser un ObjectId válido',
+    })
+    .optional(),
+  page: z.coerce.number().min(1, 'La página debe ser al menos 1').optional(),
+  limit: z.coerce.number().min(1, 'El límite debe ser al menos 1').max(100, 'El límite máximo es 100').optional(),
 });

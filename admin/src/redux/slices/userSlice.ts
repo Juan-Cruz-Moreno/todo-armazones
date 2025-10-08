@@ -23,6 +23,9 @@ interface UserState {
   searchNextCursor: string | null;
   searchLoading: boolean;
   searchError: string | null;
+  // Campos para actualización de usuario por admin
+  updatingUser: boolean;
+  updateUserError: string | null;
 }
 
 const initialState: UserState = {
@@ -38,6 +41,9 @@ const initialState: UserState = {
   searchNextCursor: null,
   searchLoading: false,
   searchError: null,
+  // Inicializar campos para actualización
+  updatingUser: false,
+  updateUserError: null,
 };
 
 export const fetchUsers = createAsyncThunk<
@@ -112,6 +118,21 @@ export interface CreateUserByAdminPayload {
   phone?: string;
 }
 
+// Payload para actualizar usuario por admin
+export interface UpdateUserByAdminPayload {
+  userId: string;
+  email?: string;
+  displayName?: string;
+  firstName?: string;
+  lastName?: string;
+  dni?: string;
+  cuit?: string;
+  phone?: string;
+  password?: string;
+  role?: string;
+  status?: string;
+}
+
 // Crear usuario por admin
 export const createUserByAdmin = createAsyncThunk<
   IUser,
@@ -128,6 +149,27 @@ export const createUserByAdmin = createAsyncThunk<
       );
     }
     return res.data.data.user;
+  } catch (err) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
+// Actualizar usuario por admin
+export const updateUserAsAdmin = createAsyncThunk<
+  IUser,
+  UpdateUserByAdminPayload,
+  { rejectValue: string }
+>("users/updateUserAsAdmin", async ({ userId, ...updateData }, { rejectWithValue }) => {
+  try {
+    const res = await axiosInstance.patch<
+      ApiResponse<IUser>
+    >(`/users/${userId}`, updateData);
+    if (res.data.status !== "success" || !res.data.data) {
+      return rejectWithValue(
+        res.data.message || "No se pudo actualizar el usuario"
+      );
+    }
+    return res.data.data;
   } catch (err) {
     return rejectWithValue(getErrorMessage(err));
   }
@@ -151,6 +193,10 @@ const userSlice = createSlice({
       state.searchNextCursor = null;
       state.searchError = null;
       state.searchLoading = false;
+    },
+    resetUpdateUser: (state) => {
+      state.updatingUser = false;
+      state.updateUserError = null;
     },
   },
   extraReducers: (builder) => {
@@ -233,9 +279,37 @@ const userSlice = createSlice({
       .addCase(searchUsers.rejected, (state, action) => {
         state.searchLoading = false;
         state.searchError = action.payload || "Error al buscar usuarios";
+      })
+      // updateUserAsAdmin
+      .addCase(updateUserAsAdmin.pending, (state) => {
+        state.updatingUser = true;
+        state.updateUserError = null;
+      })
+      .addCase(updateUserAsAdmin.fulfilled, (state, action) => {
+        state.updatingUser = false;
+        state.updateUserError = null;
+        // Actualizar el usuario en la lista principal si existe
+        const updatedUser = action.payload;
+        const userIndex = state.users.findIndex(user => user.id === updatedUser.id);
+        if (userIndex !== -1) {
+          state.users[userIndex] = updatedUser;
+        }
+        // Actualizar en resultados de búsqueda si existe
+        const searchIndex = state.searchResults.findIndex(user => user.id === updatedUser.id);
+        if (searchIndex !== -1) {
+          state.searchResults[searchIndex] = updatedUser;
+        }
+        // Actualizar userByEmail si es el mismo usuario
+        if (state.userByEmail && state.userByEmail.id === updatedUser.id) {
+          state.userByEmail = updatedUser;
+        }
+      })
+      .addCase(updateUserAsAdmin.rejected, (state, action) => {
+        state.updatingUser = false;
+        state.updateUserError = action.payload || "No se pudo actualizar el usuario";
       });
   },
 });
 
-export const { resetUsers, resetSearch } = userSlice.actions;
+export const { resetUsers, resetSearch, resetUpdateUser } = userSlice.actions;
 export default userSlice.reducer;

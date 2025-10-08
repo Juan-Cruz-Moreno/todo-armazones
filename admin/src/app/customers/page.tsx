@@ -4,12 +4,14 @@ import Link from "next/link";
 import { useUsers } from "@/hooks/useUsers";
 import { debounce } from "@/utils/debounce";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
-import { createUserByAdmin } from "@/redux/slices/userSlice";
+import { createUserByAdmin, updateUserAsAdmin, UpdateUserByAdminPayload } from "@/redux/slices/userSlice";
+import { UserRole, UserStatus } from "@/enums/user.enum";
+import { IUser } from "@/interfaces/user";
 
 const SKELETON_COUNT = 10;
 
 const CustomersPage = () => {
-  const { users, nextCursor, loading, error, loadUsers, createUser, searchResults, searchNextCursor, searchLoading, searchError, searchUsersByQuery, clearSearch } =
+  const { users, nextCursor, loading, error, loadUsers, createUser, searchResults, searchNextCursor, searchLoading, searchError, searchUsersByQuery, clearSearch, updateUser, updatingUser, updateUserError, clearUpdateUserError } =
     useUsers();
   const observer = useRef<IntersectionObserver | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -24,6 +26,22 @@ const CustomersPage = () => {
   const [cuit, setCuit] = useState("");
   const [phone, setPhone] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Estados para el modal de edición
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<IUser | null>(null);
+  const [editSubmitting, setEditSubmitting] = useState(false);
+  const [editFormError, setEditFormError] = useState<string | null>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editFirstName, setEditFirstName] = useState("");
+  const [editLastName, setEditLastName] = useState("");
+  const [editDni, setEditDni] = useState("");
+  const [editCuit, setEditCuit] = useState("");
+  const [editPhone, setEditPhone] = useState("");
+  const [editRole, setEditRole] = useState<UserRole>(UserRole.User);
+  const [editStatus, setEditStatus] = useState<UserStatus>(UserStatus.Active);
 
   // Debounced loadUsers for infinite scroll
   const debouncedFetch = useRef(
@@ -139,6 +157,83 @@ const CustomersPage = () => {
     }
   };
 
+  // Funciones para el modal de edición
+  const resetEditForm = () => {
+    setEditEmail("");
+    setEditPassword("");
+    setEditDisplayName("");
+    setEditFirstName("");
+    setEditLastName("");
+    setEditDni("");
+    setEditCuit("");
+    setEditPhone("");
+    setEditRole(UserRole.User);
+    setEditStatus(UserStatus.Active);
+    setEditFormError(null);
+  };
+
+  const handleOpenEdit = (user: IUser) => {
+    setEditingUser(user);
+    setEditEmail(user.email);
+    setEditDisplayName(user.displayName);
+    setEditFirstName(user.firstName || "");
+    setEditLastName(user.lastName || "");
+    setEditDni(user.dni || "");
+    setEditCuit(user.cuit || "");
+    setEditPhone(user.phone || "");
+    setEditRole(user.role);
+    setEditStatus(user.status);
+    setEditPassword(""); // No pre-llenar la contraseña
+    setEditFormError(null);
+    clearUpdateUserError();
+    setIsEditOpen(true);
+  };
+
+  const handleCloseEdit = () => {
+    setIsEditOpen(false);
+    setEditingUser(null);
+    resetEditForm();
+  };
+
+  const handleSubmitEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    
+    setEditFormError(null);
+    setEditSubmitting(true);
+    
+    // Construir payload solo con campos que han cambiado
+    const updatePayload: UpdateUserByAdminPayload = {
+      userId: editingUser.id,
+    };
+    
+    if (editEmail !== editingUser.email) updatePayload.email = editEmail;
+    if (editDisplayName !== editingUser.displayName) updatePayload.displayName = editDisplayName;
+    if (editFirstName !== (editingUser.firstName || "")) updatePayload.firstName = editFirstName || undefined;
+    if (editLastName !== (editingUser.lastName || "")) updatePayload.lastName = editLastName || undefined;
+    if (editDni !== (editingUser.dni || "")) updatePayload.dni = editDni || undefined;
+    if (editCuit !== (editingUser.cuit || "")) updatePayload.cuit = editCuit || undefined;
+    if (editPhone !== (editingUser.phone || "")) updatePayload.phone = editPhone || undefined;
+    if (editRole !== editingUser.role) updatePayload.role = editRole;
+    if (editStatus !== editingUser.status) updatePayload.status = editStatus;
+    if (editPassword.trim()) updatePayload.password = editPassword;
+    
+    // Si no hay cambios, cerrar modal
+    if (Object.keys(updatePayload).length === 1) { // Solo userId
+      handleCloseEdit();
+      return;
+    }
+    
+    const action = await updateUser(updatePayload);
+    setEditSubmitting(false);
+    
+    if (updateUserAsAdmin.fulfilled.match(action)) {
+      handleCloseEdit();
+    } else {
+      setEditFormError((action.payload as string) || "No se pudo actualizar el usuario");
+    }
+  };
+
   // Skeleton row for loading
   const SkeletonRow = () => (
     <tr className="animate-pulse">
@@ -153,6 +248,9 @@ const CustomersPage = () => {
       </td>
       <td>
         <div className="h-4 w-20 bg-gray-200 rounded" />
+      </td>
+      <td>
+        <div className="h-8 w-16 bg-gray-200 rounded" />
       </td>
     </tr>
   );
@@ -195,6 +293,7 @@ const CustomersPage = () => {
               <th>Email</th>
               <th>Último acceso</th>
               <th>Fecha de creación</th>
+              <th>Acciones</th>
             </tr>
           </thead>
           <tbody className="text-[#222222]">
@@ -205,14 +304,14 @@ const CustomersPage = () => {
               ))}
             {currentError && (
               <tr>
-                <td colSpan={5} className="text-center text-error">
+                <td colSpan={6} className="text-center text-error">
                   {currentError}
                 </td>
               </tr>
             )}
             {!currentLoading && !currentError && currentUsers.length === 0 && (
               <tr>
-                <td colSpan={5} className="text-center text-sm opacity-60">
+                <td colSpan={6} className="text-center text-sm opacity-60">
                   {isSearching ? "No se encontraron clientes" : "No hay clientes"}
                 </td>
               </tr>
@@ -247,6 +346,15 @@ const CustomersPage = () => {
                         year: "2-digit",
                       })
                     : ""}
+                </td>
+                <td>
+                  <button
+                    onClick={() => handleOpenEdit(user)}
+                    className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none hover:bg-[#111111]"
+                    disabled={updatingUser}
+                  >
+                    Editar
+                  </button>
                 </td>
               </tr>
             ))}
@@ -314,6 +422,15 @@ const CustomersPage = () => {
                       year: "2-digit",
                     })
                   : ""}
+              </div>
+              <div className="pt-2">
+                <button
+                  onClick={() => handleOpenEdit(user)}
+                  className="btn bg-[#222222] text-white px-4 py-2 rounded-none shadow-none hover:bg-[#111111]"
+                  disabled={updatingUser}
+                >
+                  Editar
+                </button>
               </div>
             </div>
           ))}
@@ -475,6 +592,189 @@ const CustomersPage = () => {
           method="dialog"
           className="modal-backdrop"
           onClick={handleCloseCreate}
+        >
+          <button>close</button>
+        </form>
+      </dialog>
+
+      {/* Modal editar cliente */}
+      <dialog className={`modal ${isEditOpen ? "modal-open" : ""}`}>
+        <div className="modal-box w-full max-w-md rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] p-0 max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-[#FFFFFF] border-b border-[#e1e1e1] flex justify-between items-center h-12 z-30">
+            <h3 className="font-bold text-lg text-[#111111] m-0 px-4">
+              Editar cliente
+            </h3>
+            <button
+              className="btn btn-sm bg-transparent text-[#333333] hover:text-[#111111] shadow-none h-full w-12 border-l border-[#e1e1e1] border-t-0 border-r-0 border-b-0 m-0"
+              onClick={handleCloseEdit}
+              disabled={editSubmitting}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-4">
+            <form onSubmit={handleSubmitEdit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-[#222222] mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  required
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-[#222222] mb-1">
+                  Nueva Contraseña (opcional)
+                </label>
+                <input
+                  type="password"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={editPassword}
+                  onChange={(e) => setEditPassword(e.target.value)}
+                  placeholder="Dejar vacío para mantener actual"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-[#222222] mb-1">
+                  Nombre a mostrar
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={editDisplayName}
+                  onChange={(e) => setEditDisplayName(e.target.value)}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[#222222] mb-1">
+                    Nombre
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={editFirstName}
+                    onChange={(e) => setEditFirstName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#222222] mb-1">
+                    Apellido
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={editLastName}
+                    onChange={(e) => setEditLastName(e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[#222222] mb-1">
+                    DNI
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={editDni}
+                    onChange={(e) => setEditDni(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#222222] mb-1">
+                    CUIT
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={editCuit}
+                    onChange={(e) => setEditCuit(e.target.value)}
+                  />
+                </div>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-[#222222] mb-1">
+                  Teléfono
+                </label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                />
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-[#222222] mb-1">
+                    Rol
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={editRole}
+                    onChange={(e) => setEditRole(e.target.value as UserRole)}
+                  >
+                    <option value={UserRole.User}>Usuario</option>
+                    <option value={UserRole.Admin}>Administrador</option>
+                    <option value={UserRole.Guest}>Invitado</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-[#222222] mb-1">
+                    Estado
+                  </label>
+                  <select
+                    className="w-full px-3 py-2 border border-[#e1e1e1] rounded-none focus:outline-none focus:ring-2 focus:ring-[#2271B1] text-[#222222] bg-[#FFFFFF]"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as UserStatus)}
+                  >
+                    <option value={UserStatus.Active}>Activo</option>
+                    <option value={UserStatus.Inactive}>Inactivo</option>
+                  </select>
+                </div>
+              </div>
+
+              {(editFormError || updateUserError) && (
+                <div className="text-red-600 text-sm">
+                  {editFormError || updateUserError}
+                </div>
+              )}
+
+              <div className="flex space-x-3 pt-2">
+                <button
+                  type="button"
+                  className="flex-1 px-4 py-2 text-[#333333] bg-[#f1f1f1] rounded-none hover:bg-[#e1e1e1] transition-colors border border-[#e1e1e1]"
+                  onClick={handleCloseEdit}
+                  disabled={editSubmitting}
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 px-4 py-2 text-white bg-[#222222] rounded-none hover:bg-[#111111] transition-colors disabled:opacity-50 shadow-none"
+                  disabled={editSubmitting}
+                >
+                  {editSubmitting ? "Actualizando..." : "Actualizar"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+        <form
+          method="dialog"
+          className="modal-backdrop"
+          onClick={handleCloseEdit}
         >
           <button>close</button>
         </form>

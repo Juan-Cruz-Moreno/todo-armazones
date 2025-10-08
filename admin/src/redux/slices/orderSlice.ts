@@ -61,6 +61,9 @@ import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import axiosInstance from "@/utils/axiosInstance";
 import { 
   OrdersResponse, 
+  OrdersByPageResponse,
+  OrdersPaginationInfo,
+  PaginationMetadata,
   Order, 
   UpdateOrderPayload,
   UpdateItemPricesPayload,
@@ -73,18 +76,25 @@ import {
   ApplyRefundResponse,
   RefundEligibilityResponse,
   CancelRefundResponse,
-  RefundCancelEligibilityResponse
+  RefundCancelEligibilityResponse,
+  HideCancelledOrderResponse,
+  SearchOrdersPayload,
+  SearchOrdersResponse
 } from "@/interfaces/order";
 import { ApiResponse, getErrorMessage } from "@/types/api";
 import { OrderStatus } from "@/enums/order.enum";
 
 interface OrderState {
   orders: Order[];
+  ordersByPage: Order[];
+  pagination: PaginationMetadata | null;
   orderById: Order | null;
   nextCursor: string | null;
   loading: boolean;
   bulkUpdateLoading: boolean;
   error: string | null;
+  paginationInfoLoading: boolean;
+  paginationInfoError: string | null;
   statusFilter?: OrderStatus;
   stockAvailability: StockAvailabilityResponse | null;
   stockCheckLoading: boolean;
@@ -97,15 +107,28 @@ interface OrderState {
   cancelRefundError: string | null;
   refundCancelEligibility: RefundCancelEligibilityResponse | null;
   refundCancelEligibilityLoading: boolean;
+  counts: Record<OrderStatus, number> | null;
+  countsLoading: boolean;
+  countsError: string | null;
+  hideOrderLoading: boolean;
+  hideOrderError: string | null;
+  searchResults: Order[];
+  searchPagination: PaginationMetadata | null;
+  searchLoading: boolean;
+  searchError: string | null;
 }
 
 const initialState: OrderState = {
   orders: [],
+  ordersByPage: [],
+  pagination: null,
   orderById: null,
   nextCursor: null,
   loading: false,
   bulkUpdateLoading: false,
   error: null,
+  paginationInfoLoading: false,
+  paginationInfoError: null,
   statusFilter: undefined,
   stockAvailability: null,
   stockCheckLoading: false,
@@ -118,6 +141,15 @@ const initialState: OrderState = {
   cancelRefundError: null,
   refundCancelEligibility: null,
   refundCancelEligibilityLoading: false,
+  counts: null,
+  countsLoading: false,
+  countsError: null,
+  hideOrderLoading: false,
+  hideOrderError: null,
+  searchResults: [],
+  searchPagination: null,
+  searchLoading: false,
+  searchError: null,
 };
 
 // Thunk para obtener todas las órdenes (con filtro opcional por status)
@@ -143,6 +175,49 @@ export const fetchOrders = createAsyncThunk<
     return response.data.data;
   } catch (error) {
     return rejectWithValue(getErrorMessage(error));
+  }
+});
+
+// Thunk para obtener órdenes con paginación por página (nuevo método recomendado)
+export const fetchOrdersByPage = createAsyncThunk<
+  OrdersByPageResponse,
+  { page?: number; status?: OrderStatus; limit?: number } | undefined,
+  { rejectValue: string }
+>("orders/fetchOrdersByPage", async (params, { rejectWithValue }) => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.page) query.append("page", params.page.toString());
+    if (params?.status) query.append("status", params.status);
+    if (params?.limit) query.append("limit", params.limit.toString());
+
+    const url = `/orders/all-by-page${query.toString() ? "?" + query.toString() : ""}`;
+    const { data } = await axiosInstance.get<ApiResponse<OrdersByPageResponse>>(
+      url
+    );
+    return data.data!;
+  } catch (err: unknown) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
+// Thunk para obtener solo metadatos de paginación de órdenes (para contadores rápidos)
+export const fetchOrdersPaginationInfo = createAsyncThunk<
+  OrdersPaginationInfo,
+  { status?: OrderStatus; limit?: number } | undefined,
+  { rejectValue: string }
+>("orders/fetchOrdersPaginationInfo", async (params, { rejectWithValue }) => {
+  try {
+    const query = new URLSearchParams();
+    if (params?.status) query.append("status", params.status);
+    if (params?.limit) query.append("limit", params.limit.toString());
+
+    const url = `/orders/pagination-info${query.toString() ? "?" + query.toString() : ""}`;
+    const { data } = await axiosInstance.get<ApiResponse<OrdersPaginationInfo>>(
+      url
+    );
+    return data.data!;
+  } catch (err: unknown) {
+    return rejectWithValue(getErrorMessage(err));
   }
 });
 
@@ -367,6 +442,75 @@ export const checkRefundCancelEligibility = createAsyncThunk<
   }
 );
 
+// Thunk para obtener el conteo de órdenes por estado
+export const fetchOrdersCount = createAsyncThunk<
+  Record<OrderStatus, number>,
+  void,
+  { rejectValue: string }
+>("orders/fetchOrdersCount", async (_, { rejectWithValue }) => {
+  try {
+    const response = await axiosInstance.get<ApiResponse<Record<OrderStatus, number>>>(
+      "/orders/counts"
+    );
+    if (response.data.status !== "success" || !response.data.data) {
+      return rejectWithValue(response.data.message || "Error al obtener conteo de órdenes");
+    }
+    return response.data.data;
+  } catch (error) {
+    return rejectWithValue(getErrorMessage(error));
+  }
+});
+
+// Thunk para ocultar una orden cancelada
+export const hideCancelledOrder = createAsyncThunk<
+  HideCancelledOrderResponse,
+  string,
+  { rejectValue: string }
+>(
+  "orders/hideCancelledOrder",
+  async (orderId, { rejectWithValue }) => {
+    try {
+      const response = await axiosInstance.patch<ApiResponse<HideCancelledOrderResponse>>(
+        `/orders/admin/${orderId}/hide`
+      );
+      if (response.data.status !== "success" || !response.data.data) {
+        return rejectWithValue(response.data.message || "Error al ocultar la orden");
+      }
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+// Thunk para buscar órdenes con criterios específicos
+export const searchOrders = createAsyncThunk<
+  SearchOrdersResponse,
+  SearchOrdersPayload,
+  { rejectValue: string }
+>(
+  "orders/searchOrders",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const query = new URLSearchParams();
+      if (payload.userId) query.append("userId", payload.userId);
+      if (payload.page) query.append("page", payload.page.toString());
+      if (payload.limit) query.append("limit", payload.limit.toString());
+
+      const url = `/orders/search${query.toString() ? "?" + query.toString() : ""}`;
+      const { data } = await axiosInstance.get<ApiResponse<SearchOrdersResponse>>(url);
+      
+      if (data.status !== "success" || !data.data) {
+        return rejectWithValue(data.message || "Error al buscar órdenes");
+      }
+      
+      return data.data;
+    } catch (error) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 const orderSlice = createSlice({
   name: "orders",
   initialState,
@@ -400,6 +544,12 @@ const orderSlice = createSlice({
       state.cancelRefundError = null;
       state.refundCancelEligibility = null;
     },
+    // Limpiar resultados de búsqueda
+    clearSearchResults(state) {
+      state.searchResults = [];
+      state.searchPagination = null;
+      state.searchError = null;
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -421,6 +571,35 @@ const orderSlice = createSlice({
       .addCase(fetchOrders.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload || "Error al obtener órdenes";
+      })
+
+      // fetchOrdersByPage
+      .addCase(fetchOrdersByPage.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchOrdersByPage.fulfilled, (state, action) => {
+        state.loading = false;
+        state.ordersByPage = action.payload.orders;
+        state.pagination = action.payload.pagination;
+      })
+      .addCase(fetchOrdersByPage.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload as string;
+      })
+
+      // fetchOrdersPaginationInfo
+      .addCase(fetchOrdersPaginationInfo.pending, (state) => {
+        state.paginationInfoLoading = true;
+        state.paginationInfoError = null;
+      })
+      .addCase(fetchOrdersPaginationInfo.fulfilled, (state) => {
+        state.paginationInfoLoading = false;
+        // No actualiza pagination, solo para info rápida
+      })
+      .addCase(fetchOrdersPaginationInfo.rejected, (state, action) => {
+        state.paginationInfoLoading = false;
+        state.paginationInfoError = action.payload as string;
       })
       .addCase(updateOrder.pending, (state) => {
         // No cambiar loading para evitar parpadeo en la UI
@@ -650,9 +829,72 @@ const orderSlice = createSlice({
         state.refundCancelEligibilityLoading = false;
         state.cancelRefundError = action.payload || "Error al verificar elegibilidad de cancelación de reembolso";
         state.refundCancelEligibility = null;
+      })
+      .addCase(fetchOrdersCount.pending, (state) => {
+        state.countsLoading = true;
+        state.countsError = null;
+      })
+      .addCase(fetchOrdersCount.fulfilled, (state, action) => {
+        state.countsLoading = false;
+        state.countsError = null;
+        state.counts = action.payload;
+      })
+      .addCase(fetchOrdersCount.rejected, (state, action) => {
+        state.countsLoading = false;
+        state.countsError = action.payload || "Error al obtener conteo de órdenes";
+        state.counts = null;
+      })
+      .addCase(hideCancelledOrder.pending, (state) => {
+        state.hideOrderLoading = true;
+        state.hideOrderError = null;
+      })
+      .addCase(hideCancelledOrder.fulfilled, (state, action) => {
+        state.hideOrderLoading = false;
+        state.hideOrderError = null;
+        // Actualizar la orden en el estado si está presente
+        if (action.payload.order) {
+          const index = state.orders.findIndex(order => order.id === action.payload.order!.id);
+          if (index !== -1) {
+            state.orders[index] = action.payload.order;
+          }
+          const indexByPage = state.ordersByPage.findIndex(order => order.id === action.payload.order!.id);
+          if (indexByPage !== -1) {
+            state.ordersByPage[indexByPage] = action.payload.order;
+          }
+          if (state.orderById?.id === action.payload.order.id) {
+            state.orderById = action.payload.order;
+          }
+        }
+      })
+      .addCase(hideCancelledOrder.rejected, (state, action) => {
+        state.hideOrderLoading = false;
+        state.hideOrderError = action.payload || "Error al ocultar la orden";
+      })
+      // searchOrders
+      .addCase(searchOrders.pending, (state) => {
+        state.searchLoading = true;
+        state.searchError = null;
+      })
+      .addCase(searchOrders.fulfilled, (state, action) => {
+        state.searchLoading = false;
+        state.searchResults = action.payload.orders;
+        state.searchPagination = action.payload.pagination;
+        state.searchError = null;
+      })
+      .addCase(searchOrders.rejected, (state, action) => {
+        state.searchLoading = false;
+        state.searchError = action.payload || "Error al buscar órdenes";
       });
   },
 });
 
-export const { setStatusFilter, resetOrders, addOrder, clearStockAvailability, clearOrderById, clearRefundState } = orderSlice.actions;
+export const { 
+  setStatusFilter, 
+  resetOrders, 
+  addOrder, 
+  clearStockAvailability, 
+  clearOrderById, 
+  clearRefundState,
+  clearSearchResults 
+} = orderSlice.actions;
 export default orderSlice.reducer;

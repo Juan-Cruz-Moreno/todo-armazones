@@ -2,6 +2,18 @@ import { OrderStatus, PaymentMethod, ShippingMethod, DeliveryType } from '@enums
 import { IAddress } from '@interfaces/address';
 import { Types } from 'mongoose';
 
+export interface PaginationMetadata {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  nextCursor: string | null;
+  previousCursor: string | null;
+  limit: number;
+  itemsInCurrentPage: number;
+}
+
 export interface CreateOrderDto {
   shippingMethod: ShippingMethod;
   deliveryWindow?: string;
@@ -138,6 +150,9 @@ export interface OrderResponseDto {
   refund?: RefundResponse | null;
   createdAt: string;
   updatedAt: string;
+  exchangeRate: number; // Tasa de cambio USD a ARS
+  itemsCount: number; // Total de unidades físicas
+  isVisible: boolean; // Indica si la orden es visible en listados
 }
 
 // Versiones para usuario usando Omit
@@ -192,6 +207,7 @@ export interface RefundResponse {
   reason?: string;
   processedAt: string;
   processedBy?: string;
+  originalSubTotal: number; // Subtotal original antes del reembolso
 }
 
 export interface ApplyRefundResultDto {
@@ -228,4 +244,17 @@ export interface CancelRefundResultDto {
     restoredContributionMarginUSD: number;
     cogsUSD: number; // COGS permanece sin cambios
   };
+}
+
+// DTOs para búsqueda de órdenes
+export interface SearchOrdersDto {
+  userId?: Types.ObjectId | string; // ID del usuario para filtrar órdenes
+  page?: number; // Número de página (default: 1)
+  limit?: number; // Cantidad de resultados por página (default: 10)
+}
+
+export interface SearchOrdersResultDto {
+  orders: OrderResponseDto[];
+  pagination: PaginationMetadata;
+  searchCriteria: SearchOrdersDto;
 }

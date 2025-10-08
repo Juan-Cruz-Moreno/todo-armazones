@@ -134,4 +134,35 @@ export class UserController {
       res.status(500).json(response);
     }
   };
+
+  /**
+   * Actualiza cualquier campo de un usuario (solo admin)
+   */
+  public updateUserAsAdmin = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const updateData = req.body;
+
+      const updatedUser = await this.userService.updateUserAsAdmin(userId, updateData);
+      const response: ApiResponse<typeof updatedUser> = {
+        status: 'success',
+        message: 'Usuario actualizado exitosamente por administrador',
+        data: updatedUser,
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      const response: ApiResponse =
+        error instanceof Error && 'stack' in error
+          ? {
+              status: 'error',
+              message: 'Failed to update user as admin',
+              details: { message: error.message, stack: error.stack },
+            }
+          : {
+              status: 'error',
+              message: 'Failed to update user as admin',
+            };
+      res.status(500).json(response);
+    }
+  };
 }

@@ -42,6 +42,7 @@ export const createProductSchema = z.object({
   sku: z.string().min(1, "El SKU es requerido"),
   size: z.string().min(1, "El tamaño es requerido"),
   description: z.string().optional(),
+  primaryImageOrder: z.array(z.number().int().min(0)).optional(), // Array de índices para ordenar primaryImage
 });
 
 // Schema para archivos del producto
@@ -67,6 +68,15 @@ export const createProductWithVariantsFrontendSchema = z.object({
 }, {
   message: "Cada variante debe tener al menos una imagen seleccionada",
   path: ["files", "variantImages"], // Apunta al campo de imágenes
+}).refine((data) => {
+  // Validar primaryImageOrder si está presente
+  if (data.product.primaryImageOrder) {
+    return data.product.primaryImageOrder.length === data.files.primaryImage.length;
+  }
+  return true;
+}, {
+  message: "primaryImageOrder debe tener la misma cantidad de elementos que primaryImage",
+  path: ["product", "primaryImageOrder"],
 });
 
 // Schema para variante en actualización (frontend)
@@ -103,6 +113,7 @@ export const updateProductSchema = z.object({
   sku: z.string().min(1, "El SKU es requerido").optional(),
   size: z.string().min(1, "El tamaño es requerido").optional(),
   description: z.string().optional(),
+  primaryImageOrder: z.array(z.number().int().min(0)).optional(), // Array de índices para ordenar primaryImage
 });
 
 // Schema para archivos en actualización (opcionales)
@@ -147,6 +158,16 @@ export const updateProductWithVariantsFrontendSchema = z.object({
 }, {
   message: "Nueva variante debe tener al menos una imagen",
   path: ["files", "variantImages"],
+})
+.refine((data) => {
+  // Validar primaryImageOrder si está presente y hay primaryImage
+  if (data.product.primaryImageOrder && data.files?.primaryImage) {
+    return data.product.primaryImageOrder.length === data.files.primaryImage.length;
+  }
+  return true;
+}, {
+  message: "primaryImageOrder debe tener la misma cantidad de elementos que primaryImage",
+  path: ["product", "primaryImageOrder"],
 });
 
 // Tipos inferidos para usar en formularios

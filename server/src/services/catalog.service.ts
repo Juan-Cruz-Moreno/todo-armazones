@@ -128,6 +128,9 @@ export class CatalogService {
       thumbnail: this.getAbsoluteImageUrl(variant.thumbnail),
       images: variant.images.map((i) => this.getAbsoluteImageUrl(i)),
       priceUSD: adjustedPrice,
+      priceARS: variant.priceARS
+        ? this.calculateAdjustedPrice(variant.priceARS, categoryId, subcategoryId, priceAdjustments)
+        : undefined,
     };
   }
 

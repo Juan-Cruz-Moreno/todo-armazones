@@ -43,15 +43,31 @@ export class ProductController {
         throw new AppError('At least one primary image is required', 400, 'fail', false);
       primaryImageFiles.forEach((file) => generatedFiles.push(file.path));
 
-      // 2. Crear thumbnail con Sharp (solo para la primera imagen)
-      const firstPrimaryImage = primaryImageFiles[0];
-      const thumbnailFilename = 'thumb-' + firstPrimaryImage.filename;
-      const thumbnailPath = path.join(firstPrimaryImage.destination, thumbnailFilename);
-      await sharp(firstPrimaryImage.path).resize(300, 300).toFile(thumbnailPath);
-      generatedFiles.push(thumbnailPath);
-
       // 3. Los datos ya están parseados por el middleware parseJsonFields
       const productData = req.body.product;
+
+      // 2. Crear thumbnail con Sharp (de la primera imagen después de ordenar)
+      let thumbnailFilename: string;
+      if (productData.primaryImageOrder && productData.primaryImageOrder.length === primaryImageFiles.length) {
+        // Usar el índice de primaryImageOrder[0] para elegir el archivo para thumbnail
+        const firstIndex = productData.primaryImageOrder[0];
+        if (firstIndex < 0 || firstIndex >= primaryImageFiles.length) {
+          throw new AppError(`Índice inválido en primaryImageOrder para thumbnail: ${firstIndex}`, 400, 'fail', false);
+        }
+        const firstPrimaryImage = primaryImageFiles[firstIndex];
+        thumbnailFilename = 'thumb-' + firstPrimaryImage.filename;
+        const thumbnailPath = path.join(firstPrimaryImage.destination, thumbnailFilename);
+        await sharp(firstPrimaryImage.path).resize(300, 300).toFile(thumbnailPath);
+        generatedFiles.push(thumbnailPath);
+      } else {
+        // Comportamiento original: thumbnail de la primera imagen
+        const firstPrimaryImage = primaryImageFiles[0];
+        thumbnailFilename = 'thumb-' + firstPrimaryImage.filename;
+        const thumbnailPath = path.join(firstPrimaryImage.destination, thumbnailFilename);
+        await sharp(firstPrimaryImage.path).resize(300, 300).toFile(thumbnailPath);
+        generatedFiles.push(thumbnailPath);
+      }
+
       const variantsData = req.body.variants;
 
       // 4. Asociar imágenes a cada variante usando el nombre del color como identificador
@@ -84,9 +100,28 @@ export class ProductController {
       );
 
       // 5. Asignar rutas de imágenes procesadas al producto
+      let primaryImagePaths = primaryImageFiles.map((file) => 'uploads/' + file.filename);
+
+      // Reordenar primaryImage si se proporciona primaryImageOrder
+      if (productData.primaryImageOrder && productData.primaryImageOrder.length === primaryImageFiles.length) {
+        primaryImagePaths = productData.primaryImageOrder.map((index: number) => {
+          if (index < 0 || index >= primaryImageFiles.length) {
+            throw new AppError(`Índice inválido en primaryImageOrder: ${index}`, 400, 'fail', false);
+          }
+          return primaryImagePaths[index];
+        });
+      } else if (productData.primaryImageOrder && productData.primaryImageOrder.length !== primaryImageFiles.length) {
+        throw new AppError(
+          'primaryImageOrder debe tener la misma cantidad de elementos que primaryImage',
+          400,
+          'fail',
+          false,
+        );
+      }
+
       const productDto: CreateProductRequestDto = {
         ...productData,
-        primaryImage: primaryImageFiles.map((file) => 'uploads/' + file.filename),
+        primaryImage: primaryImagePaths,
         thumbnail: 'uploads/' + thumbnailFilename,
       };
 
@@ -358,16 +393,48 @@ export class ProductController {
       const primaryImageFiles = files.filter((file) => file.fieldname === 'primaryImage');
       if (primaryImageFiles.length > 0) {
         primaryImageFiles.forEach((file) => generatedFiles.push(file.path));
-        // Crear thumbnail solo para la primera imagen
-        const firstPrimaryImage = primaryImageFiles[0];
+        // Crear thumbnail solo para la primera imagen (después de ordenar si aplica)
+        let firstPrimaryImage: Express.Multer.File;
+        if (productDto.primaryImageOrder && productDto.primaryImageOrder.length === primaryImageFiles.length) {
+          const firstIndex = productDto.primaryImageOrder[0];
+          if (firstIndex < 0 || firstIndex >= primaryImageFiles.length) {
+            throw new AppError(
+              `Índice inválido en primaryImageOrder para thumbnail: ${firstIndex}`,
+              400,
+              'fail',
+              false,
+            );
+          }
+          firstPrimaryImage = primaryImageFiles[firstIndex];
+        } else {
+          firstPrimaryImage = primaryImageFiles[0];
+        }
         thumbnailFilename = 'thumb-' + firstPrimaryImage.filename;
         const thumbnailPath = path.join(firstPrimaryImage.destination, thumbnailFilename);
         await sharp(firstPrimaryImage.path).resize(300, 300).toFile(thumbnailPath);
         generatedFiles.push(thumbnailPath);
 
+        // Reordenar primaryImage
+        let primaryImagePaths = primaryImageFiles.map((file) => 'uploads/' + file.filename);
+        if (productDto.primaryImageOrder && productDto.primaryImageOrder.length === primaryImageFiles.length) {
+          primaryImagePaths = productDto.primaryImageOrder.map((index: number) => {
+            if (index < 0 || index >= primaryImageFiles.length) {
+              throw new AppError(`Índice inválido en primaryImageOrder: ${index}`, 400, 'fail', false);
+            }
+            return primaryImagePaths[index];
+          });
+        } else if (productDto.primaryImageOrder && productDto.primaryImageOrder.length !== primaryImageFiles.length) {
+          throw new AppError(
+            'primaryImageOrder debe tener la misma cantidad de elementos que primaryImage',
+            400,
+            'fail',
+            false,
+          );
+        }
+
         productDto = {
           ...productDto,
-          primaryImage: primaryImageFiles.map((file) => 'uploads/' + file.filename),
+          primaryImage: primaryImagePaths,
           thumbnail: 'uploads/' + thumbnailFilename,
         };
       }

@@ -29,6 +29,7 @@ const createProductSchema = z.object({
   // Se incluyen por consistencia y para validar si se envían como strings (e.g., URLs) en el futuro.
   thumbnail: z.string().optional(),
   primaryImage: z.array(z.string()).optional(),
+  primaryImageOrder: z.array(z.number().int().min(0)).optional(), // Array de índices para ordenar primaryImage
   category: z
     .array(z.string().min(1, 'Cada categoría debe ser un ID válido'))
     .min(1, 'Al menos una categoría es requerida'),
@@ -74,6 +75,7 @@ const updateVariantSchema = z
 const updateProductSchema = z.object({
   thumbnail: z.string().optional(),
   primaryImage: z.array(z.string()).optional(),
+  primaryImageOrder: z.array(z.number().int().min(0)).optional(), // Array de índices para ordenar primaryImage
   category: z.array(z.string().min(1, 'Cada categoría debe ser un ID válido')).optional(), // Opcional para updates parciales
   subcategory: z.string().min(1, 'Subcategoría es requerida').optional(),
   productModel: z.string().min(1, 'Modelo del producto es requerido').optional(),

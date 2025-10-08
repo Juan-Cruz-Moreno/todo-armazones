@@ -53,8 +53,16 @@ export interface StockMovementHistory {
 export interface ProductVariantStockSummary {
   id: string;
   color: { name: string; hex: string };
+  thumbnail: string;
+  product: {
+    id: string;
+    productModel: string;
+    sku: string;
+    thumbnail: string;
+  };
   currentStock: number;
   averageCostUSD: number;
+  priceUSD: number;
   totalValue: number; // currentStock * averageCostUSD
   lastMovement?: {
     date: string;

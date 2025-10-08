@@ -3,6 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import handlebars from 'handlebars';
 import puppeteer from 'puppeteer';
+import { PDFDocument, rgb } from 'pdf-lib';
 import { OrderResponseDto } from '@dto/order.dto';
 import { ShippingMethod, PaymentMethod } from '@enums/order.enum';
 import { formatCurrency } from '@utils/formatCurrency';
@@ -51,6 +52,11 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
   const templateHtml = fs.readFileSync(templatePath, 'utf8');
   const template = handlebars.compile(templateHtml);
 
+  // Registrar helper para formatear moneda
+  handlebars.registerHelper('formatCurrency', (value: number, locale: string, currency: string) => {
+    return formatCurrency(value, locale, currency);
+  });
+
   // Helpers para condicionales
   const isParcelCompany = orderData.shippingMethod === ShippingMethod.ParcelCompany;
   const isMotorcycle = orderData.shippingMethod === ShippingMethod.Motorcycle;
@@ -89,6 +95,8 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
       ? formatCurrency(orderData.bankTransferExpense, 'en-US', 'USD')
       : undefined;
 
+  const exchangeRateFormatted = formatCurrency(orderData.exchangeRate, 'es-AR', 'ARS');
+
   const html = template({
     ...orderData,
     logoUrl,
@@ -103,6 +111,7 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
     isMotorcycle,
     showBankTransferExpense,
     bankTransferExpense: bankTransferExpenseFormatted,
+    exchangeRate: exchangeRateFormatted,
   });
 
   const browser = await puppeteer.launch({
@@ -121,22 +130,62 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
       const pdfBuffer = (await page.pdf({
         format: 'A4',
         printBackground: true,
-        displayHeaderFooter: true,
         margin: {
-          top: '40px',
-          bottom: '100px', // espacio para el footer
+          top: '70px', // Increased to provide space for order number and page number
+          bottom: '20px',
         },
-        footerTemplate: `
-          <div style="font-size:16px; width:100%; text-align:center; color:#444; padding:6px 0; font-family: Arial, sans-serif;">
-            - Pagos por transferencia o depósito bancario incluyen un 4% de interés sobre el Total<br/>
-            - Costos extra de envío a cargo del Cliente<br/>
-            - Precios en pesos sujetos a modificación por tipo de cambio al día de pago
-          </div>
-        `,
-        headerTemplate: `<div></div>`,
       })) as Buffer;
 
-      return pdfBuffer;
+      // Load the PDF with pdf-lib to add order number and page numbers
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      const pages = pdfDoc.getPages();
+      const totalPages = pages.length;
+
+      // Embed a standard font
+      const helveticaFont = await pdfDoc.embedFont('Helvetica');
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        const { width, height } = page.getSize();
+
+        // Order number in top-right corner
+        const orderText = `Orden #${orderData.orderNumber}`;
+        const pageText = `Página ${i + 1} de ${totalPages}`;
+
+        // Position for order number: top-right, with some margin
+        const orderTextWidth = helveticaFont.widthOfTextAtSize(orderText, 10);
+        const orderX = width - orderTextWidth - 20; // 20pt margin from right
+        const orderY = height - 30; // 30pt from top
+
+        // Position for page number: below order number
+        const pageTextWidth = helveticaFont.widthOfTextAtSize(pageText, 10);
+        const pageX = width - pageTextWidth - 20; // Align right
+        const pageY = orderY - 15; // 15pt below order number
+
+        // Draw order number
+        page.drawText(orderText, {
+          x: orderX,
+          y: orderY,
+          size: 10,
+          font: helveticaFont,
+          color: rgb(0, 0, 0),
+        });
+
+        // Draw page number
+        page.drawText(pageText, {
+          x: pageX,
+          y: pageY,
+          size: 10,
+          font: helveticaFont,
+          color: rgb(0, 0, 0),
+        });
+      }
+
+      // Serialize the modified PDF
+      const modifiedPdfBytes = await pdfDoc.save();
+      const modifiedPdfBuffer = Buffer.from(modifiedPdfBytes);
+
+      return modifiedPdfBuffer;
     } finally {
       await page.close().catch(() => {});
     }

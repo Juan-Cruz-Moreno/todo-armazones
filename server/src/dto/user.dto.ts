@@ -7,6 +7,20 @@ export interface UpdateUserRequestDto {
   cuit?: string;
   phone?: string;
 }
+
+export interface UpdateUserByAdminRequestDto {
+  displayName?: string;
+  email?: string;
+  firstName?: string;
+  lastName?: string;
+  dni?: string;
+  cuit?: string;
+  phone?: string;
+  password?: string;
+  role?: UserRole;
+  status?: UserStatus;
+}
+
 import { UserRole, UserStatus } from '@enums/user.enum';
 
 export interface getUserResponseDto {

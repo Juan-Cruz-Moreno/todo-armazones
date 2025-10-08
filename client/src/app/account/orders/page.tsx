@@ -188,8 +188,8 @@ const OrdersPage = () => {
               <th className="text-[#222222]">Orden</th>
               <th className="hidden sm:table-cell text-[#222222]">Fecha</th>
               <th className="text-[#222222]">Estado</th>
-              <th className="hidden sm:table-cell text-[#222222]">Total</th>
-              <th className="text-[#222222]">Total (ARS)</th>
+              <th className="hidden sm:table-cell text-[#222222]">Total USD</th>
+              <th className="text-[#222222]">Total ARS</th>
             </tr>
           </thead>
           <tbody>
@@ -205,7 +205,8 @@ const OrdersPage = () => {
                     <div className="flex items-center gap-4">
                       <div className="flex-1">
                         <div className="font-bold text-[#2271B1]">
-                          #{order.orderNumber} - {order.user.displayName}
+                          #{order.orderNumber} - {order.user.firstName}{" "}
+                          {order.user.lastName}
                         </div>
                       </div>
                       <button
@@ -257,7 +258,20 @@ const OrdersPage = () => {
                     <OrderStatusBadge status={order.orderStatus} />
                   </td>
                   <td className="hidden sm:table-cell text-[#555555]">
-                    {formatCurrency(order.totalAmount, "en-US", "USD")}
+                    {order.refund && order.refund.originalSubTotal ? (
+                      <>
+                        <span className="line-through">
+                          {formatCurrency(
+                            order.refund.originalSubTotal,
+                            "en-US",
+                            "USD"
+                          )}
+                        </span>{" "}
+                        {formatCurrency(order.totalAmount, "en-US", "USD")}
+                      </>
+                    ) : (
+                      formatCurrency(order.totalAmount, "en-US", "USD")
+                    )}
                   </td>
                   <td>
                     {formatCurrency(order.totalAmountARS, "es-AR", "ARS")}
@@ -331,8 +345,7 @@ const OrdersPage = () => {
                   </a>
                 </p>
                 <p className="mb-2 text-[#333333]">
-                  <strong>DNI:</strong>{" "}
-                  {previewOrder.user.dni || "N/A"}
+                  <strong>DNI:</strong> {previewOrder.user.dni || "N/A"}
                 </p>
                 {previewOrder.user.cuit && (
                   <p className="mb-2 text-[#333333]">
@@ -433,7 +446,7 @@ const OrdersPage = () => {
                         <tr className="border-b border-[#e1e1e1]">
                           <th className="text-[#222222]">Producto</th>
                           <th className="text-[#222222]">Cantidad</th>
-                          <th className="text-[#222222]">Subtotal</th>
+                          <th className="text-[#222222]">Subtotal USD</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -444,23 +457,67 @@ const OrdersPage = () => {
                               className="text-[#333333] border-b border-[#e1e1e1]"
                             >
                               <td>
-                                <div className="flex flex-col">
-                                  <strong>
-                                    {item.productVariant.product.productModel}
-                                  </strong>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className="text-sm text-gray-500">
-                                      Color: {item.productVariant.color.name}
-                                    </span>
-                                    <span
-                                      className="w-4 h-4 rounded-full border border-gray-300"
-                                      style={{
-                                        backgroundColor:
-                                          item.productVariant.color.hex,
-                                      }}
-                                    ></span>
+                                <a
+                                  href={`https://tienda.todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="block"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    {/* Imagen del producto (responsive) */}
+                                    <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
+                                      <Image
+                                        src={`${
+                                          process.env.NEXT_PUBLIC_API_URL
+                                        }/${
+                                          item.productVariant.images?.[0] ||
+                                          "placeholder-image.jpg"
+                                        }`}
+                                        alt={`${
+                                          item.productVariant.product
+                                            .productModel
+                                        } - ${
+                                          item.productVariant.color?.name ||
+                                          "variant"
+                                        }`}
+                                        width={64}
+                                        height={64}
+                                        className="object-cover w-full h-full"
+                                      />
+                                    </div>
+
+                                    {/* Información del producto (truncate en pantallas pequeñas) */}
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <span
+                                        className="font-medium text-[#222222] truncate block"
+                                        title={`${item.productVariant.product.productModel} ${item.productVariant.product.sku}`}
+                                      >
+                                        {
+                                          item.productVariant.product
+                                            .productModel
+                                        }
+                                      </span>
+                                      <div className="flex items-center gap-2 mt-1">
+                                        <span
+                                          className="text-sm text-gray-500 truncate"
+                                          title={`Color: ${item.productVariant.color?.name}`}
+                                        >
+                                          Color:{" "}
+                                          {item.productVariant.color?.name}
+                                        </span>
+                                        <span
+                                          className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                          style={{
+                                            backgroundColor:
+                                              item.productVariant.color?.hex ||
+                                              "transparent",
+                                          }}
+                                          aria-hidden
+                                        />
+                                      </div>
+                                    </div>
                                   </div>
-                                </div>
+                                </a>
                               </td>
                               <td>{item.quantity}</td>
                               <td>
@@ -474,26 +531,49 @@ const OrdersPage = () => {
                   </div>
                 </div>
               )}
-              <p className="mb-2 text-[#333333]">
-                <strong>Subtotal USD:</strong>{" "}
-                {formatCurrency(previewOrder.subTotal, "en-US", "USD")}
-              </p>
-              {previewOrder.bankTransferExpense && (
+              {previewOrder.refund && previewOrder.refund.originalSubTotal && (
                 <p className="mb-2 text-[#333333]">
-                  <strong>Gastos de Transferencia Bancaria USD:</strong>{" "}
+                  <strong>Subtotal USD:</strong>{" "}
+                  <span style={{ textDecoration: "line-through" }}>
+                    {formatCurrency(
+                      previewOrder.refund.originalSubTotal,
+                      "en-US",
+                      "USD"
+                    )}
+                  </span>
+                </p>
+              )}
+              {previewOrder.refund && (
+                <p className="mb-2 text-[#A00000]">
+                  <strong>Reembolso USD:</strong> -
                   {formatCurrency(
-                    previewOrder.bankTransferExpense,
+                    previewOrder.refund.appliedAmount,
                     "en-US",
                     "USD"
                   )}
                 </p>
               )}
               <p className="mb-2 text-[#333333]">
+                <strong>Subtotal USD:</strong>{" "}
+                {formatCurrency(previewOrder.subTotal, "en-US", "USD")}
+              </p>
+              {previewOrder.bankTransferExpense &&
+                previewOrder.paymentMethod === PaymentMethod.BankTransfer && (
+                  <p className="mb-2 text-[#333333]">
+                    <strong>Gasto por Transferencia bancaria USD:</strong>{" "}
+                    {formatCurrency(
+                      previewOrder.bankTransferExpense,
+                      "en-US",
+                      "USD"
+                    )}
+                  </p>
+                )}
+              <p className="mb-2 text-[#333333]">
                 <strong>Total USD:</strong>{" "}
                 {formatCurrency(previewOrder.totalAmount, "en-US", "USD")}
               </p>
               <p className="mb-2 text-[#333333]">
-                <strong>Total (ARS):</strong>{" "}
+                <strong>Total ARS:</strong>{" "}
                 {formatCurrency(previewOrder.totalAmountARS, "es-AR", "ARS")}
               </p>
             </div>

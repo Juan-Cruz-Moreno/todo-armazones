@@ -1,5 +1,6 @@
 import axios from 'axios';
-import Dollar from '@models/Dollar';
+import { UpdateQuery } from 'mongoose';
+import Dollar, { IDollarDocument } from '@models/Dollar';
 import { dollarResponseDTO, updateDollarAddedValueDTO } from '@dto/dollar.dto';
 import { AppError } from '@utils/AppError';
 import logger from '@config/logger';
@@ -52,39 +53,43 @@ export class DollarService {
   public async updateDollarValue(): Promise<{ data: dollarResponseDTO; updated: boolean }> {
     const { baseValue, source, apiUpdatedAt } = await this.fetchDollarBaseValue();
 
-    let dollar = await Dollar.findOne();
+    const existing = await Dollar.findOne();
     let updated = false;
+    const updateObj: UpdateQuery<IDollarDocument> = { $currentDate: { updatedAt: true } };
 
-    if (!dollar) {
-      dollar = new Dollar({
+    if (!existing) {
+      updateObj.$set = {
         baseValue,
         value: baseValue,
         addedValue: 0,
         isPercentage: false,
         source,
         apiUpdatedAt,
-      });
+      };
       updated = true;
       logger.info('Nuevo registro de dólar creado en la base de datos', {
         baseValue,
       });
+    } else if (existing.baseValue !== baseValue) {
+      updateObj.$set = {
+        baseValue,
+        source,
+        apiUpdatedAt,
+        value: this.applyAddedValue(baseValue, existing.addedValue, existing.isPercentage),
+      };
+      updated = true;
     } else {
-      if (dollar.baseValue === baseValue) {
-        logger.info('El valor base obtenido es igual al almacenado. No se realizaron cambios.', {
+      logger.info(
+        'El valor base obtenido es igual al almacenado. No se realizaron cambios en los valores, pero se actualizó updatedAt.',
+        {
           baseValue,
-        });
-        updated = false;
-      } else {
-        dollar.baseValue = baseValue;
-        dollar.source = source;
-        dollar.apiUpdatedAt = apiUpdatedAt;
-        dollar.value = this.applyAddedValue(baseValue, dollar.addedValue, dollar.isPercentage);
-        updated = true;
-      }
+        },
+      );
     }
 
+    const dollar = await Dollar.findOneAndUpdate({}, updateObj, { upsert: true, new: true });
+
     if (updated) {
-      await dollar.save();
       logger.info('Valor del dólar actualizado en la base de datos', {
         finalValue: dollar.value,
         addedValue: dollar.addedValue,
