@@ -21,7 +21,7 @@ import { downloadOrderPDF } from "@/utils/downloadOrderPDF";
 import Image from "next/image";
 
 const OrdersPage = () => {
-  const ORDERS_PER_PAGE = 2; // Número de órdenes por página
+  const ORDERS_PER_PAGE = 20; // Número de órdenes por página
 
   const {
     ordersByPage,
