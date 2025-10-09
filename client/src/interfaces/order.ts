@@ -1,4 +1,9 @@
-import { OrderStatus, PaymentMethod, ShippingMethod, DeliveryType } from "@/enums/order.enum";
+import {
+  OrderStatus,
+  PaymentMethod,
+  ShippingMethod,
+  DeliveryType,
+} from "@/enums/order.enum";
 import { UserRole, UserStatus } from "@/enums/user.enum";
 
 export interface Order {
@@ -27,6 +32,8 @@ export interface Order {
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
   refund?: RefundDetails | null;
+  exchangeRate: number;
+  itemsCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -77,7 +84,7 @@ export interface ShippingAddress {
 
 // Interfaces para reembolsos
 export interface RefundDetails {
-  type: 'fixed' | 'percentage';
+  type: "fixed" | "percentage";
   amount: number;
   appliedAmount: number;
   reason?: string;

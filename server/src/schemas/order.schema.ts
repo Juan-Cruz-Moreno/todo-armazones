@@ -347,6 +347,21 @@ export const searchOrdersQuerySchema = z.object({
       message: 'El userId debe ser un ObjectId válido',
     })
     .optional(),
+  orderStatus: z
+    .enum(OrderStatus, {
+      message: 'El estado de la orden debe ser uno de los valores válidos',
+    })
+    .optional(),
   page: z.coerce.number().min(1, 'La página debe ser al menos 1').optional(),
   limit: z.coerce.number().min(1, 'El límite debe ser al menos 1').max(100, 'El límite máximo es 100').optional(),
+});
+
+// Schema para conteo de órdenes por búsqueda
+export const getOrdersCountBySearchQuerySchema = z.object({
+  userId: z
+    .string()
+    .refine((val) => Types.ObjectId.isValid(val), {
+      message: 'El userId debe ser un ObjectId válido',
+    })
+    .optional(),
 });

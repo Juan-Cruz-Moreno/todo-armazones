@@ -27,7 +27,7 @@ cron.schedule('*/30 * * * *', async () => {
       logger.info('Órdenes actualizadas con el nuevo valor del dólar');
     }
 
-    // // Migración única: actualizar itemsCount en todas las órdenes existentes
+    // Migración única: actualizar itemsCount en todas las órdenes existentes
     // logger.info('Iniciando migración única de itemsCount en todas las órdenes');
     // const updatedOrdersCount = await orderService.updateAllOrdersItemsCount();
     // logger.info('Migración de itemsCount completada', { updatedOrdersCount });

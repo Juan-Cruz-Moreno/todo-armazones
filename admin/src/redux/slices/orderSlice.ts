@@ -110,6 +110,9 @@ interface OrderState {
   counts: Record<OrderStatus, number> | null;
   countsLoading: boolean;
   countsError: string | null;
+  searchCounts: Record<OrderStatus, number> | null;
+  searchCountsLoading: boolean;
+  searchCountsError: string | null;
   hideOrderLoading: boolean;
   hideOrderError: string | null;
   searchResults: Order[];
@@ -144,6 +147,9 @@ const initialState: OrderState = {
   counts: null,
   countsLoading: false,
   countsError: null,
+  searchCounts: null,
+  searchCountsLoading: false,
+  searchCountsError: null,
   hideOrderLoading: false,
   hideOrderError: null,
   searchResults: [],
@@ -461,6 +467,28 @@ export const fetchOrdersCount = createAsyncThunk<
   }
 });
 
+// Thunk para obtener el conteo de órdenes por búsqueda
+export const fetchOrdersCountBySearch = createAsyncThunk<
+  Record<OrderStatus, number>,
+  { userId?: string },
+  { rejectValue: string }
+>("orders/fetchOrdersCountBySearch", async (params, { rejectWithValue }) => {
+  try {
+    const query = new URLSearchParams();
+    if (params.userId) query.append("userId", params.userId);
+
+    const url = `/orders/counts-by-search${query.toString() ? "?" + query.toString() : ""}`;
+    const response = await axiosInstance.get<ApiResponse<Record<OrderStatus, number>>>(url);
+    
+    if (response.data.status !== "success" || !response.data.data) {
+      return rejectWithValue(response.data.message || "Error al obtener conteo de órdenes por búsqueda");
+    }
+    return response.data.data;
+  } catch (error) {
+    return rejectWithValue(getErrorMessage(error));
+  }
+});
+
 // Thunk para ocultar una orden cancelada
 export const hideCancelledOrder = createAsyncThunk<
   HideCancelledOrderResponse,
@@ -494,6 +522,7 @@ export const searchOrders = createAsyncThunk<
     try {
       const query = new URLSearchParams();
       if (payload.userId) query.append("userId", payload.userId);
+      if (payload.orderStatus) query.append("orderStatus", payload.orderStatus);
       if (payload.page) query.append("page", payload.page.toString());
       if (payload.limit) query.append("limit", payload.limit.toString());
 
@@ -549,6 +578,8 @@ const orderSlice = createSlice({
       state.searchResults = [];
       state.searchPagination = null;
       state.searchError = null;
+      state.searchCounts = null;
+      state.searchCountsError = null;
     },
   },
   extraReducers: (builder) => {
@@ -843,6 +874,21 @@ const orderSlice = createSlice({
         state.countsLoading = false;
         state.countsError = action.payload || "Error al obtener conteo de órdenes";
         state.counts = null;
+      })
+      // fetchOrdersCountBySearch
+      .addCase(fetchOrdersCountBySearch.pending, (state) => {
+        state.searchCountsLoading = true;
+        state.searchCountsError = null;
+      })
+      .addCase(fetchOrdersCountBySearch.fulfilled, (state, action) => {
+        state.searchCountsLoading = false;
+        state.searchCountsError = null;
+        state.searchCounts = action.payload;
+      })
+      .addCase(fetchOrdersCountBySearch.rejected, (state, action) => {
+        state.searchCountsLoading = false;
+        state.searchCountsError = action.payload || "Error al obtener conteo de órdenes por búsqueda";
+        state.searchCounts = null;
       })
       .addCase(hideCancelledOrder.pending, (state) => {
         state.hideOrderLoading = true;

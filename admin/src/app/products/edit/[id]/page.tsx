@@ -65,6 +65,19 @@ export default function EditProductPage({
   const [primaryImageURLs, setPrimaryImageURLs] = useState<string[]>([]);
   const [variantImageURLs, setVariantImageURLs] = useState<Record<string, string[]>>({});
 
+  // Refs para almacenar las URLs actuales y poder revocarlas en el cleanup
+  const primaryImageURLsRef = useRef<string[]>([]);
+  const variantImageURLsRef = useRef<Record<string, string[]>>({});
+
+  // Sincronizar refs con state
+  useEffect(() => {
+    primaryImageURLsRef.current = primaryImageURLs;
+  }, [primaryImageURLs]);
+
+  useEffect(() => {
+    variantImageURLsRef.current = variantImageURLs;
+  }, [variantImageURLs]);
+
   // Estado para el orden de primaryImage
   const [primaryImageOrder, setPrimaryImageOrder] = useState<number[] | undefined>(undefined);
 
@@ -177,16 +190,22 @@ export default function EditProductPage({
 
   // Función para revocar todas las URLs de object
   const revokeAllURLs = useCallback(() => {
-    primaryImageURLs.forEach(url => URL.revokeObjectURL(url));
-    Object.values(variantImageURLs).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
+    primaryImageURLsRef.current.forEach(url => URL.revokeObjectURL(url));
+    Object.values(variantImageURLsRef.current).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
     setPrimaryImageURLs([]);
     setVariantImageURLs({});
-  }, [primaryImageURLs, variantImageURLs]);
+    primaryImageURLsRef.current = [];
+    variantImageURLsRef.current = {};
+  }, []); // ✅ Sin dependencias - usa refs en lugar de state
 
   // Revocar URLs al desmontar el componente
   useEffect(() => {
-    return () => revokeAllURLs();
-  }, [revokeAllURLs]);
+    return () => {
+      // Usar refs para acceder a los valores actuales en el cleanup
+      primaryImageURLsRef.current.forEach(url => URL.revokeObjectURL(url));
+      Object.values(variantImageURLsRef.current).forEach(urls => urls.forEach(url => URL.revokeObjectURL(url)));
+    };
+  }, []); // ✅ Solo ejecutar al montar/desmontar
 
   // Handlers para categorías y subcategorías
   const handleCategoryChange = (catId: string) => {

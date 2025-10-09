@@ -97,6 +97,15 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
 
   const exchangeRateFormatted = formatCurrency(orderData.exchangeRate, 'es-AR', 'ARS');
 
+  let refundDescription = '';
+  if (orderData.refund?.type) {
+    if (orderData.refund.type === 'fixed') {
+      refundDescription = `fijo`;
+    } else {
+      refundDescription = `${orderData.refund.amount}%`;
+    }
+  }
+
   const html = template({
     ...orderData,
     logoUrl,
@@ -112,6 +121,7 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
     showBankTransferExpense,
     bankTransferExpense: bankTransferExpenseFormatted,
     exchangeRate: exchangeRateFormatted,
+    refundDescription,
   });
 
   const browser = await puppeteer.launch({

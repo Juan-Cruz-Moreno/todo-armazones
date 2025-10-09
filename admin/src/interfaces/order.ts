@@ -33,6 +33,9 @@ export interface Order {
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
   refund?: RefundDetails | null;
+  exchangeRate: number;
+  itemsCount: number;
+
   createdAt: string;
   updatedAt: string;
   isVisible: boolean; // Indica si la orden es visible en listados
@@ -87,7 +90,14 @@ export interface ShippingAddress {
 // Payload para actualizar items de la orden
 export interface UpdateOrderItemPayload {
   productVariantId: string;
-  action: "increase" | "decrease" | "remove" | "add" | "set" | "update_prices" | "update_all";
+  action:
+    | "increase"
+    | "decrease"
+    | "remove"
+    | "add"
+    | "set"
+    | "update_prices"
+    | "update_all";
   quantity?: number;
   // Nuevos campos para actualización de precios y valores financieros
   costUSDAtPurchase?: number; // Para 'update_prices', 'update_all'
@@ -210,7 +220,7 @@ export interface UpdateItemCompletePayload {
 
 // Interfaces para reembolsos
 export interface RefundDetails {
-  type: 'fixed' | 'percentage';
+  type: "fixed" | "percentage";
   amount: number;
   appliedAmount: number;
   reason?: string;
@@ -221,7 +231,7 @@ export interface RefundDetails {
 
 export interface ApplyRefundPayload {
   orderId: string;
-  type: 'fixed' | 'percentage';
+  type: "fixed" | "percentage";
   amount: number;
   reason?: string;
 }
@@ -281,10 +291,10 @@ export interface HideCancelledOrderResponse {
 // Interfaces para búsqueda de órdenes
 export interface SearchOrdersPayload {
   userId?: string;
+  orderStatus?: OrderStatus;
   page?: number;
   limit?: number;
   // Campos adicionales para futuras expansiones:
-  // orderStatus?: OrderStatus;
   // orderNumber?: number;
   // dateFrom?: string;
   // dateTo?: string;

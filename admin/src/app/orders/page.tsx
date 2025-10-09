@@ -34,7 +34,11 @@ const OrdersPage = () => {
     clearOrders,
     bulkUpdateOrderStatusData,
     counts,
+    countsLoading,
+    searchCounts,
+    searchCountsLoading,
     getOrdersCount,
+    getOrdersCountBySearch,
     fetchOrdersByPage,
     hideOrder,
     hideOrderLoading,
@@ -78,19 +82,41 @@ const OrdersPage = () => {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    clearOrders();
-    fetchOrdersByPage({
-      page: 1,
-      status: statusFilter,
-      limit: ORDERS_PER_PAGE,
-    });
-    setCurrentPage(1);
+    // Solo actualizar fetchOrdersByPage si no hay usuario seleccionado
+    if (!selectedUser) {
+      clearOrders();
+      fetchOrdersByPage({
+        page: 1,
+        status: statusFilter,
+        limit: ORDERS_PER_PAGE,
+      });
+      setCurrentPage(1);
+    } else {
+      // Si hay usuario seleccionado, actualizar la búsqueda con el nuevo filtro
+      setSearchOrderPage(1);
+      searchOrdersData({
+        userId: selectedUser.id,
+        orderStatus: statusFilter,
+        page: 1,
+        limit: ORDERS_PER_PAGE,
+      });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [statusFilter]);
 
   useEffect(() => {
+    // Cargar conteo global al montar el componente
     getOrdersCount();
   }, [getOrdersCount]);
+
+  useEffect(() => {
+    // Actualizar conteos según el contexto (usuario seleccionado o vista general)
+    if (selectedUser) {
+      getOrdersCountBySearch({ userId: selectedUser.id });
+    } else {
+      getOrdersCount();
+    }
+  }, [selectedUser, getOrdersCount, getOrdersCountBySearch]);
 
   // Efecto para búsqueda de usuarios con debounce
   useEffect(() => {
@@ -138,9 +164,10 @@ const OrdersPage = () => {
     clearUserSearch();
     setSearchOrderPage(1);
 
-    // Buscar órdenes del usuario seleccionado
+    // Buscar órdenes del usuario seleccionado con el filtro de estado actual
     searchOrdersData({
       userId: user.id,
+      orderStatus: statusFilter,
       page: 1,
       limit: ORDERS_PER_PAGE,
     });
@@ -164,11 +191,12 @@ const OrdersPage = () => {
 
       searchOrdersData({
         userId: selectedUser.id,
+        orderStatus: statusFilter,
         page: pageNumber,
         limit: ORDERS_PER_PAGE,
       });
     },
-    [selectedUser, searchOrdersData]
+    [selectedUser, statusFilter, searchOrdersData]
   );
 
   const handleCheckboxChange = (orderId: string, isChecked: boolean) => {
@@ -284,6 +312,8 @@ const OrdersPage = () => {
   const displayLoading = selectedUser ? searchLoading : loading;
   const displayError = selectedUser ? searchError : error;
   const displayPage = selectedUser ? searchOrderPage : currentPage;
+  const displayCounts = selectedUser ? searchCounts : counts;
+  const displayCountsLoading = selectedUser ? searchCountsLoading : countsLoading;
   const handleDisplayPageChange = selectedUser
     ? handleSearchOrderPageChange
     : handlePageChange;
@@ -413,90 +443,96 @@ const OrdersPage = () => {
         <div className="p-4 text-center text-error">{displayError}</div>
       )}
 
-      {/* Filtro - Solo mostrar si no hay búsqueda activa */}
-      {!selectedUser && (
-        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
-          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
-            <span className="text-[#666666] text-sm">Filtrar por estado:</span>
-            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  !statusFilter
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(undefined)}
-              >
-                Todos (
-                {counts
-                  ? Object.values(counts).reduce((sum, count) => sum + count, 0)
-                  : 0}
-                )
-              </button>
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === OrderStatus.Processing
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(OrderStatus.Processing)}
-              >
-                Processing ({counts?.[OrderStatus.Processing] || 0})
-              </button>
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === OrderStatus.OnHold
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(OrderStatus.OnHold)}
-              >
-                On Hold ({counts?.[OrderStatus.OnHold] || 0})
-              </button>
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === OrderStatus.PendingPayment
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(OrderStatus.PendingPayment)}
-              >
-                Pending Payment ({counts?.[OrderStatus.PendingPayment] || 0})
-              </button>
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === OrderStatus.Completed
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(OrderStatus.Completed)}
-              >
-                Completed ({counts?.[OrderStatus.Completed] || 0})
-              </button>
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === OrderStatus.Cancelled
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(OrderStatus.Cancelled)}
-              >
-                Cancelled ({counts?.[OrderStatus.Cancelled] || 0})
-              </button>
-              <button
-                className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
-                  statusFilter === OrderStatus.Refunded
-                    ? "bg-[#2271B1] text-white"
-                    : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
-                }`}
-                onClick={() => setFilter(OrderStatus.Refunded)}
-              >
-                Refunded ({counts?.[OrderStatus.Refunded] || 0})
-              </button>
-            </div>
+      {/* Filtro de estados - Ahora también funciona con búsqueda de usuario */}
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+          <span className="text-[#666666] text-sm">
+            Filtrar por estado{selectedUser && " (búsqueda activa)"}:
+          </span>
+          <div className="flex flex-wrap items-center gap-1 sm:gap-2">
+            {displayCountsLoading ? (
+              <div className="text-sm text-[#666666]">Cargando conteos...</div>
+            ) : (
+              <>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    !statusFilter
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(undefined)}
+                >
+                  Todos (
+                  {displayCounts
+                    ? Object.values(displayCounts).reduce((sum, count) => sum + count, 0)
+                    : 0}
+                  )
+                </button>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === OrderStatus.Processing
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(OrderStatus.Processing)}
+                >
+                  Processing ({displayCounts?.[OrderStatus.Processing] || 0})
+                </button>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === OrderStatus.OnHold
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(OrderStatus.OnHold)}
+                >
+                  On Hold ({displayCounts?.[OrderStatus.OnHold] || 0})
+                </button>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === OrderStatus.PendingPayment
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(OrderStatus.PendingPayment)}
+                >
+                  Pending Payment ({displayCounts?.[OrderStatus.PendingPayment] || 0})
+                </button>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === OrderStatus.Completed
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(OrderStatus.Completed)}
+                >
+                  Completed ({displayCounts?.[OrderStatus.Completed] || 0})
+                </button>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === OrderStatus.Cancelled
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(OrderStatus.Cancelled)}
+                >
+                  Cancelled ({displayCounts?.[OrderStatus.Cancelled] || 0})
+                </button>
+                <button
+                  className={`text-xs sm:text-sm px-2 sm:px-3 py-1 rounded-md transition-colors whitespace-nowrap ${
+                    statusFilter === OrderStatus.Refunded
+                      ? "bg-[#2271B1] text-white"
+                      : "text-[#2271B1] hover:bg-[#f0f0f0] hover:text-[#111111]"
+                  }`}
+                  onClick={() => setFilter(OrderStatus.Refunded)}
+                >
+                  Refunded ({displayCounts?.[OrderStatus.Refunded] || 0})
+                </button>
+              </>
+            )}
           </div>
         </div>
-      )}
+      </div>
 
       {/* Acciones en lote - Solo mostrar si no hay búsqueda activa */}
       {!selectedUser && (
@@ -985,6 +1021,9 @@ const OrdersPage = () => {
                   </div>
                 </div>
               )}
+              <p className="mb-2 text-[#333333]">
+                <strong>Cantidad de Items:</strong> {previewOrder.itemsCount}
+              </p>
               {previewOrder.refund && previewOrder.refund.originalSubTotal && (
                 <p className="mb-2 text-[#333333]">
                   <strong>Subtotal:</strong>{" "}
@@ -998,15 +1037,31 @@ const OrdersPage = () => {
                 </p>
               )}
               {previewOrder.refund && (
-                <p className="mb-2 text-[#A00000]">
-                  <strong>Reembolso:</strong> -
-                  {formatCurrency(
-                    previewOrder.refund.appliedAmount,
-                    "en-US",
-                    "USD"
+                <>
+                  <p className="mb-2 text-[#A00000]">
+                    <strong>Reembolso USD:</strong>{" "}
+                    {previewOrder.refund.type === "fixed"
+                      ? `Fijo de ${formatCurrency(
+                          previewOrder.refund.amount,
+                          "en-US",
+                          "USD"
+                        )}`
+                      : `${
+                          previewOrder.refund.amount
+                        }% (equivalente a ${formatCurrency(
+                          previewOrder.refund.appliedAmount,
+                          "en-US",
+                          "USD"
+                        )})`}
+                  </p>
+                  {previewOrder.refund.reason && (
+                    <p className="mb-2 text-[#A00000]">
+                      <strong>Razón:</strong> {previewOrder.refund.reason}
+                    </p>
                   )}
-                </p>
+                </>
               )}
+
               <p className="mb-2 text-[#333333]">
                 <strong>Subtotal:</strong>{" "}
                 {formatCurrency(previewOrder.subTotal, "en-US", "USD")}
@@ -1027,8 +1082,12 @@ const OrdersPage = () => {
                 {formatCurrency(previewOrder.totalAmount, "en-US", "USD")}
               </p>
               <p className="mb-2 text-[#333333]">
-                <strong>Total en ARS:</strong>{" "}
-                {formatCurrency(previewOrder.totalAmountARS, "es-AR", "ARS")}
+                <strong>Total ARS:</strong>{" "}
+                {formatCurrency(previewOrder.totalAmountARS, "es-AR", "ARS")}{" "}
+                <span className="text-sm text-gray-500">
+                  (tipo de cambio:{" "}
+                  {formatCurrency(previewOrder.exchangeRate, "es-AR", "ARS")})
+                </span>
               </p>
               <p className="mb-2 text-[#333333]">
                 <strong>Cost of Goods:</strong>{" "}

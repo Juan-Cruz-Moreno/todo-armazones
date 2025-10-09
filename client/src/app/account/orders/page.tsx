@@ -531,6 +531,9 @@ const OrdersPage = () => {
                   </div>
                 </div>
               )}
+              <p className="mb-2 text-[#333333]">
+                <strong>Cantidad de Items:</strong> {previewOrder.itemsCount}
+              </p>
               {previewOrder.refund && previewOrder.refund.originalSubTotal && (
                 <p className="mb-2 text-[#333333]">
                   <strong>Subtotal USD:</strong>{" "}
@@ -544,14 +547,27 @@ const OrdersPage = () => {
                 </p>
               )}
               {previewOrder.refund && (
-                <p className="mb-2 text-[#A00000]">
-                  <strong>Reembolso USD:</strong> -
-                  {formatCurrency(
-                    previewOrder.refund.appliedAmount,
-                    "en-US",
-                    "USD"
+                <>
+                  <p className="mb-2 text-[#A00000]">
+                    <strong>Reembolso USD:</strong>{" "}
+                    {previewOrder.refund.type === "fixed"
+                      ? `Fijo de ${formatCurrency(
+                          previewOrder.refund.amount,
+                          "en-US",
+                          "USD"
+                        )}`
+                      : `${previewOrder.refund.amount}% (equivalente a ${formatCurrency(
+                          previewOrder.refund.appliedAmount,
+                          "en-US",
+                          "USD"
+                        )})`}
+                  </p>
+                  {previewOrder.refund.reason && (
+                    <p className="mb-2 text-[#A00000]">
+                      <strong>Razón:</strong> {previewOrder.refund.reason}
+                    </p>
                   )}
-                </p>
+                </>
               )}
               <p className="mb-2 text-[#333333]">
                 <strong>Subtotal USD:</strong>{" "}
@@ -574,7 +590,11 @@ const OrdersPage = () => {
               </p>
               <p className="mb-2 text-[#333333]">
                 <strong>Total ARS:</strong>{" "}
-                {formatCurrency(previewOrder.totalAmountARS, "es-AR", "ARS")}
+                {formatCurrency(previewOrder.totalAmountARS, "es-AR", "ARS")}{" "}
+                <span className="text-sm text-gray-500">
+                  (tipo de cambio:{" "}
+                  {formatCurrency(previewOrder.exchangeRate, "es-AR", "ARS")})
+                </span>
               </p>
             </div>
           </div>

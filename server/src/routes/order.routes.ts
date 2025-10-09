@@ -16,6 +16,7 @@ import {
   applyRefundBodySchema,
   cancelRefundParamsSchema,
   searchOrdersQuerySchema,
+  getOrdersCountBySearchQuerySchema,
 } from 'schemas/order.schema';
 import { updateItemPricesBodySchema } from 'schemas/updateItemPrices.schema';
 
@@ -46,6 +47,16 @@ router.get(
   orderController.getAllOrdersByPage,
 );
 router.get('/counts', checkAdmin, orderController.getOrdersCount);
+
+// Ruta para obtener conteo de órdenes con criterios de búsqueda (admin)
+router.get(
+  '/counts-by-search',
+  checkAdmin,
+  validateRequest({
+    query: getOrdersCountBySearchQuerySchema,
+  }),
+  orderController.getOrdersCountBySearch,
+);
 
 // Ruta para búsqueda de órdenes (admin)
 router.get(

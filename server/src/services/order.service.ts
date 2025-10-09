@@ -1162,6 +1162,87 @@ export class OrderService {
   }
 
   /**
+   * Obtiene el conteo de órdenes por estado basado en criterios de búsqueda
+   * Útil para mostrar conteos contextuales cuando se filtra por usuario u otros criterios
+   * @param searchCriteria - Criterios de búsqueda (userId, orderStatus)
+   * @returns Conteo de órdenes por estado que coinciden con los criterios
+   */
+  public async getOrdersCountBySearch(searchCriteria: {
+    userId?: Types.ObjectId | string;
+  }): Promise<Record<OrderStatus, number>> {
+    try {
+      // Inicializar objeto con todos los estados en 0
+      const statusCounts: Record<OrderStatus, number> = {
+        [OrderStatus.Processing]: 0,
+        [OrderStatus.OnHold]: 0,
+        [OrderStatus.PendingPayment]: 0,
+        [OrderStatus.Completed]: 0,
+        [OrderStatus.Cancelled]: 0,
+        [OrderStatus.Refunded]: 0,
+      };
+
+      // Construir query base
+      const matchQuery: OrderQuery = { isVisible: true };
+
+      // Aplicar filtro por usuario si se proporciona
+      if (searchCriteria.userId) {
+        // Validar que el userId sea un ObjectId válido
+        let userObjectId: Types.ObjectId;
+        try {
+          userObjectId = new Types.ObjectId(searchCriteria.userId);
+        } catch (_error) {
+          throw new AppError('El ID de usuario proporcionado no es válido', 400, 'fail', false);
+        }
+
+        // Verificar que el usuario existe
+        const userExists = await User.findById(userObjectId).select('_id').lean();
+        if (!userExists) {
+          throw new AppError('El usuario especificado no existe', 404, 'fail', false);
+        }
+
+        matchQuery.user = userObjectId;
+      }
+
+      // Usar aggregation para contar por estado con filtros aplicados
+      const aggregationResult = await Order.aggregate([
+        {
+          $match: matchQuery,
+        },
+        {
+          $group: {
+            _id: '$orderStatus',
+            count: { $sum: 1 },
+          },
+        },
+      ]);
+
+      // Actualizar el objeto con los resultados
+      aggregationResult.forEach((result) => {
+        if (result._id in statusCounts) {
+          statusCounts[result._id as OrderStatus] = result.count;
+        }
+      });
+
+      logger.info('Conteo de órdenes por búsqueda completado', {
+        searchCriteria,
+        totalOrders: Object.values(statusCounts).reduce((sum, count) => sum + count, 0),
+      });
+
+      return statusCounts;
+    } catch (error) {
+      logger.error('Error al obtener conteo de órdenes por búsqueda', {
+        error,
+        searchCriteria,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener conteo de órdenes por búsqueda.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
    * Obtiene solo los metadatos de paginación para todas las órdenes sin cargar las órdenes
    * Método optimizado que usa la nueva arquitectura centralizada
    */
@@ -1310,7 +1391,7 @@ export class OrderService {
   public async searchOrders(searchCriteria: SearchOrdersDto): Promise<SearchOrdersResultDto> {
     try {
       // Validar que se proporcione al menos un criterio de búsqueda
-      if (!searchCriteria.userId) {
+      if (!searchCriteria.userId && !searchCriteria.orderStatus) {
         throw new AppError('Debe proporcionar al menos un criterio de búsqueda', 400, 'fail', false);
       }
 
@@ -1345,10 +1426,12 @@ export class OrderService {
         query.user = userObjectId;
       }
 
+      // Filtro por estado de orden
+      if (searchCriteria.orderStatus) {
+        query.orderStatus = searchCriteria.orderStatus;
+      }
+
       // Futuros filtros se agregarían aquí:
-      // if (searchCriteria.orderStatus) {
-      //   query.orderStatus = searchCriteria.orderStatus;
-      // }
       // if (searchCriteria.orderNumber) {
       //   query.orderNumber = searchCriteria.orderNumber;
       // }

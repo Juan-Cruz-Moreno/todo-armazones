@@ -868,6 +868,50 @@ export class OrderController {
   };
 
   /**
+   * Obtiene el conteo de órdenes por estado basado en criterios de búsqueda
+   * Útil para conteos contextuales cuando se filtra (por ejemplo, por usuario)
+   */
+  public getOrdersCountBySearch = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { userId } = req.query;
+
+      const searchCriteria: { userId?: string } = {
+        ...(userId && { userId: userId as string }),
+      };
+
+      const counts = await this.orderService.getOrdersCountBySearch(searchCriteria);
+
+      const response: ApiResponse<typeof counts> = {
+        status: 'success',
+        message: 'Conteo de órdenes por búsqueda obtenido exitosamente',
+        data: counts,
+      };
+
+      res.status(200).json(response);
+    } catch (error) {
+      logger.error('Error al obtener conteo de órdenes por búsqueda', {
+        error,
+        query: req.query,
+      });
+
+      if (!(error instanceof AppError)) {
+        const wrappedError = new AppError(
+          'Error inesperado al obtener conteo de órdenes por búsqueda',
+          500,
+          'error',
+          false,
+          {
+            cause: error instanceof Error ? error.message : String(error),
+          },
+        );
+        return next(wrappedError);
+      }
+
+      return next(error);
+    }
+  };
+
+  /**
    * Oculta una orden cancelada (solo admin)
    */
   public hideCancelledOrder = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -908,15 +952,16 @@ export class OrderController {
 
   /**
    * Busca órdenes basándose en criterios específicos
-   * Por ahora soporta búsqueda por usuario con paginación
+   * Soporta búsqueda por usuario y/o estado con paginación
    */
   public searchOrders = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      const { userId, page, limit } = req.query;
+      const { userId, orderStatus, page, limit } = req.query;
 
       // Construir objeto de búsqueda
       const searchCriteria: SearchOrdersDto = {
         ...(userId && { userId: userId as string }),
+        ...(orderStatus && { orderStatus: orderStatus as OrderStatus }),
         ...(page && { page: Number(page) }),
         ...(limit && { limit: Number(limit) }),
       };

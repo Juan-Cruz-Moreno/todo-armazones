@@ -58,6 +58,7 @@ const EditOrderPage = () => {
   const [originalForm, setOriginalForm] = useState<Order | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
 
   const [itemOperationLoading, setItemOperationLoading] = useState<
     string | null
@@ -271,6 +272,9 @@ const EditOrderPage = () => {
 
   // Handler para cambios en los campos de dirección
   const handleAddressChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Prevenir cambios si no está en modo edición
+    if (!isEditMode) return;
+    
     const { name, value } = e.target;
     setForm((prev) =>
       prev
@@ -286,6 +290,9 @@ const EditOrderPage = () => {
   const handleDeliveryFieldChange = (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
+    // Prevenir cambios si no está en modo edición
+    if (!isEditMode) return;
+    
     const { name, value } = e.target;
     setForm((prev) =>
       prev
@@ -552,6 +559,9 @@ const EditOrderPage = () => {
   // Cambiar cantidad
   const handleQuantityChange = async (variantId: string, qty: number) => {
     if (!form) return;
+    
+    // Prevenir cambios si no está en modo edición
+    if (!isEditMode) return;
 
     const newQuantity = Math.max(1, qty);
     const currentItem = form.items.find(
@@ -909,6 +919,8 @@ const EditOrderPage = () => {
         setForm(result);
         setOriginalForm(result);
         addSuccess("Orden actualizada correctamente");
+        // Desactivar modo edición después de guardar exitosamente
+        setIsEditMode(false);
       } else {
         addWarning("No hay cambios que guardar");
       }
@@ -1071,6 +1083,27 @@ const EditOrderPage = () => {
     }
   };
 
+  // Handler para manejar el toggle del modo edición
+  const handleToggleEditMode = () => {
+    if (isEditMode) {
+      // Si está saliendo del modo edición, revertir cambios si los hay
+      if (hasChanges() && originalForm) {
+        const confirmed = window.confirm(
+          "Tienes cambios sin guardar. ¿Deseas descartarlos?"
+        );
+        if (confirmed) {
+          setForm(originalForm);
+          setIsEditMode(false);
+        }
+      } else {
+        setIsEditMode(false);
+      }
+    } else {
+      // Activar modo edición
+      setIsEditMode(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#FFFFFF] pt-4 pb-10 px-4">
       <div className="max-w-7xl mx-auto">
@@ -1087,13 +1120,26 @@ const EditOrderPage = () => {
                     </span>
                   )}
                 </h2>
-                <button
-                  type="button"
-                  onClick={() => router.push("/orders")}
-                  className="btn btn-sm rounded-none shadow-none border-none px-4 text-[#222222] bg-[#e0e0e0]"
-                >
-                  Volver
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleToggleEditMode}
+                    className={`btn btn-sm rounded-none shadow-none border-none px-4 ${
+                      isEditMode
+                        ? "text-white bg-[#d32f2f] hover:bg-[#b71c1c]"
+                        : "text-white bg-[#2196f3] hover:bg-[#1976d2]"
+                    }`}
+                  >
+                    {isEditMode ? "Cancelar edición" : "Editar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push("/orders")}
+                    className="btn btn-sm rounded-none shadow-none border-none px-4 text-[#222222] bg-[#e0e0e0]"
+                  >
+                    Volver
+                  </button>
+                </div>
               </div>
 
               {/* Sistema de notificaciones/errores inline */}
@@ -1308,7 +1354,7 @@ const EditOrderPage = () => {
                             value={method}
                             checked={form.paymentMethod === method}
                             onChange={handleFieldChange}
-                            disabled={isPaymentMethodUpdating}
+                            disabled={isPaymentMethodUpdating || !isEditMode}
                             className="radio border-[#e1e1e1] checked:bg-[#222222]"
                           />
                           <span className="text-[#222222] text-sm">
@@ -1350,6 +1396,7 @@ const EditOrderPage = () => {
                             value={method}
                             checked={form.shippingMethod === method}
                             onChange={handleFieldChange}
+                            disabled={!isEditMode}
                             className="radio border-[#e1e1e1] checked:bg-[#222222]"
                           />
                           <span className="text-[#222222] text-sm">
@@ -1389,6 +1436,7 @@ const EditOrderPage = () => {
                                 form.shippingAddress.deliveryType === type
                               }
                               onChange={handleDeliveryTypeChange}
+                              disabled={!isEditMode}
                               className="radio border-[#e1e1e1] checked:bg-[#222222]"
                             />
                             <span className="text-[#222222] text-sm">
@@ -1414,7 +1462,10 @@ const EditOrderPage = () => {
                           name="shippingCompany"
                           value={form.shippingAddress.shippingCompany || ""}
                           onChange={handleAddressChange}
-                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          readOnly={!isEditMode}
+                          className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                            !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                          }`}
                           style={{ borderColor: "#e1e1e1" }}
                         />
                       </div>
@@ -1429,7 +1480,10 @@ const EditOrderPage = () => {
                             form.shippingAddress.declaredShippingAmount || ""
                           }
                           onChange={handleAddressChange}
-                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          readOnly={!isEditMode}
+                          className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                            !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                          }`}
                           style={{ borderColor: "#e1e1e1" }}
                         />
                       </div>
@@ -1446,8 +1500,11 @@ const EditOrderPage = () => {
                       name="deliveryWindow"
                       value={form.shippingAddress.deliveryWindow || ""}
                       onChange={handleAddressChange}
+                      readOnly={!isEditMode}
                       placeholder="Ej: 11:00 - 16:00"
-                      className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                      className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                        !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                      }`}
                       style={{ borderColor: "#e1e1e1" }}
                     />
                   </div>
@@ -1495,7 +1552,10 @@ const EditOrderPage = () => {
                         }
                         onChange={handleAddressChange}
                         name={name}
-                        className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                        readOnly={!isEditMode}
+                        className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                          !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                        }`}
                         style={{ borderColor: "#e1e1e1" }}
                         required={!["companyName", "cuit"].includes(name)}
                       />
@@ -1520,7 +1580,10 @@ const EditOrderPage = () => {
                         value={form.shippingAddress.streetAddress || ""}
                         onChange={handleAddressChange}
                         name="streetAddress"
-                        className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                        readOnly={!isEditMode}
+                        className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                          !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                        }`}
                         style={{ borderColor: "#e1e1e1" }}
                       />
                     </div>
@@ -1544,7 +1607,10 @@ const EditOrderPage = () => {
                           value={form.shippingAddress.pickupPointAddress || ""}
                           onChange={handleAddressChange}
                           name="pickupPointAddress"
-                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          readOnly={!isEditMode}
+                          className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                            !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                          }`}
                           style={{ borderColor: "#e1e1e1" }}
                           placeholder="Ej: Sucursal Correo Argentino - Av. Corrientes 500"
                         />
@@ -1579,7 +1645,10 @@ const EditOrderPage = () => {
                           }
                           onChange={handleAddressChange}
                           name={name}
-                          className="input w-full border rounded-none bg-[#FFFFFF] text-[#222222]"
+                          readOnly={!isEditMode}
+                          className={`input w-full border rounded-none bg-[#FFFFFF] text-[#222222] ${
+                            !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                          }`}
                           style={{ borderColor: "#e1e1e1" }}
                           required={!["companyName"].includes(name)}
                         />
@@ -1594,17 +1663,17 @@ const EditOrderPage = () => {
                       Ítems de la orden:
                     </div>
                     <div className="overflow-x-auto">
-                      <table className="table table-auto w-full min-w-[720px] border border-[#e1e1e1]">
+                      <table className="table table-auto w-full min-w-[720px] border border-[#e1e1e1] table-compact">
                         {/* head */}
                         <thead>
                           <tr className="text-[#111111]">
-                            <th>Producto</th>
-                            <th>Cost of Goods</th>
-                            <th>Precio</th>
-                            <th>Cantidad</th>
-                            <th>Subtotal</th>
-                            <th>Contribución Marginal</th>
-                            <th>Acciones</th>
+                            <th className="py-2 px-2">Producto</th>
+                            <th className="py-2 px-2">COGS</th>
+                            <th className="py-2 px-2">Precio</th>
+                            <th className="py-2 px-2">Cantidad</th>
+                            <th className="py-2 px-2">Subtotal</th>
+                            <th className="py-2 px-2">Cont. Marg</th>
+                            <th className="py-2 px-2">Acciones</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1613,16 +1682,16 @@ const EditOrderPage = () => {
                               key={item.productVariant.id}
                               className="text-[#222222]"
                             >
-                              <td>
+                              <td className="py-2 px-2">
                                 <a
                                   href={`https://tienda.todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="block"
                                 >
-                                  <div className="flex items-start gap-3">
+                                  <div className="flex items-start gap-2">
                                     {/* Imagen del producto (responsive) */}
-                                    <div className="flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
+                                    <div className="flex-shrink-0 w-10 h-10 sm:w-12 sm:h-12 overflow-hidden rounded-md bg-gray-50 border border-gray-200">
                                       <Image
                                         src={`${
                                           process.env.NEXT_PUBLIC_API_URL
@@ -1637,8 +1706,8 @@ const EditOrderPage = () => {
                                           item.productVariant.color?.name ||
                                           "variant"
                                         }`}
-                                        width={64}
-                                        height={64}
+                                        width={48}
+                                        height={48}
                                         className="object-cover w-full h-full"
                                       />
                                     </div>
@@ -1646,7 +1715,7 @@ const EditOrderPage = () => {
                                     {/* Información del producto (truncate en pantallas pequeñas) */}
                                     <div className="flex flex-col min-w-0 flex-1">
                                       <span
-                                        className="font-medium text-[#222222] truncate block"
+                                        className="font-medium text-[#222222] truncate block text-sm"
                                         title={`${item.productVariant.product.productModel} ${item.productVariant.product.sku}`}
                                       >
                                         {
@@ -1654,16 +1723,16 @@ const EditOrderPage = () => {
                                             .productModel
                                         }
                                       </span>
-                                      <div className="flex items-center gap-2 mt-1">
+                                      <div className="flex items-center gap-1 mt-0.5">
                                         <span
-                                          className="text-sm text-gray-500 truncate"
+                                          className="text-xs text-gray-500 truncate"
                                           title={`Color: ${item.productVariant.color?.name}`}
                                         >
                                           Color:{" "}
                                           {item.productVariant.color?.name}
                                         </span>
                                         <span
-                                          className="w-4 h-4 rounded-full border border-gray-300 flex-shrink-0"
+                                          className="w-3 h-3 rounded-full border border-gray-300 flex-shrink-0"
                                           style={{
                                             backgroundColor:
                                               item.productVariant.color?.hex ||
@@ -1676,17 +1745,17 @@ const EditOrderPage = () => {
                                   </div>
                                 </a>
                               </td>
-                              <td>
+                              <td className="py-2 px-2 text-sm">
                                 {formatCurrency(item.cogsUSD, "en-US", "USD")}
                               </td>
-                              <td>
+                              <td className="py-2 px-2 text-sm">
                                 {formatCurrency(
                                   item.priceUSDAtPurchase,
                                   "en-US",
                                   "USD"
                                 )}
                               </td>
-                              <td>
+                              <td className="py-2 px-2">
                                 <input
                                   type="number"
                                   min={1}
@@ -1697,28 +1766,35 @@ const EditOrderPage = () => {
                                       Number(e.target.value)
                                     )
                                   }
-                                  disabled={
+                                  readOnly={
+                                    !isEditMode ||
                                     itemOperationLoading ===
-                                    item.productVariant.id
+                                      item.productVariant.id
                                   }
-                                  className="input input-xs w-16 text-[#222222] bg-white border-[#bdbdbd] rounded-md shadow-sm focus:ring-2 focus:ring-[#388e3c] focus:outline-none disabled:opacity-50"
+                                  className={`input input-xs w-14 text-[#222222] bg-white border-[#bdbdbd] rounded-md shadow-sm focus:ring-2 focus:ring-[#388e3c] focus:outline-none ${
+                                    !isEditMode ||
+                                    itemOperationLoading ===
+                                      item.productVariant.id
+                                      ? "cursor-not-allowed opacity-50"
+                                      : ""
+                                  }`}
                                 />
                               </td>
-                              <td>
+                              <td className="py-2 px-2 text-sm">
                                 {formatCurrency(item.subTotal, "en-US", "USD")}
                               </td>
-                              <td>
+                              <td className="py-2 px-2 text-sm">
                                 {formatCurrency(
                                   item.contributionMarginUSD,
                                   "en-US",
                                   "USD"
                                 )}
                               </td>
-                              <td>
-                                <div className="flex gap-2">
+                              <td className="py-2 px-2">
+                                <div className="flex gap-1">
                                   <button
                                     type="button"
-                                    className="btn btn-xs text-white bg-[#2196f3] border-[#2196f3] rounded-md shadow-md hover:bg-[#1976d2] hover:border-[#1976d2] transition-colors duration-200 ease-in-out"
+                                    className="btn btn-xs text-white bg-[#2196f3] border-[#2196f3] rounded-md shadow-md hover:bg-[#1976d2] hover:border-[#1976d2] transition-colors duration-200 ease-in-out min-h-0 h-7 px-2"
                                     onClick={() => handleEditPrices(item)}
                                     disabled={
                                       itemOperationLoading ===
@@ -1726,11 +1802,11 @@ const EditOrderPage = () => {
                                     }
                                     title="Editar precios"
                                   >
-                                    <Edit3 size={16} />
+                                    <Edit3 size={14} />
                                   </button>
                                   <button
                                     type="button"
-                                    className="btn btn-xs text-white bg-[#d32f2f] border-[#d32f2f] rounded-md shadow-md hover:bg-[#b71c1c] hover:border-[#b71c1c] transition-colors duration-200 ease-in-out"
+                                    className="btn btn-xs text-white bg-[#d32f2f] border-[#d32f2f] rounded-md shadow-md hover:bg-[#b71c1c] hover:border-[#b71c1c] transition-colors duration-200 ease-in-out min-h-0 h-7 px-2"
                                     onClick={() =>
                                       handleRemoveVariant(
                                         item.productVariant.id
@@ -1746,7 +1822,7 @@ const EditOrderPage = () => {
                                     item.productVariant.id ? (
                                       <span className="loading loading-spinner loading-xs"></span>
                                     ) : (
-                                      <Trash size={16} />
+                                      <Trash size={14} />
                                     )}
                                   </button>
                                 </div>
@@ -1757,14 +1833,19 @@ const EditOrderPage = () => {
                             <tr>
                               <td
                                 colSpan={6}
-                                className="text-sm text-[#A00000]"
+                                className="text-sm text-[#A00000] py-2 px-2"
                               >
-                                Reembolso: -
-                                {formatCurrency(
-                                  form.refund.appliedAmount,
-                                  "en-US",
-                                  "USD"
-                                )}
+                                Reembolso: {form.refund.type === "fixed"
+                                  ? `Fijo de ${formatCurrency(
+                                      form.refund.amount,
+                                      "en-US",
+                                      "USD"
+                                    )}`
+                                  : `${form.refund.amount}% (equivalente a ${formatCurrency(
+                                      form.refund.appliedAmount,
+                                      "en-US",
+                                      "USD"
+                                    )})`}
                                 {form.refund.reason && (
                                   <span className="text-xs text-[#A00000]">
                                     {" "}
@@ -1772,12 +1853,12 @@ const EditOrderPage = () => {
                                   </span>
                                 )}
                               </td>
-                              <td className="text-right">
+                              <td className="text-right py-2 px-2">
                                 <button
                                   type="button"
                                   onClick={() => handleCancelRefund()}
                                   disabled={cancelRefundLoading}
-                                  className="btn btn-xs text-white bg-[#d32f2f] border-[#d32f2f] rounded-md shadow-md hover:bg-[#b71c1c] hover:border-[#b71c1c] transition-colors duration-200 ease-in-out disabled:opacity-50"
+                                  className="btn btn-xs text-white bg-[#d32f2f] border-[#d32f2f] rounded-md shadow-md hover:bg-[#b71c1c] hover:border-[#b71c1c] transition-colors duration-200 ease-in-out disabled:opacity-50 min-h-0 h-7 px-2"
                                   title="Cancelar reembolso"
                                 >
                                   {cancelRefundLoading ? (
@@ -1795,6 +1876,14 @@ const EditOrderPage = () => {
                   </div>
                 )}
                 {/* Subtotal y Total */}
+                <div className="flex justify-between items-center mt-4">
+                  <span className="text-sm font-semibold text-[#222222]">
+                    Cantidad de Items:
+                  </span>
+                  <span className="text-sm text-[#222222]">
+                    {form.itemsCount}
+                  </span>
+                </div>
                 <div className="mt-4">
                   {form.refund && form.refund.originalSubTotal && (
                     <div className="flex justify-between items-center mt-2">
@@ -1811,19 +1900,36 @@ const EditOrderPage = () => {
                     </div>
                   )}
                   {form.refund && (
-                    <div className="flex justify-between items-center mt-2">
-                      <span className="text-sm font-semibold text-[#A00000]">
-                        Reembolso:
-                      </span>
-                      <span className="text-sm text-[#A00000]">
-                        -
-                        {formatCurrency(
-                          form.refund.appliedAmount,
-                          "en-US",
-                          "USD"
-                        )}
-                      </span>
-                    </div>
+                    <>
+                      <div className="flex justify-between items-center mt-2">
+                        <span className="text-sm font-semibold text-[#A00000]">
+                          Reembolso:
+                        </span>
+                        <span className="text-sm text-[#A00000]">
+                          {form.refund.type === "fixed"
+                            ? `Fijo de ${formatCurrency(
+                                form.refund.amount,
+                                "en-US",
+                                "USD"
+                              )}`
+                            : `${form.refund.amount}% (equivalente a ${formatCurrency(
+                                form.refund.appliedAmount,
+                                "en-US",
+                                "USD"
+                              )})`}
+                        </span>
+                      </div>
+                      {form.refund.reason && (
+                        <div className="flex justify-between items-center mt-1">
+                          <span className="text-sm font-semibold text-[#A00000]">
+                            Razón:
+                          </span>
+                          <span className="text-sm text-[#A00000]">
+                            {form.refund.reason}
+                          </span>
+                        </div>
+                      )}
+                    </>
                   )}
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-sm font-semibold text-[#222222]">
@@ -1858,7 +1964,7 @@ const EditOrderPage = () => {
                   </div>
                   <div className="flex justify-between items-center mt-2">
                     <span className="text-sm font-semibold text-[#222222]">
-                      Total en ARS:
+                      Total en ARS: <span className="text-sm text-gray-500 font-normal">(tipo de cambio: {formatCurrency(form.exchangeRate, "es-AR", "ARS")})</span>
                     </span>
                     <span className="text-sm text-[#222222]">
                       {formatCurrency(form.totalAmountARS, "es-AR", "ARS")}
@@ -1895,11 +2001,13 @@ const EditOrderPage = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !hasChanges()}
+                  disabled={isSubmitting || !hasChanges() || !isEditMode}
                   className="mt-4 btn rounded-none shadow-none border-none h-12 px-6 w-full transition-colors duration-300 ease-in-out text-white bg-[#388e3c] border-[#388e3c] disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
                   {isSubmitting
                     ? "Guardando..."
+                    : !isEditMode
+                    ? "Modo solo lectura"
                     : hasChanges()
                     ? "Guardar cambios"
                     : "Sin cambios"}

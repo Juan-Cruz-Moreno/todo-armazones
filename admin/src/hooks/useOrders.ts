@@ -25,6 +25,7 @@ import {
   searchOrders,
   clearSearchResults,
   CreateOrderAdminPayload,
+  fetchOrdersCountBySearch,
 } from "@/redux/slices/orderSlice";
 import type { 
   Order, 
@@ -74,6 +75,9 @@ const useOrders = () => {
   const counts = useAppSelector((state) => state.orders.counts);
   const countsLoading = useAppSelector((state) => state.orders.countsLoading);
   const countsError = useAppSelector((state) => state.orders.countsError);
+  const searchCounts = useAppSelector((state) => state.orders.searchCounts);
+  const searchCountsLoading = useAppSelector((state) => state.orders.searchCountsLoading);
+  const searchCountsError = useAppSelector((state) => state.orders.searchCountsError);
   const hideOrderLoading = useAppSelector((state) => state.orders.hideOrderLoading);
   const hideOrderError = useAppSelector((state) => state.orders.hideOrderError);
   const searchResults = useAppSelector((state) => state.orders.searchResults);
@@ -326,6 +330,9 @@ const useOrders = () => {
     counts,
     countsLoading,
     countsError,
+    searchCounts,
+    searchCountsLoading,
+    searchCountsError,
     hideOrderLoading,
     hideOrderError,
     searchResults,
@@ -370,6 +377,10 @@ const useOrders = () => {
     ),
     getOrdersCount: useCallback(() => {
       dispatch(fetchOrdersCount());
+    }, [dispatch]),
+
+    getOrdersCountBySearch: useCallback((params?: { userId?: string }) => {
+      dispatch(fetchOrdersCountBySearch(params || {}));
     }, [dispatch]),
 
     /**

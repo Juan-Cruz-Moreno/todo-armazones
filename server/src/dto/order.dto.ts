@@ -249,6 +249,7 @@ export interface CancelRefundResultDto {
 // DTOs para búsqueda de órdenes
 export interface SearchOrdersDto {
   userId?: Types.ObjectId | string; // ID del usuario para filtrar órdenes
+  orderStatus?: OrderStatus; // Estado de la orden para filtrar
   page?: number; // Número de página (default: 1)
   limit?: number; // Cantidad de resultados por página (default: 10)
 }
