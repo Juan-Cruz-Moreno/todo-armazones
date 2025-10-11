@@ -28,11 +28,11 @@ cron.schedule('*/30 * * * *', async () => {
     }
 
     // Migración única: actualizar contributionMarginPercentage en todas las órdenes existentes
-    logger.info('Iniciando migración única de contributionMarginPercentage en todas las órdenes');
-    const result = await orderService.updateAllOrdersContributionMarginPercentage();
-    logger.info('Migración de contributionMarginPercentage completada', {
-      result,
-    });
+    // logger.info('Iniciando migración única de contributionMarginPercentage en todas las órdenes');
+    // const result = await orderService.updateAllOrdersContributionMarginPercentage();
+    // logger.info('Migración de contributionMarginPercentage completada', {
+    //   result,
+    // });
   } catch (error) {
     const appError = new AppError(
       'Error en la tarea programada: Actualización del dólar y órdenes',

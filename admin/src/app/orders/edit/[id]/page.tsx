@@ -1988,7 +1988,10 @@ const EditOrderPage = () => {
                         "en-US",
                         "USD"
                       )}{" "}
-                      ({form.contributionMarginPercentage.toFixed(2)}%)
+                      {form.contributionMarginPercentage !== undefined &&
+                      form.contributionMarginPercentage !== null
+                        ? `(${form.contributionMarginPercentage.toFixed(2)}%)`
+                        : ""}
                     </span>
                   </div>
                 </div>

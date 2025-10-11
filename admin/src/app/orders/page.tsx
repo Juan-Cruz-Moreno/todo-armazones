@@ -1100,7 +1100,10 @@ const OrdersPage = () => {
                   "en-US",
                   "USD"
                 )}{" "}
-                ({previewOrder.contributionMarginPercentage.toFixed(2)}%)
+                {previewOrder.contributionMarginPercentage !== undefined &&
+                previewOrder.contributionMarginPercentage !== null
+                  ? `(${previewOrder.contributionMarginPercentage.toFixed(2)}%)`
+                  : ""}
               </p>
             </div>
           </div>
