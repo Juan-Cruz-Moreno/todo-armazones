@@ -10,6 +10,11 @@ import type {
   BulkPriceUpdateResponse,
   PaginationMetadata,
   ProductsPaginationInfo,
+  ProductFilters,
+  LowStockProductVariantsResponse,
+  LowStockFilters,
+  ProductVariantWithProduct,
+  LowStockPaginationMetadata,
 } from "../../interfaces/product";
 import type { ApiResponse } from "../../types/api";
 import { getErrorMessage } from "../../types/api";
@@ -28,6 +33,10 @@ interface ProductsState {
   paginationInfoError: string | null;
   lastCreatedProduct: Product | null;
   productDetail: Product | null;
+  lowStockVariants: ProductVariantWithProduct[];
+  lowStockPagination: LowStockPaginationMetadata | null;
+  lowStockLoading: boolean;
+  lowStockError: string | null;
 }
 
 const initialState: ProductsState = {
@@ -44,6 +53,10 @@ const initialState: ProductsState = {
   paginationInfoError: null,
   lastCreatedProduct: null,
   productDetail: null,
+  lowStockVariants: [],
+  lowStockPagination: null,
+  lowStockLoading: false,
+  lowStockError: null,
 };
 
 // Fetch products with optional filters and pagination
@@ -80,13 +93,7 @@ export const fetchProducts = createAsyncThunk<
 // ✨ RECOMENDADO: Usa esta función para mejor performance (40% más rápido)
 export const fetchProductsByPage = createAsyncThunk<
   ProductsResponse,
-  {
-    page?: number;
-    categorySlug?: string;
-    subcategorySlug?: string;
-    limit?: number;
-    inStock?: boolean;
-  }
+  ProductFilters
 >("products/fetchProductsByPage", async (params, { rejectWithValue }) => {
   try {
     const query = new URLSearchParams();
@@ -97,6 +104,8 @@ export const fetchProductsByPage = createAsyncThunk<
     if (params.limit) query.append("limit", params.limit.toString());
     if (params.inStock !== undefined)
       query.append("inStock", params.inStock.toString());
+    if (params.outOfStock !== undefined)
+      query.append("outOfStock", params.outOfStock.toString());
 
     const url = `/products/by-page${query.toString() ? "?" + query.toString() : ""}`;
     const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(
@@ -111,12 +120,7 @@ export const fetchProductsByPage = createAsyncThunk<
 // Fetch pagination info only (for counters and UI indicators)
 export const fetchProductsPaginationInfo = createAsyncThunk<
   ProductsPaginationInfo,
-  {
-    categorySlug?: string;
-    subcategorySlug?: string;
-    limit?: number;
-    inStock?: boolean;
-  }
+  Omit<ProductFilters, 'page' | 'cursor'>
 >("products/fetchProductsPaginationInfo", async (params, { rejectWithValue }) => {
   try {
     const query = new URLSearchParams();
@@ -126,6 +130,8 @@ export const fetchProductsPaginationInfo = createAsyncThunk<
     if (params.limit) query.append("limit", params.limit.toString());
     if (params.inStock !== undefined)
       query.append("inStock", params.inStock.toString());
+    if (params.outOfStock !== undefined)
+      query.append("outOfStock", params.outOfStock.toString());
 
     const url = `/products/pagination-info${query.toString() ? "?" + query.toString() : ""}`;
     const { data } = await axiosInstance.get<ApiResponse<ProductsPaginationInfo>>(
@@ -138,13 +144,17 @@ export const fetchProductsPaginationInfo = createAsyncThunk<
 });
 
 // Search products
-export const searchProducts = createAsyncThunk<Product[], { q: string; inStock?: boolean }>(
+export const searchProducts = createAsyncThunk<
+  Product[], 
+  { q: string } & Pick<ProductFilters, 'inStock' | 'outOfStock'>
+>(
   "products/searchProducts",
-  async ({ q, inStock }, { rejectWithValue }) => {
+  async ({ q, inStock, outOfStock }, { rejectWithValue }) => {
     try {
       const query = new URLSearchParams();
       query.append("q", encodeURIComponent(q));
       if (inStock !== undefined) query.append("inStock", inStock.toString());
+      if (outOfStock !== undefined) query.append("outOfStock", outOfStock.toString());
 
       const url = `/products/search${query.toString() ? "?" + query.toString() : ""}`;
       const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(
@@ -265,6 +275,27 @@ export const bulkUpdatePrices = createAsyncThunk<
   }
 });
 
+// Obtener variantes con stock bajo
+export const fetchLowStockProductVariants = createAsyncThunk<
+  LowStockProductVariantsResponse,
+  LowStockFilters
+>("products/fetchLowStockProductVariants", async (params, { rejectWithValue }) => {
+  try {
+    const query = new URLSearchParams();
+    query.append("stockThreshold", params.stockThreshold.toString());
+    if (params.page) query.append("page", params.page.toString());
+    if (params.limit) query.append("limit", params.limit.toString());
+
+    const url = `/products/low-stock?${query.toString()}`;
+    const { data } = await axiosInstance.get<
+      ApiResponse<LowStockProductVariantsResponse>
+    >(url);
+    return data.data!;
+  } catch (err: unknown) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
 const productSlice = createSlice({
   name: "products",
   initialState,
@@ -282,6 +313,11 @@ const productSlice = createSlice({
     },
     clearProductDetail(state) {
       state.productDetail = null;
+    },
+    clearLowStockVariants(state) {
+      state.lowStockVariants = [];
+      state.lowStockPagination = null;
+      state.lowStockError = null;
     },
   },
   extraReducers: (builder) => {
@@ -425,9 +461,30 @@ const productSlice = createSlice({
       .addCase(bulkUpdatePrices.rejected, (state, action) => {
         state.bulkUpdateLoading = false;
         state.bulkUpdateError = action.payload as string;
+      })
+
+      // fetchLowStockProductVariants
+      .addCase(fetchLowStockProductVariants.pending, (state) => {
+        state.lowStockLoading = true;
+        state.lowStockError = null;
+      })
+      .addCase(fetchLowStockProductVariants.fulfilled, (state, action) => {
+        state.lowStockLoading = false;
+        state.lowStockVariants = action.payload.variants;
+        state.lowStockPagination = action.payload.pagination;
+      })
+      .addCase(fetchLowStockProductVariants.rejected, (state, action) => {
+        state.lowStockLoading = false;
+        state.lowStockError = action.payload as string;
       });
   },
 });
 
-export const { clearSearchResults, clearBulkUpdateError, resetPagination, clearProductDetail } = productSlice.actions;
+export const { 
+  clearSearchResults, 
+  clearBulkUpdateError, 
+  resetPagination, 
+  clearProductDetail,
+  clearLowStockVariants,
+} = productSlice.actions;
 export default productSlice.reducer;

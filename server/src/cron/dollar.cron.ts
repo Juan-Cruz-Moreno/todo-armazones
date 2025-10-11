@@ -27,10 +27,12 @@ cron.schedule('*/30 * * * *', async () => {
       logger.info('Órdenes actualizadas con el nuevo valor del dólar');
     }
 
-    // Migración única: actualizar itemsCount en todas las órdenes existentes
-    // logger.info('Iniciando migración única de itemsCount en todas las órdenes');
-    // const updatedOrdersCount = await orderService.updateAllOrdersItemsCount();
-    // logger.info('Migración de itemsCount completada', { updatedOrdersCount });
+    // Migración única: actualizar contributionMarginPercentage en todas las órdenes existentes
+    logger.info('Iniciando migración única de contributionMarginPercentage en todas las órdenes');
+    const result = await orderService.updateAllOrdersContributionMarginPercentage();
+    logger.info('Migración de contributionMarginPercentage completada', {
+      result,
+    });
   } catch (error) {
     const appError = new AppError(
       'Error en la tarea programada: Actualización del dólar y órdenes',

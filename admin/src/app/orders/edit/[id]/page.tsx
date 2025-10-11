@@ -1987,7 +1987,8 @@ const EditOrderPage = () => {
                         form.totalContributionMarginUSD,
                         "en-US",
                         "USD"
-                      )}
+                      )}{" "}
+                      ({form.contributionMarginPercentage.toFixed(2)}%)
                     </span>
                   </div>
                 </div>

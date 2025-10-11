@@ -67,6 +67,16 @@ export interface ProductsPaginationInfo {
   limit: number;
 }
 
+export interface ProductFilters {
+  page?: number;
+  categorySlug?: string;
+  subcategorySlug?: string;
+  cursor?: string;
+  limit?: number;
+  inStock?: boolean;
+  outOfStock?: boolean;
+}
+
 export interface CreateProductPayload {
   product: {
     category: string[]; // IDs de categorías
@@ -159,4 +169,36 @@ export interface BulkPriceUpdateResponse {
     averagePriceIncrease: number;
     totalValueIncrease: number;
   };
+}
+
+// Low Stock Interfaces
+export interface ProductVariantWithProduct extends ProductVariant {
+  product: {
+    id: string;
+    slug: string;
+    productModel: string;
+    sku: string;
+    thumbnail: string;
+  };
+}
+
+export interface LowStockPaginationMetadata {
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  limit: number;
+  itemsInCurrentPage: number;
+}
+
+export interface LowStockProductVariantsResponse {
+  variants: ProductVariantWithProduct[];
+  pagination: LowStockPaginationMetadata;
+}
+
+export interface LowStockFilters {
+  stockThreshold: number;
+  page?: number;
+  limit?: number;
 }

@@ -144,6 +144,7 @@ export interface OrderResponseDto {
   totalAmount: number;
   totalAmountARS: number;
   totalContributionMarginUSD: number;
+  contributionMarginPercentage: number; // Porcentaje de margen de contribución
   totalCogsUSD: number; // Total Cost of Goods Sold
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
@@ -158,7 +159,10 @@ export interface OrderResponseDto {
 // Versiones para usuario usando Omit
 export type OrderItemUserResponse = Omit<OrderItemResponse, 'costUSDAtPurchase' | 'contributionMarginUSD' | 'cogsUSD'>;
 
-export type OrderUserResponseDto = Omit<OrderResponseDto, 'totalContributionMarginUSD' | 'totalCogsUSD' | 'items'> & {
+export type OrderUserResponseDto = Omit<
+  OrderResponseDto,
+  'totalContributionMarginUSD' | 'contributionMarginPercentage' | 'totalCogsUSD' | 'items'
+> & {
   items: OrderItemUserResponse[];
 };
 

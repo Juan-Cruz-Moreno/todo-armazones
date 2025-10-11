@@ -116,6 +116,7 @@ const orderSchema = new Schema<IOrderDocument>(
     totalAmount: { type: Number, required: true, default: 0 },
     totalAmountARS: { type: Number, required: false },
     totalContributionMarginUSD: { type: Number, required: true, default: 0 },
+    contributionMarginPercentage: { type: Number, required: true, default: 0 }, // Porcentaje de margen de contribución
     totalCogsUSD: { type: Number, required: true, default: 0 }, // Total Cost of Goods Sold
     orderStatus: {
       type: String,

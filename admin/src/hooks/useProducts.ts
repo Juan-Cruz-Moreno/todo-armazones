@@ -3,6 +3,8 @@ import {
   CreateProductPayload,
   UpdateProductPayload,
   BulkPriceUpdatePayload,
+  ProductFilters,
+  LowStockFilters,
 } from "@/interfaces/product";
 import { useAppDispatch, useAppSelector } from "../redux/hooks";
 import {
@@ -18,6 +20,8 @@ import {
   resetPagination,
   fetchProductBySlug,
   clearProductDetail,
+  fetchLowStockProductVariants,
+  clearLowStockVariants,
 } from "../redux/slices/productSlice";
 
 export const useProducts = () => {
@@ -36,6 +40,10 @@ export const useProducts = () => {
     paginationInfoError,
     lastCreatedProduct,
     productDetail,
+    lowStockVariants,
+    lowStockPagination,
+    lowStockLoading,
+    lowStockError,
   } = useAppSelector((state) => state.products);
 
   return {
@@ -52,6 +60,10 @@ export const useProducts = () => {
     paginationInfoError,
     lastCreatedProduct,
     productDetail,
+    lowStockVariants,
+    lowStockPagination,
+    lowStockLoading,
+    lowStockError,
     
     // Derived state for convenience
     hasNextPage: pagination?.hasNextPage || false,
@@ -60,43 +72,35 @@ export const useProducts = () => {
     totalPages: pagination?.totalPages || 0,
     currentPage: pagination?.currentPage || 1,
     
+    // Low stock derived state
+    lowStockTotalCount: lowStockPagination?.totalCount || 0,
+    lowStockTotalPages: lowStockPagination?.totalPages || 0,
+    lowStockCurrentPage: lowStockPagination?.currentPage || 1,
+    lowStockHasNextPage: lowStockPagination?.hasNextPage || false,
+    lowStockHasPreviousPage: lowStockPagination?.hasPreviousPage || false,
+    
     // Actions
     /**
      * @deprecated Considera usar fetchProductsByPage para mejor performance
      * Método de paginación por cursor que puede ser más lento
      */
-    fetchProducts: (params?: {
-      categorySlug?: string;
-      subcategorySlug?: string;
-      cursor?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => dispatch(fetchProducts(params)),
+    fetchProducts: (params?: Omit<ProductFilters, 'page'>) => dispatch(fetchProducts(params)),
     
     /**
      * Método recomendado para paginación - Optimizado con 40% mejor performance
      * Usa paginación por número de página en lugar de cursors
      */
-    fetchProductsByPage: (params: {
-      page?: number;
-      categorySlug?: string;
-      subcategorySlug?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => dispatch(fetchProductsByPage(params)),
+    fetchProductsByPage: (params: ProductFilters) => dispatch(fetchProductsByPage(params)),
     
     /**
      * Obtiene solo metadatos de paginación sin cargar productos
      * Útil para contadores rápidos y indicadores de UI - Muy optimizado
      */
-    fetchProductsPaginationInfo: (params: {
-      categorySlug?: string;
-      subcategorySlug?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => dispatch(fetchProductsPaginationInfo(params)),
+    fetchProductsPaginationInfo: (params: Omit<ProductFilters, 'page' | 'cursor'>) => 
+      dispatch(fetchProductsPaginationInfo(params)),
     
-    searchProducts: useCallback((params: { q: string; inStock?: boolean }) => dispatch(searchProducts(params)), [dispatch]),
+    searchProducts: useCallback((params: { q: string } & Pick<ProductFilters, 'inStock' | 'outOfStock'>) => 
+      dispatch(searchProducts(params)), [dispatch]),
     clearSearchResults: useCallback(() => dispatch(clearSearchResults()), [dispatch]),
     createProduct: (payload: CreateProductPayload) =>
       dispatch(createProduct(payload)),
@@ -127,21 +131,11 @@ export const useProducts = () => {
     },
 
     // New methods for page-based navigation
-    loadPageByNumber: (pageNumber: number, filters?: {
-      categorySlug?: string;
-      subcategorySlug?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => {
+    loadPageByNumber: (pageNumber: number, filters?: Omit<ProductFilters, 'page' | 'cursor'>) => {
       return dispatch(fetchProductsByPage({ page: pageNumber, ...filters }));
     },
 
-    goToFirstPage: (filters?: {
-      categorySlug?: string;
-      subcategorySlug?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => {
+    goToFirstPage: (filters?: Omit<ProductFilters, 'page' | 'cursor'>) => {
       return dispatch(fetchProductsByPage({ page: 1, ...filters }));
     },
 
@@ -152,24 +146,50 @@ export const useProducts = () => {
     },
 
     // Método recomendado para cargar productos con filtros (usa la API optimizada)
-    loadProductsWithFilters: (filters: {
-      page?: number;
-      categorySlug?: string;
-      subcategorySlug?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => {
+    loadProductsWithFilters: (filters: ProductFilters) => {
       return dispatch(fetchProductsByPage(filters));
     },
 
     // Método rápido para obtener conteos sin cargar productos
-    getQuickPaginationInfo: (filters: {
-      categorySlug?: string;
-      subcategorySlug?: string;
-      limit?: number;
-      inStock?: boolean;
-    }) => {
+    getQuickPaginationInfo: (filters: Omit<ProductFilters, 'page' | 'cursor'>) => {
       return dispatch(fetchProductsPaginationInfo(filters));
+    },
+
+    // Low Stock methods
+    /**
+     * Obtiene variantes de productos con stock bajo o igual al threshold
+     * @param filters - stockThreshold (requerido), page y limit (opcionales)
+     */
+    fetchLowStockProductVariants: (filters: LowStockFilters) => 
+      dispatch(fetchLowStockProductVariants(filters)),
+    
+    /**
+     * Limpia los resultados de variantes con stock bajo
+     */
+    clearLowStockVariants: () => dispatch(clearLowStockVariants()),
+    
+    /**
+     * Carga una página específica de variantes con stock bajo
+     */
+    loadLowStockPage: (stockThreshold: number, pageNumber: number, limit?: number) => {
+      return dispatch(fetchLowStockProductVariants({ 
+        stockThreshold, 
+        page: pageNumber, 
+        limit 
+      }));
+    },
+    
+    /**
+     * Refresca la página actual de variantes con stock bajo
+     */
+    refreshLowStockPage: (stockThreshold: number) => {
+      const currentPageNumber = lowStockPagination?.currentPage || 1;
+      const currentLimit = lowStockPagination?.limit || 10;
+      return dispatch(fetchLowStockProductVariants({ 
+        stockThreshold, 
+        page: currentPageNumber,
+        limit: currentLimit,
+      }));
     },
   };
 };

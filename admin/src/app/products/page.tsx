@@ -4,7 +4,7 @@ import { useProducts } from "@/hooks/useProducts";
 import Image from "next/image";
 import { formatCurrency } from "@/utils/formatCurrency";
 import Link from "next/link";
-import { Boxes, Plus, SquarePen, DollarSign, Eye } from "lucide-react";
+import { Boxes, Plus, SquarePen, DollarSign, Eye, AlertTriangle } from "lucide-react";
 import Pagination from "@/components/molecules/Pagination";
 
 const SKELETON_COUNT = 10;
@@ -42,6 +42,7 @@ const ProductsPage = () => {
   const [searching, setSearching] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [inStock, setInStock] = useState(false);
+  const [outOfStock, setOutOfStock] = useState(false);
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("");
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>("");
 
@@ -53,13 +54,14 @@ const ProductsPage = () => {
         page: 1, 
         limit: 20, 
         inStock,
+        outOfStock,
         categorySlug: selectedCategorySlug || undefined,
         subcategorySlug: selectedSubcategorySlug || undefined,
       });
       setCurrentPage(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searching, inStock, selectedCategorySlug, selectedSubcategorySlug]);
+  }, [searching, inStock, outOfStock, selectedCategorySlug, selectedSubcategorySlug]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +71,7 @@ const ProductsPage = () => {
       return;
     }
     setSearching(true);
-    await searchProducts({ q: search, inStock });
+    await searchProducts({ q: search, inStock, outOfStock });
   };
 
   const handleClear = () => {
@@ -87,10 +89,11 @@ const ProductsPage = () => {
     loadPageByNumber(pageNumber, { 
       limit: 20, 
       inStock,
+      outOfStock,
       categorySlug: selectedCategorySlug || undefined,
       subcategorySlug: selectedSubcategorySlug || undefined,
     });
-  }, [loadPageByNumber, inStock, selectedCategorySlug, selectedSubcategorySlug]);
+  }, [loadPageByNumber, inStock, outOfStock, selectedCategorySlug, selectedSubcategorySlug]);
 
   // Skeleton para lista
   const SkeletonRow = () => (
@@ -149,16 +152,43 @@ const ProductsPage = () => {
         </div>
       </div>
       {/* Checkbox para filtrar por stock */}
-      <div className="mb-4">
-        <label className="flex items-center gap-2 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={inStock}
-            onChange={(e) => setInStock(e.target.checked)}
-            className="checkbox checkbox-neutral"
-          />
-          <span className="text-sm text-[#666666]">Mostrar solo productos en stock</span>
-        </label>
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={inStock}
+              onChange={(e) => {
+                setInStock(e.target.checked);
+                if (e.target.checked && outOfStock) {
+                  setOutOfStock(false);
+                }
+              }}
+              className="checkbox checkbox-neutral"
+            />
+            <span className="text-sm text-[#666666]">In Stock</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={outOfStock}
+              onChange={(e) => {
+                setOutOfStock(e.target.checked);
+                if (e.target.checked && inStock) {
+                  setInStock(false);
+                }
+              }}
+              className="checkbox checkbox-neutral"
+            />
+            <span className="text-sm text-[#666666]">Out of Stock</span>
+          </label>
+        </div>
+        <Link href="/products/stock-threshold">
+          <button className="btn btn-sm rounded-none bg-orange-500 text-white border-orange-500 shadow-none hover:bg-orange-600">
+            <AlertTriangle className="size-4" />
+            Low Stock
+          </button>
+        </Link>
       </div>
 
       {/* Filtros de categoría y subcategoría */}
@@ -409,7 +439,7 @@ const ProductsPage = () => {
       {!searching && pagination && (
         <div className="mt-4 text-sm text-[#666666] text-center">
           Mostrando {products.length} de {pagination.totalCount} productos
-          {(selectedCategorySlug || selectedSubcategorySlug || inStock) && (
+          {(selectedCategorySlug || selectedSubcategorySlug || inStock || outOfStock) && (
             <span className="block mt-1 text-xs">
               {selectedCategorySlug && (
                 <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full mr-2">
@@ -422,8 +452,13 @@ const ProductsPage = () => {
                 </span>
               )}
               {inStock && (
-                <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full">
+                <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full mr-2">
                   En stock
+                </span>
+              )}
+              {outOfStock && (
+                <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full">
+                  Sin stock
                 </span>
               )}
             </span>

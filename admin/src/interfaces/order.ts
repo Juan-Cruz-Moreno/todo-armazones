@@ -30,6 +30,7 @@ export interface Order {
   totalAmountARS: number;
   totalCogsUSD: number;
   totalContributionMarginUSD: number;
+  contributionMarginPercentage: number;
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
   refund?: RefundDetails | null;

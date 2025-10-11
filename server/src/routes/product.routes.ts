@@ -23,6 +23,7 @@ router.get('/', productController.getProducts);
 router.get('/by-page', productController.getProductsByPage);
 router.get('/pagination-info', productController.getProductsPaginationInfo);
 router.get('/search', productController.searchProducts);
+router.get('/low-stock', productController.getLowStockProductVariants);
 
 // Nueva ruta para actualización masiva de precios
 router.patch(

@@ -18,6 +18,8 @@ import {
   CreateProductVariantResponseDto,
   ProductVariantSummaryDto,
   UpdateProductVariantRequestDto,
+  ProductVariantWithProductDto,
+  GetLowStockProductVariantsResponseDto,
 } from '@dto/product-variant.dto';
 import {
   BulkPriceUpdateRequestDto,
@@ -40,6 +42,7 @@ interface ProductFilters {
   categorySlug?: string;
   subcategorySlug?: string;
   inStock?: boolean;
+  outOfStock?: boolean;
 }
 
 interface QueryBuildResult {
@@ -521,6 +524,17 @@ export class ProductService {
       }
     }
 
+    // Filtro por productos sin stock - mutuamente excluyente con inStock
+    if (filters.outOfStock === true) {
+      stockFilteredIds = await this.getProductsWithoutStock();
+      if (stockFilteredIds.length === 0) {
+        // Retornar query que no coincidirá con nada
+        baseQuery._id = { $in: [] };
+      } else {
+        baseQuery._id = { $in: stockFilteredIds };
+      }
+    }
+
     return {
       baseQuery,
       ...(stockFilteredIds && { stockFilteredIds }),
@@ -540,6 +554,28 @@ export class ProductService {
       { $project: { _id: 1 } },
     ]);
     return productsWithStock.map((item) => item._id);
+  }
+
+  /**
+   * Método optimizado para obtener IDs de productos que NO tienen stock en ninguna variante
+   * Un producto está sin stock si todas sus variantes tienen stock = 0
+   */
+  private async getProductsWithoutStock(): Promise<Types.ObjectId[]> {
+    // Obtener todos los productos que tienen al menos una variante con stock > 0
+    const productsWithStock = await this.getProductsWithStock();
+
+    // Obtener todos los productos que tienen al menos una variante
+    const allProductsWithVariants = await ProductVariant.aggregate([
+      { $group: { _id: '$product' } },
+      { $project: { _id: 1 } },
+    ]);
+
+    // Filtrar los productos que NO están en la lista de productos con stock
+    const productsWithoutStock = allProductsWithVariants
+      .filter((item) => !productsWithStock.some((p) => p.toString() === item._id.toString()))
+      .map((item) => item._id);
+
+    return productsWithoutStock;
   }
 
   /**
@@ -599,8 +635,12 @@ export class ProductService {
   private async getProductsCount(filters: ProductFilters): Promise<number> {
     const { baseQuery, stockFilteredIds } = await this.buildProductQuery(filters);
 
-    // Si tenemos filtro de stock y no hay productos con stock, retornar 0
-    if (filters.inStock === true && stockFilteredIds && stockFilteredIds.length === 0) {
+    // Si tenemos filtro de stock (inStock o outOfStock) y no hay productos, retornar 0
+    if (
+      (filters.inStock === true || filters.outOfStock === true) &&
+      stockFilteredIds &&
+      stockFilteredIds.length === 0
+    ) {
       return 0;
     }
 
@@ -618,21 +658,28 @@ export class ProductService {
     categorySlug?: string,
     subcategorySlug?: string,
     inStock?: boolean,
+    outOfStock?: boolean,
   ): Promise<GetProductsResponseDto> {
     try {
       if (page < 1) {
         throw new AppError('El número de página debe ser mayor a 0', 400, 'fail', false);
       }
 
+      // Validar que no se envíen ambos filtros al mismo tiempo
+      if (inStock === true && outOfStock === true) {
+        throw new AppError('No se pueden aplicar los filtros inStock y outOfStock simultáneamente', 400, 'fail', false);
+      }
+
       const filters: ProductFilters = {};
       if (categorySlug) filters.categorySlug = categorySlug;
       if (subcategorySlug) filters.subcategorySlug = subcategorySlug;
       if (inStock !== undefined) filters.inStock = inStock;
+      if (outOfStock !== undefined) filters.outOfStock = outOfStock;
 
       // Usar método centralizado para construir query
       const { baseQuery } = await this.buildProductQuery(filters);
 
-      // Si no hay productos con stock (cuando se filtra por stock), retornar vacío
+      // Si no hay productos (cuando se filtra por stock), retornar vacío
       if (baseQuery._id && Array.isArray(baseQuery._id.$in) && baseQuery._id.$in.length === 0) {
         return {
           products: [],
@@ -719,6 +766,7 @@ export class ProductService {
         categorySlug,
         subcategorySlug,
         inStock,
+        outOfStock,
       });
       throw error instanceof AppError
         ? error
@@ -737,12 +785,19 @@ export class ProductService {
     categorySlug?: string,
     subcategorySlug?: string,
     inStock?: boolean,
+    outOfStock?: boolean,
   ): Promise<Omit<PaginationMetadata, 'nextCursor' | 'previousCursor' | 'itemsInCurrentPage'>> {
     try {
+      // Validar que no se envíen ambos filtros al mismo tiempo
+      if (inStock === true && outOfStock === true) {
+        throw new AppError('No se pueden aplicar los filtros inStock y outOfStock simultáneamente', 400, 'fail', false);
+      }
+
       const filters: ProductFilters = {};
       if (categorySlug) filters.categorySlug = categorySlug;
       if (subcategorySlug) filters.subcategorySlug = subcategorySlug;
       if (inStock !== undefined) filters.inStock = inStock;
+      if (outOfStock !== undefined) filters.outOfStock = outOfStock;
 
       // Usar método optimizado para obtener conteo
       const totalCount = await this.getProductsCount(filters);
@@ -763,10 +818,130 @@ export class ProductService {
         categorySlug,
         subcategorySlug,
         inStock,
+        outOfStock,
       });
       throw error instanceof AppError
         ? error
         : new AppError('Error al obtener información de paginación.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
+    }
+  }
+
+  /**
+   * Obtiene variantes de productos con stock bajo o igual al threshold especificado
+   * Método paginado que retorna las variantes junto con información básica del producto
+   */
+  public async getLowStockProductVariants(
+    stockThreshold: number,
+    page: number = 1,
+    limit: number = 10,
+  ): Promise<GetLowStockProductVariantsResponseDto> {
+    try {
+      // Validaciones de entrada
+      if (stockThreshold < 0) {
+        throw new AppError('El umbral de stock no puede ser negativo', 400, 'fail', false);
+      }
+
+      if (page < 1) {
+        throw new AppError('El número de página debe ser mayor a 0', 400, 'fail', false);
+      }
+
+      // Calcular skip para la página específica
+      const skip = (page - 1) * limit;
+
+      // Obtener total count de variantes con bajo stock
+      const totalCount = await ProductVariant.countDocuments({
+        stock: { $lte: stockThreshold },
+      });
+
+      const totalPages = Math.ceil(totalCount / limit);
+
+      // Validar que la página solicitada existe
+      if (page > totalPages && totalCount > 0) {
+        throw new AppError(`La página ${page} no existe. Máximo: ${totalPages}`, 404, 'fail', false);
+      }
+
+      // Si no hay variantes con bajo stock, retornar vacío
+      if (totalCount === 0) {
+        return {
+          variants: [],
+          pagination: {
+            totalCount: 0,
+            totalPages: 0,
+            currentPage: page,
+            hasNextPage: false,
+            hasPreviousPage: false,
+            limit,
+            itemsInCurrentPage: 0,
+          },
+        };
+      }
+
+      // Obtener variantes con stock bajo, paginadas y pobladas con información del producto
+      const variants = await ProductVariant.find({
+        stock: { $lte: stockThreshold },
+      })
+        .sort({ stock: 1, _id: 1 }) // Ordenar por stock ascendente, luego por _id
+        .skip(skip)
+        .limit(limit)
+        .populate<{
+          product: Pick<IProductDocument, '_id' | 'slug' | 'productModel' | 'sku' | 'thumbnail'>;
+        }>({
+          path: 'product',
+          select: '_id slug productModel sku thumbnail',
+        })
+        .lean();
+
+      const itemsInCurrentPage = variants.length;
+      const hasNextPage = page < totalPages;
+      const hasPreviousPage = page > 1;
+
+      // Mapear las variantes al DTO con información del producto
+      const variantsDto: ProductVariantWithProductDto[] = await Promise.all(
+        variants.map(async (variant) => {
+          return {
+            id: variant._id.toString(),
+            color: variant.color,
+            stock: variant.stock,
+            averageCostUSD: variant.averageCostUSD,
+            priceUSD: variant.priceUSD,
+            priceARS: await this.calculatePriceARS(variant.priceUSD),
+            thumbnail: variant.thumbnail,
+            images: variant.images,
+            product: {
+              id: variant.product._id.toString(),
+              slug: variant.product.slug,
+              productModel: variant.product.productModel,
+              sku: variant.product.sku,
+              thumbnail: variant.product.thumbnail,
+            },
+          };
+        }),
+      );
+
+      return {
+        variants: variantsDto,
+        pagination: {
+          totalCount,
+          totalPages,
+          currentPage: page,
+          hasNextPage,
+          hasPreviousPage,
+          limit,
+          itemsInCurrentPage,
+        },
+      };
+    } catch (error) {
+      logger.error('Error al obtener variantes con stock bajo', {
+        error,
+        stockThreshold,
+        page,
+        limit,
+      });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al obtener variantes con stock bajo.', 500, 'error', false, {
             cause: error instanceof Error ? error.message : String(error),
           });
     }
@@ -782,12 +957,19 @@ export class ProductService {
     categorySlug?: string,
     subcategorySlug?: string,
     inStock?: boolean,
+    outOfStock?: boolean,
   ): Promise<GetProductsResponseDto> {
     try {
+      // Validar que no se envíen ambos filtros al mismo tiempo
+      if (inStock === true && outOfStock === true) {
+        throw new AppError('No se pueden aplicar los filtros inStock y outOfStock simultáneamente', 400, 'fail', false);
+      }
+
       const filters: ProductFilters = {};
       if (categorySlug) filters.categorySlug = categorySlug;
       if (subcategorySlug) filters.subcategorySlug = subcategorySlug;
       if (inStock !== undefined) filters.inStock = inStock;
+      if (outOfStock !== undefined) filters.outOfStock = outOfStock;
 
       // Construir query base usando método centralizado
       const { baseQuery } = await this.buildProductQuery(filters);
@@ -798,7 +980,7 @@ export class ProductService {
         query._id = query._id ? { ...query._id, $gt: new Types.ObjectId(cursor) } : { $gt: new Types.ObjectId(cursor) };
       }
 
-      // Si no hay productos con stock (cuando se filtra), retornar vacío
+      // Si no hay productos (cuando se filtra), retornar vacío
       if (baseQuery._id && Array.isArray(baseQuery._id.$in) && baseQuery._id.$in.length === 0) {
         return {
           products: [],
@@ -881,7 +1063,7 @@ export class ProductService {
         pagination,
       };
     } catch (error) {
-      logger.error('Error al obtener productos', { error, limit, cursor });
+      logger.error('Error al obtener productos', { error, limit, cursor, inStock, outOfStock });
       throw error instanceof AppError
         ? error
         : new AppError('Error al obtener productos.', 500, 'error', false, {

@@ -33,6 +33,7 @@ export interface IOrder {
   totalAmount: number;
   totalAmountARS?: number;
   totalContributionMarginUSD: number;
+  contributionMarginPercentage: number; // Porcentaje de margen de contribución = (totalContributionMarginUSD / subTotal) * 100
   totalCogsUSD: number; // Total Cost of Goods Sold = suma de cogsUSD de todos los items
   orderStatus: OrderStatus;
   allowViewInvoice: boolean;
@@ -50,23 +51,4 @@ export interface IRefund {
   processedAt: Date;
   processedBy?: Types.ObjectId;
   originalSubTotal: number; // Subtotal original antes del reembolso
-}
-
-export interface IOrder {
-  orderNumber: number;
-  user: Types.ObjectId;
-  items: IOrderItem[];
-  shippingAddress: Types.ObjectId;
-  shippingMethod: ShippingMethod;
-  paymentMethod: PaymentMethod;
-  subTotal: number;
-  bankTransferExpense?: number;
-  totalAmount: number;
-  totalAmountARS?: number;
-  totalContributionMarginUSD: number;
-  totalCogsUSD: number; // Total Cost of Goods Sold = suma de cogsUSD de todos los items
-  orderStatus: OrderStatus;
-  allowViewInvoice: boolean;
-  refund?: IRefund;
-  exchangeRate: number; // Tasa de cambio USD a ARS al momento de la orden
 }

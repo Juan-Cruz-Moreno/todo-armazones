@@ -168,6 +168,7 @@ export class ProductController {
       const categorySlug = req.query.categorySlug as string | undefined;
       const subcategorySlug = req.query.subcategorySlug as string | undefined;
       const inStockParam = req.query.inStock as string | undefined;
+      const outOfStockParam = req.query.outOfStock as string | undefined;
 
       let page = 1;
       if (pageParam) {
@@ -199,8 +200,21 @@ export class ProductController {
         inStock = inStockParam.toLowerCase() === 'true';
       }
 
+      // Convertir el parámetro outOfStock a boolean
+      let outOfStock: boolean | undefined;
+      if (outOfStockParam !== undefined) {
+        outOfStock = outOfStockParam.toLowerCase() === 'true';
+      }
+
       // Llamada al servicio para obtener productos por página
-      const result = await this.productService.getProductsByPage(page, limit, categorySlug, subcategorySlug, inStock);
+      const result = await this.productService.getProductsByPage(
+        page,
+        limit,
+        categorySlug,
+        subcategorySlug,
+        inStock,
+        outOfStock,
+      );
 
       res.status(200).json({
         status: 'success',
@@ -235,6 +249,7 @@ export class ProductController {
       const categorySlug = req.query.categorySlug as string | undefined;
       const subcategorySlug = req.query.subcategorySlug as string | undefined;
       const inStockParam = req.query.inStock as string | undefined;
+      const outOfStockParam = req.query.outOfStock as string | undefined;
 
       let limit = 10;
       if (limitParam) {
@@ -254,8 +269,20 @@ export class ProductController {
         inStock = inStockParam.toLowerCase() === 'true';
       }
 
+      // Convertir el parámetro outOfStock a boolean
+      let outOfStock: boolean | undefined;
+      if (outOfStockParam !== undefined) {
+        outOfStock = outOfStockParam.toLowerCase() === 'true';
+      }
+
       // Llamada al servicio para obtener información de paginación
-      const result = await this.productService.getProductsPaginationInfo(limit, categorySlug, subcategorySlug, inStock);
+      const result = await this.productService.getProductsPaginationInfo(
+        limit,
+        categorySlug,
+        subcategorySlug,
+        inStock,
+        outOfStock,
+      );
 
       res.status(200).json({
         status: 'success',
@@ -288,6 +315,7 @@ export class ProductController {
       const categorySlug = req.query.categorySlug as string | undefined;
       const subcategorySlug = req.query.subcategorySlug as string | undefined;
       const inStockParam = req.query.inStock as string | undefined;
+      const outOfStockParam = req.query.outOfStock as string | undefined;
 
       let limit = 10;
       if (limitParam) {
@@ -307,8 +335,21 @@ export class ProductController {
         inStock = inStockParam.toLowerCase() === 'true';
       }
 
+      // Convertir el parámetro outOfStock a boolean
+      let outOfStock: boolean | undefined;
+      if (outOfStockParam !== undefined) {
+        outOfStock = outOfStockParam.toLowerCase() === 'true';
+      }
+
       // Llamada al servicio para obtener productos
-      const result = await this.productService.getProducts(limit, cursor, categorySlug, subcategorySlug, inStock);
+      const result = await this.productService.getProducts(
+        limit,
+        cursor,
+        categorySlug,
+        subcategorySlug,
+        inStock,
+        outOfStock,
+      );
 
       res.status(200).json({
         status: 'success',
@@ -585,6 +626,75 @@ export class ProductController {
         res.status(500).json({
           status: 'error',
           message: 'Error en la actualización masiva de precios',
+        } as ApiErrorResponse);
+      }
+    }
+  };
+
+  public getLowStockProductVariants = async (
+    req: Request,
+    res: Response<ApiResponse | ApiErrorResponse>,
+  ): Promise<void> => {
+    try {
+      // Validación de parámetros de consulta
+      const stockThresholdParam = req.query.stockThreshold as string;
+      const pageParam = req.query.page as string;
+      const limitParam = req.query.limit as string;
+
+      // Validar y parsear stockThreshold
+      if (!stockThresholdParam) {
+        throw new AppError('El parámetro stockThreshold es requerido', 400, 'fail', false);
+      }
+
+      const stockThreshold = parseInt(stockThresholdParam, 10);
+      if (isNaN(stockThreshold)) {
+        throw new AppError('El parámetro stockThreshold debe ser un número válido', 400, 'fail', false);
+      }
+
+      // Parsear page (opcional, default 1)
+      let page = 1;
+      if (pageParam) {
+        page = parseInt(pageParam, 10);
+        if (isNaN(page) || page < 1) {
+          throw new AppError('El parámetro page debe ser un número válido mayor a 0', 400, 'fail', false);
+        }
+      }
+
+      // Parsear limit (opcional, default 10)
+      let limit = 10;
+      if (limitParam) {
+        limit = parseInt(limitParam, 10);
+        if (isNaN(limit) || limit < 1) {
+          throw new AppError('El parámetro limit debe ser un número válido mayor a 0', 400, 'fail', false);
+        }
+        if (limit > 100) {
+          throw new AppError('El parámetro limit no puede ser mayor a 100', 400, 'fail', false);
+        }
+      }
+
+      // Llamada al servicio
+      const result = await this.productService.getLowStockProductVariants(stockThreshold, page, limit);
+
+      res.status(200).json({
+        status: 'success',
+        data: result,
+      });
+    } catch (error: unknown) {
+      logger.error('Error fetching low stock product variants:', {
+        error,
+        query: req.query,
+      });
+
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        } as ApiErrorResponse);
+      } else {
+        res.status(500).json({
+          status: 'error',
+          message: 'Error al obtener variantes con stock bajo',
         } as ApiErrorResponse);
       }
     }

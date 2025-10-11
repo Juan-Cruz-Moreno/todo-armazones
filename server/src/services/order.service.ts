@@ -309,6 +309,9 @@ export class OrderService {
     // Determinar el estado inicial basado en el método de pago
     const initialStatus: OrderStatus = OrderStatus.Processing;
 
+    // Calcular el porcentaje de margen de contribución
+    const contributionMarginPercentage = subTotal > 0 ? (totalContributionMarginUSD / subTotal) * 100 : 0;
+
     return {
       orderNumber,
       user: userId,
@@ -320,6 +323,7 @@ export class OrderService {
       ...(bankTransferExpense && { bankTransferExpense }),
       totalAmount,
       totalContributionMarginUSD,
+      contributionMarginPercentage,
       totalCogsUSD,
       orderStatus: initialStatus,
       allowViewInvoice: 'allowViewInvoice' in orderData ? (orderData.allowViewInvoice ?? false) : false,
@@ -463,6 +467,7 @@ export class OrderService {
       totalAmount: order.totalAmount,
       totalAmountARS: order.totalAmountARS ?? 0,
       totalContributionMarginUSD: order.totalContributionMarginUSD,
+      contributionMarginPercentage: order.contributionMarginPercentage,
       totalCogsUSD: order.totalCogsUSD,
       orderStatus: order.orderStatus,
       allowViewInvoice: order.allowViewInvoice,
@@ -2857,6 +2862,9 @@ export class OrderService {
     order.totalContributionMarginUSD = finalContributionMarginUSD;
     order.totalCogsUSD = finalCOGS;
 
+    // Calcular el porcentaje de margen de contribución
+    order.contributionMarginPercentage = baseSubTotal > 0 ? (finalContributionMarginUSD / baseSubTotal) * 100 : 0;
+
     // 4️⃣ RECALCULAR GASTOS BANCARIOS Y TOTAL AMOUNT
     const { bankTransferExpense, totalAmount } = this.calculateTotals(order.subTotal, order.paymentMethod);
 
@@ -3422,5 +3430,90 @@ export class OrderService {
     });
 
     return updatedCount;
+  }
+
+  /**
+   * 🔄 MIGRACIÓN: Actualiza el campo contributionMarginPercentage en todas las órdenes existentes
+   *
+   * Este método calcula el porcentaje de margen de contribución para cada orden basado en:
+   * - Si hay reembolso: usa el totalContributionMarginUSD actual (ya reducido por el refund)
+   * - Si no hay reembolso: usa el totalContributionMarginUSD directo
+   * - Formula: (totalContributionMarginUSD / subTotal_original) * 100
+   *
+   * ⚠️ IMPORTANTE: Este método debe ejecutarse UNA SOLA VEZ después de agregar el campo.
+   *
+   * @returns Objeto con estadísticas de la migración
+   */
+  public async updateAllOrdersContributionMarginPercentage(): Promise<{
+    totalOrders: number;
+    updatedOrders: number;
+    skippedOrders: number;
+    errors: Array<{ orderId: string; error: string }>;
+  }> {
+    logger.info('🚀 Iniciando migración de contributionMarginPercentage para todas las órdenes');
+
+    const orders = await Order.find({});
+    let updatedCount = 0;
+    let skippedCount = 0;
+    const errors: Array<{ orderId: string; error: string }> = [];
+
+    for (const order of orders) {
+      try {
+        // Calcular el subtotal original (antes de cualquier reembolso)
+        // Si hay reembolso, usar refund.originalSubTotal
+        // Si no hay reembolso, el subTotal actual es el original
+        const originalSubTotal = order.refund?.originalSubTotal ?? order.subTotal;
+
+        // Calcular el porcentaje basado en el margen actual y el subtotal original
+        // Nota: totalContributionMarginUSD ya está ajustado si hay reembolso
+        const contributionMarginPercentage =
+          originalSubTotal > 0 ? (order.totalContributionMarginUSD / originalSubTotal) * 100 : 0;
+
+        // Verificar si realmente necesita actualización
+        // Solo omitir si el valor calculado es exactamente igual al existente (dentro de un margen de error)
+        const existingValue = order.contributionMarginPercentage || 0;
+        const difference = Math.abs(contributionMarginPercentage - existingValue);
+
+        if (difference < 0.01 && existingValue !== 0) {
+          // Si la diferencia es menor a 0.01% y ya tiene un valor válido, omitir
+          skippedCount++;
+          continue;
+        }
+
+        // Actualizar el campo
+        order.contributionMarginPercentage = contributionMarginPercentage;
+        await order.save();
+
+        updatedCount++;
+
+        // Log cada 100 órdenes para tracking
+        if (updatedCount % 100 === 0) {
+          logger.info(`Progreso de migración: ${updatedCount} órdenes actualizadas`);
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        errors.push({
+          orderId: order._id.toString(),
+          error: errorMessage,
+        });
+
+        logger.error('Error al actualizar contributionMarginPercentage de orden', {
+          orderId: order._id.toString(),
+          orderNumber: order.orderNumber,
+          error: errorMessage,
+        });
+      }
+    }
+
+    const result = {
+      totalOrders: orders.length,
+      updatedOrders: updatedCount,
+      skippedOrders: skippedCount,
+      errors,
+    };
+
+    logger.info('✅ Migración de contributionMarginPercentage completada', result);
+
+    return result;
   }
 }

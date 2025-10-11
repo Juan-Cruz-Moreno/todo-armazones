@@ -48,3 +48,26 @@ export interface ProductVariantSummaryDto {
   thumbnail: string;
   images: string[];
 }
+
+export interface ProductVariantWithProductDto extends ProductVariantSummaryDto {
+  product: {
+    id: string;
+    slug: string;
+    productModel: string;
+    sku: string;
+    thumbnail: string;
+  };
+}
+
+export interface GetLowStockProductVariantsResponseDto {
+  variants: ProductVariantWithProductDto[];
+  pagination: {
+    totalCount: number;
+    totalPages: number;
+    currentPage: number;
+    hasNextPage: boolean;
+    hasPreviousPage: boolean;
+    limit: number;
+    itemsInCurrentPage: number;
+  };
+}
