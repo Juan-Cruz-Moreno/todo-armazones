@@ -1,4 +1,5 @@
 import User, { IUserDocument } from '@models/User';
+import Address, { IAddressDocument } from '@models/Address';
 import { GetUsersPaginatedResponse, UpdateUserRequestDto } from '@dto/user.dto';
 import session from 'express-session';
 import { Types } from 'mongoose';
@@ -16,6 +17,25 @@ export class UserService {
   public async findUserByEmail(email: string): Promise<IUserDocument | null> {
     const user = await User.findOne({ email });
     return user;
+  }
+
+  /**
+   * Obtiene la dirección más reciente de un usuario
+   * @param userId ID del usuario
+   * @returns La dirección más reciente o null si no tiene direcciones
+   */
+  public async getMostRecentAddress(userId: string): Promise<IAddressDocument | null> {
+    // Validar que el userId sea válido
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new AppError('Invalid user ID', 400, 'fail', true);
+    }
+
+    // Buscar la dirección más reciente del usuario
+    const address = await Address.findOne({ userId: new Types.ObjectId(userId) })
+      .sort({ createdAt: -1 }) // Ordenar por fecha de creación descendente
+      .limit(1);
+
+    return address;
   }
 
   /**

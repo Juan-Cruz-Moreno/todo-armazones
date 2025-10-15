@@ -4,7 +4,7 @@ import { useProducts } from "@/hooks/useProducts";
 import Image from "next/image";
 import { formatCurrency } from "@/utils/formatCurrency";
 import Link from "next/link";
-import { Boxes, Plus, SquarePen, DollarSign, Eye, AlertTriangle } from "lucide-react";
+import { Boxes, Plus, SquarePen, DollarSign, Eye, AlertTriangle, Trash2 } from "lucide-react";
 import Pagination from "@/components/molecules/Pagination";
 
 const SKELETON_COUNT = 10;
@@ -36,6 +36,10 @@ const ProductsPage = () => {
     clearSearchResults,
     loadPageByNumber,
     resetPagination,
+    deleteProduct,
+    deleteLoading,
+    deleteError,
+    clearDeleteError,
   } = useProducts();
 
   const [search, setSearch] = useState("");
@@ -45,6 +49,12 @@ const ProductsPage = () => {
   const [outOfStock, setOutOfStock] = useState(false);
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("");
   const [selectedSubcategorySlug, setSelectedSubcategorySlug] = useState<string>("");
+  const [productToDelete, setProductToDelete] = useState<{
+    id: string;
+    productModel: string;
+    sku: string;
+  } | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<boolean>(false);
 
   // Cargar productos al montar o cuando cambien los filtros
   useEffect(() => {
@@ -94,6 +104,41 @@ const ProductsPage = () => {
       subcategorySlug: selectedSubcategorySlug || undefined,
     });
   }, [loadPageByNumber, inStock, outOfStock, selectedCategorySlug, selectedSubcategorySlug]);
+
+  // Handlers para eliminación de producto
+  const handleDeleteProduct = async () => {
+    if (productToDelete) {
+      try {
+        await deleteProduct(productToDelete.id).unwrap();
+        setDeleteSuccess(true);
+        
+        // Refrescar la lista después de eliminar
+        setTimeout(() => {
+          if (searching) {
+            // Si está buscando, refrescar búsqueda
+            searchProducts({ q: search, inStock, outOfStock });
+          } else {
+            // Si está en la lista normal, refrescar la página actual
+            loadPageByNumber(currentPage, { 
+              limit: 20, 
+              inStock,
+              outOfStock,
+              categorySlug: selectedCategorySlug || undefined,
+              subcategorySlug: selectedSubcategorySlug || undefined,
+            });
+          }
+        }, 1500);
+      } catch (error) {
+        console.error("Error al eliminar producto:", error);
+      }
+    }
+  };
+
+  const handleCloseDeleteModal = () => {
+    setProductToDelete(null);
+    setDeleteSuccess(false);
+    clearDeleteError();
+  };
 
   // Skeleton para lista
   const SkeletonRow = () => (
@@ -328,6 +373,17 @@ const ProductsPage = () => {
                       <Eye className="size-4" />
                     </button>
                   </Link>
+                  <button
+                    className="btn rounded-none bg-red-500 hover:bg-red-600 text-white border-none shadow-none"
+                    title="Eliminar Producto"
+                    onClick={() => setProductToDelete({
+                      id: product.id,
+                      productModel: product.productModel,
+                      sku: product.sku,
+                    })}
+                  >
+                    <Trash2 className="size-4" />
+                  </button>
                 </div>
               </li>
             ))}
@@ -419,6 +475,17 @@ const ProductsPage = () => {
                   <Eye className="size-4" />
                 </button>
               </Link>
+              <button
+                className="btn rounded-none bg-red-500 hover:bg-red-600 text-white border-none shadow-none"
+                title="Eliminar Producto"
+                onClick={() => setProductToDelete({
+                  id: product.id,
+                  productModel: product.productModel,
+                  sku: product.sku,
+                })}
+              >
+                <Trash2 className="size-4" />
+              </button>
             </div>
           </li>
         ))}
@@ -464,6 +531,86 @@ const ProductsPage = () => {
             </span>
           )}
         </div>
+      )}
+
+      {/* Modal de confirmación para eliminar producto */}
+      {productToDelete && (
+        <dialog id="delete_product_modal" className="modal modal-open">
+          <div className="modal-box rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222]">
+            <h3 className="font-bold text-lg text-[#111111] mb-4">
+              {deleteSuccess ? "Eliminación completada" : "Confirmar eliminación"}
+            </h3>
+            {deleteSuccess ? (
+              <div className="py-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg
+                      className="w-5 h-5 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-[#333333] font-medium">
+                    El producto &quot;{productToDelete.productModel}&quot; (SKU: {productToDelete.sku}) ha sido eliminado
+                    exitosamente.
+                  </p>
+                </div>
+                <p className="text-sm text-[#666666]">
+                  El producto ya no aparecerá en los listados pero los datos se
+                  mantienen para auditoría.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="py-4 text-[#333333]">
+                  ¿Estás seguro de que quieres eliminar el producto{" "}
+                  <strong>&quot;{productToDelete.productModel}&quot;</strong> con SKU{" "}
+                  <strong>{productToDelete.sku}</strong>?
+                </p>
+                <p className="text-sm text-[#666666] mb-6">
+                  Esta acción eliminará el producto y todas sus variantes de los listados
+                  pero mantendrá los datos para auditoría. El stock de todas las variantes
+                  se establecerá en 0.
+                </p>
+                {deleteError && (
+                  <div className="alert alert-error mb-4 rounded-none">
+                    <span className="text-sm">{deleteError}</span>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="modal-action">
+              <button
+                className={`btn border-none shadow-none ${
+                  deleteSuccess
+                    ? "bg-[#2271B1] text-white hover:bg-[#1a5a8a]"
+                    : "bg-transparent text-[#666666] hover:text-[#333333]"
+                }`}
+                onClick={handleCloseDeleteModal}
+                disabled={deleteLoading}
+              >
+                {deleteSuccess ? "Cerrar" : "Cancelar"}
+              </button>
+              {!deleteSuccess && (
+                <button
+                  className="btn bg-red-500 hover:bg-red-600 text-white border-none shadow-none"
+                  onClick={handleDeleteProduct}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? "Eliminando..." : "Eliminar producto"}
+                </button>
+              )}
+            </div>
+          </div>
+        </dialog>
       )}
     </div>
   );

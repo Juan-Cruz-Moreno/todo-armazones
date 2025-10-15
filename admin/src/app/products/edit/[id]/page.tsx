@@ -46,10 +46,18 @@ export default function EditProductPage({
 }) {
   // Desempaqueta params usando React.use()
   const { id } = React.use(params);
-  const { products, searchResults, updateProduct, loading } = useProducts();
+  const { products, searchResults, updateProduct, loading, deleteProductVariant, deleteLoading, deleteError, clearDeleteError } = useProducts();
   const router = useRouter();
   const modalRef = useRef<HTMLDialogElement>(null);
   const [success, setSuccess] = useState(false);
+
+  // Estados para eliminar variante
+  const [variantToDelete, setVariantToDelete] = useState<{
+    id: string;
+    colorName: string;
+    productId: string;
+  } | null>(null);
+  const [deleteSuccess, setDeleteSuccess] = useState<boolean>(false);
 
   // Estado para manejar errores en toast
   const [toastErrors, setToastErrors] = useState<
@@ -253,8 +261,49 @@ export default function EditProductPage({
   };
 
   const removeVariant = (idx: number) => {
-    remove(idx);
-    setExpanded((prev) => prev.filter((_, i) => i !== idx));
+    const variant = watchedVariants?.[idx];
+    
+    // Si la variante tiene ID (existe en BD), mostrar modal de confirmación
+    if (variant?.id && !(variant as VariantField).isNew) {
+      setVariantToDelete({
+        id: variant.id,
+        colorName: variant.data?.color?.name || "Sin nombre",
+        productId: id,
+      });
+    } else {
+      // Si es nueva (sin ID en BD), eliminar directamente del formulario
+      remove(idx);
+      setExpanded((prev) => prev.filter((_, i) => i !== idx));
+    }
+  };
+
+  // Handlers para eliminación de variante
+  const handleDeleteVariant = async () => {
+    if (variantToDelete) {
+      try {
+        await deleteProductVariant(variantToDelete.id, variantToDelete.productId).unwrap();
+        setDeleteSuccess(true);
+        
+        // Refrescar la lista después de eliminar
+        setTimeout(() => {
+          // Remover del formulario
+          const variantIndex = watchedVariants?.findIndex(v => v.id === variantToDelete.id);
+          if (variantIndex !== undefined && variantIndex !== -1) {
+            remove(variantIndex);
+            setExpanded((prev) => prev.filter((_, i) => i !== variantIndex));
+          }
+          handleCloseDeleteVariantModal();
+        }, 1500);
+      } catch (error) {
+        console.error("Error al eliminar variante:", error);
+      }
+    }
+  };
+
+  const handleCloseDeleteVariantModal = () => {
+    setVariantToDelete(null);
+    setDeleteSuccess(false);
+    clearDeleteError();
   };
 
   const toggleExpand = (idx: number) =>
@@ -972,6 +1021,85 @@ export default function EditProductPage({
           </div>
         ))}
       </div>
+
+      {/* Modal de confirmación para eliminar variante */}
+      {variantToDelete && (
+        <dialog id="delete_variant_modal" className="modal modal-open">
+          <div className="modal-box rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222]">
+            <h3 className="font-bold text-lg text-[#111111] mb-4">
+              {deleteSuccess ? "Eliminación completada" : "Confirmar eliminación de variante"}
+            </h3>
+            {deleteSuccess ? (
+              <div className="py-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                    <svg
+                      className="w-5 h-5 text-green-600"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                  </div>
+                  <p className="text-[#333333] font-medium">
+                    La variante &quot;{variantToDelete.colorName}&quot; ha sido eliminada
+                    exitosamente.
+                  </p>
+                </div>
+                <p className="text-sm text-[#666666]">
+                  La variante ya no aparecerá en los listados pero los datos se
+                  mantienen para auditoría.
+                </p>
+              </div>
+            ) : (
+              <>
+                <p className="py-4 text-[#333333]">
+                  ¿Estás seguro de que quieres eliminar la variante{" "}
+                  <strong>&quot;{variantToDelete.colorName}&quot;</strong>?
+                </p>
+                <p className="text-sm text-[#666666] mb-6">
+                  Esta acción eliminará la variante de los listados
+                  pero mantendrá los datos para auditoría. El stock de la variante
+                  se establecerá en 0.
+                </p>
+                {deleteError && (
+                  <div className="alert alert-error mb-4 rounded-none">
+                    <span className="text-sm">{deleteError}</span>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="modal-action">
+              <button
+                className={`btn border-none shadow-none ${
+                  deleteSuccess
+                    ? "bg-[#2271B1] text-white hover:bg-[#1a5a8a]"
+                    : "bg-transparent text-[#666666] hover:text-[#333333]"
+                }`}
+                onClick={handleCloseDeleteVariantModal}
+                disabled={deleteLoading}
+              >
+                {deleteSuccess ? "Cerrar" : "Cancelar"}
+              </button>
+              {!deleteSuccess && (
+                <button
+                  className="btn bg-red-500 hover:bg-red-600 text-white border-none shadow-none"
+                  onClick={handleDeleteVariant}
+                  disabled={deleteLoading}
+                >
+                  {deleteLoading ? "Eliminando..." : "Eliminar variante"}
+                </button>
+              )}
+            </div>
+          </div>
+        </dialog>
+      )}
     </div>
   );
 }

@@ -37,6 +37,8 @@ interface ProductsState {
   lowStockPagination: LowStockPaginationMetadata | null;
   lowStockLoading: boolean;
   lowStockError: string | null;
+  deleteLoading: boolean;
+  deleteError: string | null;
 }
 
 const initialState: ProductsState = {
@@ -57,6 +59,8 @@ const initialState: ProductsState = {
   lowStockPagination: null,
   lowStockLoading: false,
   lowStockError: null,
+  deleteLoading: false,
+  deleteError: null,
 };
 
 // Fetch products with optional filters and pagination
@@ -285,12 +289,44 @@ export const fetchLowStockProductVariants = createAsyncThunk<
     query.append("stockThreshold", params.stockThreshold.toString());
     if (params.page) query.append("page", params.page.toString());
     if (params.limit) query.append("limit", params.limit.toString());
+    if (params.minStock !== undefined) query.append("minStock", params.minStock.toString());
+    if (params.maxStock !== undefined) query.append("maxStock", params.maxStock.toString());
 
     const url = `/products/low-stock?${query.toString()}`;
     const { data } = await axiosInstance.get<
       ApiResponse<LowStockProductVariantsResponse>
     >(url);
     return data.data!;
+  } catch (err: unknown) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
+// Eliminar producto (soft delete)
+export const deleteProduct = createAsyncThunk<
+  { productId: string },
+  string
+>("products/deleteProduct", async (productId, { rejectWithValue }) => {
+  try {
+    await axiosInstance.delete<ApiResponse<void>>(
+      `/products/${productId}`
+    );
+    return { productId };
+  } catch (err: unknown) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
+// Eliminar variante de producto (soft delete)
+export const deleteProductVariant = createAsyncThunk<
+  { variantId: string; productId: string },
+  { variantId: string; productId: string }
+>("products/deleteProductVariant", async ({ variantId, productId }, { rejectWithValue }) => {
+  try {
+    await axiosInstance.delete<ApiResponse<void>>(
+      `/products/variants/${variantId}`
+    );
+    return { variantId, productId };
   } catch (err: unknown) {
     return rejectWithValue(getErrorMessage(err));
   }
@@ -318,6 +354,9 @@ const productSlice = createSlice({
       state.lowStockVariants = [];
       state.lowStockPagination = null;
       state.lowStockError = null;
+    },
+    clearDeleteError(state) {
+      state.deleteError = null;
     },
   },
   extraReducers: (builder) => {
@@ -476,6 +515,61 @@ const productSlice = createSlice({
       .addCase(fetchLowStockProductVariants.rejected, (state, action) => {
         state.lowStockLoading = false;
         state.lowStockError = action.payload as string;
+      })
+
+      // deleteProduct
+      .addCase(deleteProduct.pending, (state) => {
+        state.deleteLoading = true;
+        state.deleteError = null;
+      })
+      .addCase(deleteProduct.fulfilled, (state, action) => {
+        state.deleteLoading = false;
+        // Remover el producto eliminado de la lista
+        state.products = state.products.filter(
+          (p) => p.id !== action.payload.productId
+        );
+        // Actualizar el conteo total si existe paginación
+        if (state.pagination) {
+          state.pagination.totalCount = Math.max(0, state.pagination.totalCount - 1);
+          state.pagination.itemsInCurrentPage = state.products.length;
+        }
+        // Limpiar detalle del producto si coincide con el eliminado
+        if (state.productDetail?.id === action.payload.productId) {
+          state.productDetail = null;
+        }
+      })
+      .addCase(deleteProduct.rejected, (state, action) => {
+        state.deleteLoading = false;
+        state.deleteError = action.payload as string;
+      })
+
+      // deleteProductVariant
+      .addCase(deleteProductVariant.pending, (state) => {
+        state.deleteLoading = true;
+        state.deleteError = null;
+      })
+      .addCase(deleteProductVariant.fulfilled, (state, action) => {
+        state.deleteLoading = false;
+        const { variantId, productId } = action.payload;
+        
+        // Actualizar productos en la lista
+        const productIndex = state.products.findIndex((p) => p.id === productId);
+        if (productIndex !== -1) {
+          state.products[productIndex].variants = state.products[productIndex].variants.filter(
+            (v) => v.id !== variantId
+          );
+        }
+        
+        // Actualizar detalle del producto si existe
+        if (state.productDetail?.id === productId) {
+          state.productDetail.variants = state.productDetail.variants.filter(
+            (v) => v.id !== variantId
+          );
+        }
+      })
+      .addCase(deleteProductVariant.rejected, (state, action) => {
+        state.deleteLoading = false;
+        state.deleteError = action.payload as string;
       });
   },
 });
@@ -486,5 +580,6 @@ export const {
   resetPagination, 
   clearProductDetail,
   clearLowStockVariants,
+  clearDeleteError,
 } = productSlice.actions;
 export default productSlice.reducer;

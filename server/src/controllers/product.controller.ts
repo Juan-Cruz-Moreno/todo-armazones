@@ -640,6 +640,8 @@ export class ProductController {
       const stockThresholdParam = req.query.stockThreshold as string;
       const pageParam = req.query.page as string;
       const limitParam = req.query.limit as string;
+      const minStockParam = req.query.minStock as string | undefined;
+      const maxStockParam = req.query.maxStock as string | undefined;
 
       // Validar y parsear stockThreshold
       if (!stockThresholdParam) {
@@ -672,8 +674,32 @@ export class ProductController {
         }
       }
 
+      // Parsear minStock (opcional)
+      let minStock: number | undefined;
+      if (minStockParam) {
+        minStock = parseInt(minStockParam, 10);
+        if (isNaN(minStock)) {
+          throw new AppError('El parámetro minStock debe ser un número válido', 400, 'fail', false);
+        }
+      }
+
+      // Parsear maxStock (opcional)
+      let maxStock: number | undefined;
+      if (maxStockParam) {
+        maxStock = parseInt(maxStockParam, 10);
+        if (isNaN(maxStock)) {
+          throw new AppError('El parámetro maxStock debe ser un número válido', 400, 'fail', false);
+        }
+      }
+
       // Llamada al servicio
-      const result = await this.productService.getLowStockProductVariants(stockThreshold, page, limit);
+      const result = await this.productService.getLowStockProductVariants(
+        stockThreshold,
+        page,
+        limit,
+        minStock,
+        maxStock,
+      );
 
       res.status(200).json({
         status: 'success',
@@ -695,6 +721,77 @@ export class ProductController {
         res.status(500).json({
           status: 'error',
           message: 'Error al obtener variantes con stock bajo',
+        } as ApiErrorResponse);
+      }
+    }
+  };
+
+  public softDeleteProduct = async (req: Request, res: Response<ApiResponse | ApiErrorResponse>): Promise<void> => {
+    const { productId } = req.params;
+
+    try {
+      // Validar que se proporcionó un productId
+      if (!productId) {
+        throw new AppError('El ID del producto es requerido', 400, 'fail', false);
+      }
+
+      // Llamar al servicio para realizar el soft delete
+      await this.productService.softDeleteProduct(productId);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Producto eliminado correctamente',
+      });
+    } catch (error: unknown) {
+      logger.error('Error deleting product:', { error, productId });
+
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        } as ApiErrorResponse);
+      } else {
+        res.status(500).json({
+          status: 'error',
+          message: 'Error al eliminar el producto',
+        } as ApiErrorResponse);
+      }
+    }
+  };
+
+  public softDeleteProductVariant = async (
+    req: Request,
+    res: Response<ApiResponse | ApiErrorResponse>,
+  ): Promise<void> => {
+    const { variantId } = req.params;
+
+    try {
+      // Validar que se proporcionó un variantId
+      if (!variantId) {
+        throw new AppError('El ID de la variante es requerido', 400, 'fail', false);
+      }
+
+      // Llamar al servicio para realizar el soft delete
+      await this.productService.softDeleteProductVariant(variantId);
+
+      res.status(200).json({
+        status: 'success',
+        message: 'Variante eliminada correctamente',
+      });
+    } catch (error: unknown) {
+      logger.error('Error deleting product variant:', { error, variantId });
+
+      if (error instanceof AppError) {
+        res.status(error.statusCode).json({
+          status: error.status,
+          message: error.message,
+          details: error.details,
+        } as ApiErrorResponse);
+      } else {
+        res.status(500).json({
+          status: 'error',
+          message: 'Error al eliminar la variante',
         } as ApiErrorResponse);
       }
     }

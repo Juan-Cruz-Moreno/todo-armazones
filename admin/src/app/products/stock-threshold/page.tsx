@@ -17,13 +17,14 @@ const StockThresholdPage = () => {
     lowStockError,
     lowStockTotalCount,
     lowStockTotalPages,
-    lowStockCurrentPage,
     fetchLowStockProductVariants,
     loadLowStockPage,
     clearLowStockVariants,
   } = useProducts();
 
   const [stockThreshold, setStockThreshold] = useState<string>("5");
+  const [minStock, setMinStock] = useState<string>("");
+  const [maxStock, setMaxStock] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -42,9 +43,34 @@ const StockThresholdPage = () => {
       alert("Por favor ingresa un número válido mayor o igual a 0");
       return;
     }
+
+    const min = minStock ? parseInt(minStock, 10) : undefined;
+    const max = maxStock ? parseInt(maxStock, 10) : undefined;
+
+    if (min !== undefined && min < 0) {
+      alert("El stock mínimo debe ser mayor o igual a 0");
+      return;
+    }
+
+    if (max !== undefined && max < 0) {
+      alert("El stock máximo debe ser mayor o igual a 0");
+      return;
+    }
+
+    if (min !== undefined && max !== undefined && min > max) {
+      alert("El stock mínimo no puede ser mayor al stock máximo");
+      return;
+    }
+
     setCurrentPage(1);
     setHasSearched(true);
-    fetchLowStockProductVariants({ stockThreshold: threshold, page: 1, limit: 20 });
+    fetchLowStockProductVariants({ 
+      stockThreshold: threshold, 
+      page: 1, 
+      limit: 20,
+      minStock: min,
+      maxStock: max,
+    });
   };
 
   const handlePageChange = useCallback(
@@ -52,21 +78,33 @@ const StockThresholdPage = () => {
       const threshold = parseInt(stockThreshold, 10);
       if (isNaN(threshold)) return;
 
+      const min = minStock ? parseInt(minStock, 10) : undefined;
+      const max = maxStock ? parseInt(maxStock, 10) : undefined;
+
       // Scroll hacia arriba inmediatamente cuando cambie de página
       window.scrollTo({ top: 0, behavior: "instant" });
 
       setCurrentPage(pageNumber);
-      loadLowStockPage(threshold, pageNumber, 20);
+      loadLowStockPage(threshold, pageNumber, 20, min, max);
     },
-    [stockThreshold, loadLowStockPage]
+    [stockThreshold, minStock, maxStock, loadLowStockPage]
   );
 
   const handleRefresh = () => {
     const threshold = parseInt(stockThreshold, 10);
     if (isNaN(threshold) || threshold < 0 || !hasSearched) return;
     
+    const min = minStock ? parseInt(minStock, 10) : undefined;
+    const max = maxStock ? parseInt(maxStock, 10) : undefined;
+    
     setCurrentPage(1);
-    fetchLowStockProductVariants({ stockThreshold: threshold, page: 1, limit: 20 });
+    fetchLowStockProductVariants({ 
+      stockThreshold: threshold, 
+      page: 1, 
+      limit: 20,
+      minStock: min,
+      maxStock: max,
+    });
   };
 
   // Skeleton para lista
@@ -110,24 +148,66 @@ const StockThresholdPage = () => {
 
       {/* Formulario de búsqueda */}
       <div className="mb-6 p-4 bg-[#ffffff] border border-[#e1e1e1] rounded-none shadow-sm">
-        <form onSubmit={handleSearch} className="flex flex-col gap-4 sm:flex-row sm:items-start">
-          <div className="flex-1">
-            <label className="text-xs text-[#7A7A7A] mb-1 block font-medium">
-              Umbral de Stock
-            </label>
-            <input
-              type="number"
-              min="0"
-              value={stockThreshold}
-              onChange={(e) => setStockThreshold(e.target.value)}
-              placeholder="Ej: 5"
-              className="input w-full border border-[#e1e1e1] rounded-none bg-[#FFFFFF] text-[#222222] shadow-none focus:border-[#222222] focus:outline-none"
-            />
-            <p className="text-xs text-[#999999] mt-1">
-              Muestra variantes con stock menor o igual al umbral especificado
-            </p>
+        <form onSubmit={handleSearch} className="flex flex-col gap-4">
+          {/* Primera fila - Umbral principal */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex-1">
+              <label className="text-xs text-[#7A7A7A] mb-1 block font-medium">
+                Umbral de Stock (Máximo)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={stockThreshold}
+                onChange={(e) => setStockThreshold(e.target.value)}
+                placeholder="Ej: 5"
+                className="input w-full border border-[#e1e1e1] rounded-none bg-[#FFFFFF] text-[#222222] shadow-none focus:border-[#222222] focus:outline-none"
+              />
+              <p className="text-xs text-[#999999] mt-1">
+                Muestra variantes con stock menor o igual a este valor
+              </p>
+            </div>
           </div>
-          <div className="flex gap-2 sm:mt-6">
+
+          {/* Segunda fila - Filtros opcionales de rango */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <div className="flex-1">
+              <label className="text-xs text-[#7A7A7A] mb-1 block font-medium">
+                Stock Mínimo (Opcional)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={minStock}
+                onChange={(e) => setMinStock(e.target.value)}
+                placeholder="Ej: 2"
+                className="input w-full border border-[#e1e1e1] rounded-none bg-[#FFFFFF] text-[#222222] shadow-none focus:border-[#222222] focus:outline-none"
+              />
+              <p className="text-xs text-[#999999] mt-1">
+                Excluye variantes con menos de este stock
+              </p>
+            </div>
+
+            <div className="flex-1">
+              <label className="text-xs text-[#7A7A7A] mb-1 block font-medium">
+                Stock Máximo (Opcional)
+              </label>
+              <input
+                type="number"
+                min="0"
+                value={maxStock}
+                onChange={(e) => setMaxStock(e.target.value)}
+                placeholder="Ej: 10"
+                className="input w-full border border-[#e1e1e1] rounded-none bg-[#FFFFFF] text-[#222222] shadow-none focus:border-[#222222] focus:outline-none"
+              />
+              <p className="text-xs text-[#999999] mt-1">
+                Límite superior (tiene prioridad sobre umbral)
+              </p>
+            </div>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex gap-2">
             <button
               type="submit"
               className="btn rounded-none bg-[#222222] text-white border-[#222222] shadow-none hover:bg-[#111111]"

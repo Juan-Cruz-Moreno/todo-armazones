@@ -106,7 +106,12 @@ export class InventoryService {
         // Obtener la variante actual
         const productVariant = await ProductVariant.findById(dto.productVariantId).session(session);
         if (!productVariant) {
-          throw new AppError(`Variante de producto no encontrada: ${dto.productVariantId}`, 404);
+          throw new AppError('Variante de producto no encontrada.', 404, 'fail', false);
+        }
+
+        // Validar que la variante no esté eliminada
+        if (productVariant.deleted) {
+          throw new AppError('No se puede crear movimiento de stock para una variante eliminada.', 400, 'fail', false);
         }
 
         // Determinar si se debe calcular CPP y validar unitCost
@@ -219,6 +224,11 @@ export class InventoryService {
       throw new AppError(`Variante de producto no encontrada: ${productVariantId}`, 404);
     }
 
+    // Validar que la variante no esté eliminada
+    if (productVariant.deleted) {
+      throw new AppError('No se puede crear movimiento de stock para una variante eliminada.', 400);
+    }
+
     if (productVariant.stock < quantity) {
       throw new AppError(
         `Stock insuficiente. Stock actual: ${productVariant.stock}, cantidad solicitada: ${quantity}`,
@@ -301,6 +311,11 @@ export class InventoryService {
       throw new AppError(`Variante de producto no encontrada: ${productVariantId}`, 404);
     }
 
+    // Validar que la variante no esté eliminada
+    if (productVariant.deleted) {
+      throw new AppError('No se puede crear movimiento de stock para una variante eliminada.', 400);
+    }
+
     // Determinar si se debe calcular CPP y validar unitCost
     const shouldCalculateCPP = reason === StockMovementReason.PURCHASE || reason === StockMovementReason.INITIAL_STOCK;
 
@@ -372,6 +387,11 @@ export class InventoryService {
         const productVariant = await ProductVariant.findById(productVariantId).session(session);
         if (!productVariant) {
           throw new AppError(`Variante de producto no encontrada: ${productVariantId}`, 404);
+        }
+
+        // Validar que la variante no esté eliminada
+        if (productVariant.deleted) {
+          throw new AppError('No se puede crear movimiento de stock para una variante eliminada.', 400);
         }
 
         if (productVariant.stock < quantity) {
@@ -568,7 +588,7 @@ export class InventoryService {
    */
   public async getProductStockSummary(productId: Types.ObjectId): Promise<ProductVariantStockSummaryDto[]> {
     try {
-      const variants = (await ProductVariant.find({ product: productId })
+      const variants = (await ProductVariant.find({ product: productId, deleted: false })
         .select('color stock averageCostUSD priceUSD thumbnail')
         .populate('product', 'productModel sku thumbnail')
         .lean()) as unknown as ProductVariantLean[];

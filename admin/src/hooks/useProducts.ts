@@ -15,6 +15,8 @@ import {
   clearSearchResults,
   createProduct,
   updateProduct,
+  deleteProduct,
+  deleteProductVariant,
   bulkUpdatePrices,
   clearBulkUpdateError,
   resetPagination,
@@ -22,6 +24,7 @@ import {
   clearProductDetail,
   fetchLowStockProductVariants,
   clearLowStockVariants,
+  clearDeleteError,
 } from "../redux/slices/productSlice";
 
 export const useProducts = () => {
@@ -44,6 +47,8 @@ export const useProducts = () => {
     lowStockPagination,
     lowStockLoading,
     lowStockError,
+    deleteLoading,
+    deleteError,
   } = useAppSelector((state) => state.products);
 
   return {
@@ -64,6 +69,8 @@ export const useProducts = () => {
     lowStockPagination,
     lowStockLoading,
     lowStockError,
+    deleteLoading,
+    deleteError,
     
     // Derived state for convenience
     hasNextPage: pagination?.hasNextPage || false,
@@ -158,7 +165,8 @@ export const useProducts = () => {
     // Low Stock methods
     /**
      * Obtiene variantes de productos con stock bajo o igual al threshold
-     * @param filters - stockThreshold (requerido), page y limit (opcionales)
+     * Soporta filtros opcionales de rango (minStock, maxStock)
+     * @param filters - stockThreshold (requerido), page, limit, minStock y maxStock (opcionales)
      */
     fetchLowStockProductVariants: (filters: LowStockFilters) => 
       dispatch(fetchLowStockProductVariants(filters)),
@@ -170,26 +178,63 @@ export const useProducts = () => {
     
     /**
      * Carga una página específica de variantes con stock bajo
+     * @param stockThreshold - Umbral máximo de stock
+     * @param pageNumber - Número de página
+     * @param limit - Límite de resultados por página
+     * @param minStock - Stock mínimo opcional
+     * @param maxStock - Stock máximo opcional (tiene prioridad sobre stockThreshold)
      */
-    loadLowStockPage: (stockThreshold: number, pageNumber: number, limit?: number) => {
+    loadLowStockPage: (
+      stockThreshold: number, 
+      pageNumber: number, 
+      limit?: number,
+      minStock?: number,
+      maxStock?: number
+    ) => {
       return dispatch(fetchLowStockProductVariants({ 
         stockThreshold, 
         page: pageNumber, 
-        limit 
+        limit,
+        minStock,
+        maxStock,
       }));
     },
     
     /**
      * Refresca la página actual de variantes con stock bajo
      */
-    refreshLowStockPage: (stockThreshold: number) => {
+    refreshLowStockPage: (stockThreshold: number, minStock?: number, maxStock?: number) => {
       const currentPageNumber = lowStockPagination?.currentPage || 1;
       const currentLimit = lowStockPagination?.limit || 10;
       return dispatch(fetchLowStockProductVariants({ 
         stockThreshold, 
         page: currentPageNumber,
         limit: currentLimit,
+        minStock,
+        maxStock,
       }));
     },
+
+    // Delete methods
+    /**
+     * Elimina un producto (soft delete)
+     * Marca el producto y sus variantes como eliminados
+     * @param productId - ID del producto a eliminar
+     */
+    deleteProduct: (productId: string) => dispatch(deleteProduct(productId)),
+    
+    /**
+     * Elimina una variante de producto (soft delete)
+     * Marca la variante como eliminada sin afectar otras variantes
+     * @param variantId - ID de la variante a eliminar
+     * @param productId - ID del producto al que pertenece la variante
+     */
+    deleteProductVariant: (variantId: string, productId: string) => 
+      dispatch(deleteProductVariant({ variantId, productId })),
+    
+    /**
+     * Limpia el error de eliminación
+     */
+    clearDeleteError: () => dispatch(clearDeleteError()),
   };
 };

@@ -34,6 +34,8 @@ router.patch(
 );
 
 router.get('/:slug', productController.getProductVariantsByProductSlug);
+router.delete('/:productId', checkAdmin, productController.softDeleteProduct);
+router.delete('/variants/:variantId', checkAdmin, productController.softDeleteProductVariant);
 router.patch(
   '/:productId',
   checkAdmin,

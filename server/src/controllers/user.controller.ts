@@ -46,6 +46,38 @@ export class UserController {
       res.status(500).json(response);
     }
   };
+
+  /**
+   * Obtiene la dirección más reciente de un usuario (solo admin)
+   */
+  public getMostRecentAddress = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { userId } = req.params;
+
+      if (!userId || typeof userId !== 'string') {
+        res.status(400).json({ status: 'error', message: 'User ID is required' });
+        return;
+      }
+
+      const address = await this.userService.getMostRecentAddress(userId);
+
+      // Es válido que un usuario no tenga direcciones, retornar null
+      res.status(200).json({ status: 'success', data: address });
+    } catch (error) {
+      const response: ApiResponse =
+        error instanceof Error && 'stack' in error
+          ? {
+              status: 'error',
+              message: 'Failed to fetch user address',
+              details: { message: error.message, stack: error.stack },
+            }
+          : {
+              status: 'error',
+              message: 'Failed to fetch user address',
+            };
+      res.status(500).json(response);
+    }
+  };
   public getUsers = async (req: Request, res: Response): Promise<void> => {
     const { limit = 10, cursor } = req.query;
     const parsedLimit = parseInt(limit as string, 10);

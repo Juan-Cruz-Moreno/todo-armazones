@@ -23,6 +23,7 @@ const productSchema = new Schema<IProductDocument>(
     sku: { type: String, required: true, unique: true },
     size: { type: String, required: true },
     description: { type: String, required: false },
+    deleted: { type: Boolean, default: false, required: true },
   },
   { timestamps: true },
 );
@@ -42,6 +43,8 @@ productSchema.index({ _id: 1, subcategory: 1 }); // Optimiza paginación con fil
 productSchema.index({ _id: 1, category: 1, subcategory: 1 }); // Optimiza paginación con ambos filtros
 
 productSchema.index({ createdAt: -1 }); // Para ordenamiento por fecha de creación
+
+productSchema.index({ deleted: 1 }); // Para filtrar productos eliminados
 
 // Creación del modelo de Mongoose
 const Product = model<IProductDocument>('Product', productSchema);

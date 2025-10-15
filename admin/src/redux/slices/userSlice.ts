@@ -2,6 +2,7 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axiosInstance from "@/utils/axiosInstance";
 import { ApiResponse, getErrorMessage } from "@/types/api";
 import { IGetUsersPaginatedResponse, IUser } from "@/interfaces/user";
+import { IAddress } from "@/interfaces/address";
 
 // Interfaz temporal para manejar la respuesta del backend que puede tener _id o id
 interface IUserWithPossibleId extends Omit<IUser, 'id'> {
@@ -26,6 +27,10 @@ interface UserState {
   // Campos para actualización de usuario por admin
   updatingUser: boolean;
   updateUserError: string | null;
+  // Campos para dirección más reciente
+  recentAddress: IAddress | null;
+  loadingRecentAddress: boolean;
+  errorRecentAddress: string | null;
 }
 
 const initialState: UserState = {
@@ -44,6 +49,10 @@ const initialState: UserState = {
   // Inicializar campos para actualización
   updatingUser: false,
   updateUserError: null,
+  // Inicializar campos para dirección reciente
+  recentAddress: null,
+  loadingRecentAddress: false,
+  errorRecentAddress: null,
 };
 
 export const fetchUsers = createAsyncThunk<
@@ -175,6 +184,27 @@ export const updateUserAsAdmin = createAsyncThunk<
   }
 });
 
+// Obtener dirección más reciente de un usuario
+export const fetchMostRecentAddress = createAsyncThunk<
+  IAddress,
+  string,
+  { rejectValue: string }
+>("users/fetchMostRecentAddress", async (userId, { rejectWithValue }) => {
+  try {
+    const res = await axiosInstance.get<ApiResponse<IAddress>>(
+      `/users/${userId}/address/recent`
+    );
+    if (res.data.status !== "success" || !res.data.data) {
+      return rejectWithValue(
+        res.data.message || "No se encontró ninguna dirección"
+      );
+    }
+    return res.data.data;
+  } catch (err) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
 const userSlice = createSlice({
   name: "users",
   initialState,
@@ -197,6 +227,11 @@ const userSlice = createSlice({
     resetUpdateUser: (state) => {
       state.updatingUser = false;
       state.updateUserError = null;
+    },
+    resetRecentAddress: (state) => {
+      state.recentAddress = null;
+      state.loadingRecentAddress = false;
+      state.errorRecentAddress = null;
     },
   },
   extraReducers: (builder) => {
@@ -307,9 +342,25 @@ const userSlice = createSlice({
       .addCase(updateUserAsAdmin.rejected, (state, action) => {
         state.updatingUser = false;
         state.updateUserError = action.payload || "No se pudo actualizar el usuario";
+      })
+      // fetchMostRecentAddress
+      .addCase(fetchMostRecentAddress.pending, (state) => {
+        state.loadingRecentAddress = true;
+        state.errorRecentAddress = null;
+        state.recentAddress = null;
+      })
+      .addCase(fetchMostRecentAddress.fulfilled, (state, action) => {
+        state.loadingRecentAddress = false;
+        state.errorRecentAddress = null;
+        state.recentAddress = action.payload;
+      })
+      .addCase(fetchMostRecentAddress.rejected, (state, action) => {
+        state.loadingRecentAddress = false;
+        state.errorRecentAddress = action.payload || "No se pudo obtener la dirección";
+        state.recentAddress = null;
       });
   },
 });
 
-export const { resetUsers, resetSearch, resetUpdateUser } = userSlice.actions;
+export const { resetUsers, resetSearch, resetUpdateUser, resetRecentAddress } = userSlice.actions;
 export default userSlice.reducer;

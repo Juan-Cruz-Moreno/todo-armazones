@@ -14,4 +14,5 @@ export interface IProductVariant {
   priceARS?: number; // Precio de venta en ARS (calculado en backend)
   thumbnail: string;
   images: string[];
+  deleted?: boolean;
 }

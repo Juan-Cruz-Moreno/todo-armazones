@@ -475,7 +475,7 @@ export class ProductService {
    * Elimina la duplicación de lógica entre diferentes métodos de paginación
    */
   private async buildProductQuery(filters: ProductFilters): Promise<QueryBuildResult> {
-    const baseQuery: FilterQuery<IProductDocument> = {};
+    const baseQuery: FilterQuery<IProductDocument> = { deleted: { $ne: true } };
     let stockFilteredIds: Types.ObjectId[] | undefined;
     let categoryId: Types.ObjectId | undefined;
     let subcategoryId: Types.ObjectId | undefined;
@@ -549,7 +549,7 @@ export class ProductService {
    */
   private async getProductsWithStock(): Promise<Types.ObjectId[]> {
     const productsWithStock = await ProductVariant.aggregate([
-      { $match: { stock: { $gt: 0 } } },
+      { $match: { stock: { $gt: 0 }, deleted: { $ne: true } } },
       { $group: { _id: '$product' } },
       { $project: { _id: 1 } },
     ]);
@@ -564,8 +564,9 @@ export class ProductService {
     // Obtener todos los productos que tienen al menos una variante con stock > 0
     const productsWithStock = await this.getProductsWithStock();
 
-    // Obtener todos los productos que tienen al menos una variante
+    // Obtener todos los productos que tienen al menos una variante no eliminada
     const allProductsWithVariants = await ProductVariant.aggregate([
+      { $match: { deleted: { $ne: true } } },
       { $group: { _id: '$product' } },
       { $project: { _id: 1 } },
     ]);
@@ -597,6 +598,7 @@ export class ProductService {
     if (includeVariants) {
       const variantsByProduct = await ProductVariant.find({
         product: { $in: productIds },
+        deleted: { $ne: true },
       })
         .select('color stock averageCostUSD priceUSD thumbnail images product')
         .lean();
@@ -831,11 +833,18 @@ export class ProductService {
   /**
    * Obtiene variantes de productos con stock bajo o igual al threshold especificado
    * Método paginado que retorna las variantes junto con información básica del producto
+   * @param stockThreshold - Stock máximo (inclusive)
+   * @param page - Número de página
+   * @param limit - Límite de resultados por página
+   * @param minStock - Stock mínimo opcional (inclusive)
+   * @param maxStock - Stock máximo opcional (inclusive), tiene prioridad sobre stockThreshold si se proporciona
    */
   public async getLowStockProductVariants(
     stockThreshold: number,
     page: number = 1,
     limit: number = 10,
+    minStock?: number,
+    maxStock?: number,
   ): Promise<GetLowStockProductVariantsResponseDto> {
     try {
       // Validaciones de entrada
@@ -847,13 +856,37 @@ export class ProductService {
         throw new AppError('El número de página debe ser mayor a 0', 400, 'fail', false);
       }
 
+      if (minStock !== undefined && minStock < 0) {
+        throw new AppError('El stock mínimo no puede ser negativo', 400, 'fail', false);
+      }
+
+      if (maxStock !== undefined && maxStock < 0) {
+        throw new AppError('El stock máximo no puede ser negativo', 400, 'fail', false);
+      }
+
+      if (minStock !== undefined && maxStock !== undefined && minStock > maxStock) {
+        throw new AppError('El stock mínimo no puede ser mayor al stock máximo', 400, 'fail', false);
+      }
+
+      // Construir query de filtro de stock
+      const stockQuery: FilterQuery<IProductVariantDocument> = {
+        deleted: { $ne: true },
+      };
+
+      // Usar maxStock si se proporciona, sino usar stockThreshold
+      const effectiveMaxStock = maxStock !== undefined ? maxStock : stockThreshold;
+      stockQuery.stock = { $lte: effectiveMaxStock };
+
+      // Agregar filtro de stock mínimo si se proporciona
+      if (minStock !== undefined) {
+        stockQuery.stock = { ...stockQuery.stock, $gte: minStock };
+      }
+
       // Calcular skip para la página específica
       const skip = (page - 1) * limit;
 
       // Obtener total count de variantes con bajo stock
-      const totalCount = await ProductVariant.countDocuments({
-        stock: { $lte: stockThreshold },
-      });
+      const totalCount = await ProductVariant.countDocuments(stockQuery);
 
       const totalPages = Math.ceil(totalCount / limit);
 
@@ -879,9 +912,7 @@ export class ProductService {
       }
 
       // Obtener variantes con stock bajo, paginadas y pobladas con información del producto
-      const variants = await ProductVariant.find({
-        stock: { $lte: stockThreshold },
-      })
+      const variants = await ProductVariant.find(stockQuery)
         .sort({ stock: 1, _id: 1 }) // Ordenar por stock ascendente, luego por _id
         .skip(skip)
         .limit(limit)
@@ -938,6 +969,8 @@ export class ProductService {
         stockThreshold,
         page,
         limit,
+        minStock,
+        maxStock,
       });
       throw error instanceof AppError
         ? error
@@ -1077,7 +1110,7 @@ export class ProductService {
     product: ProductListItemDto;
   }> {
     try {
-      const product = await Product.findOne({ slug })
+      const product = await Product.findOne({ slug, deleted: { $ne: true } })
         .select('slug thumbnail primaryImage category subcategory productModel sku size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
@@ -1087,7 +1120,7 @@ export class ProductService {
         throw new AppError('Producto no encontrado', 404, 'fail', false);
       }
 
-      const variants = await ProductVariant.find({ product: product._id })
+      const variants = await ProductVariant.find({ product: product._id, deleted: { $ne: true } })
         .select('color stock averageCostUSD priceUSD thumbnail images')
         .lean();
 
@@ -1124,6 +1157,15 @@ export class ProductService {
     productDto: UpdateProductRequestDto,
     variantsDto: { id?: string; data: UpdateProductVariantRequestDto }[],
   ): Promise<ProductListItemDto> {
+    // Validar que el producto no esté eliminado
+    const existingProductCheck = await Product.findById(productId).select('deleted');
+    if (!existingProductCheck) {
+      throw new AppError('Producto no encontrado', 404, 'fail', false);
+    }
+    if (existingProductCheck.deleted) {
+      throw new AppError('No se puede actualizar un producto eliminado', 400, 'fail', false);
+    }
+
     // Validaciones de entrada (adaptadas para update)
     this.validateUpdateProduct(productDto);
     this.validateUpdateVariants(variantsDto);
@@ -1285,29 +1327,14 @@ export class ProductService {
           }
         }
 
-        // Eliminar variantes que no están en el payload enviado (eliminadas en frontend)
-        const sentVariantIds = variantsDto
-          .map((v) => v.id)
-          .filter((id) => id)
-          .concat(createdVariantIds);
-        const allProductVariants = await ProductVariant.find({ product: product._id }, '_id', { session });
-        const variantsToDelete = allProductVariants.filter((v) => !sentVariantIds.includes(v._id.toString()));
-
-        if (variantsToDelete.length > 0) {
-          logger.info(`Eliminando ${variantsToDelete.length} variantes no enviadas`, {
-            productId,
-            variantsToDelete: variantsToDelete.map((v) => v._id.toString()),
-          });
-
-          await ProductVariant.deleteMany({ _id: { $in: variantsToDelete.map((v) => v._id) } }, { session });
-        }
-
         // Armar respuesta igual que ProductListItemDto
         const categoryInfo = this.mapCategories(product.category);
         const subcategoryInfo = this.mapSubcategory(product.subcategory);
 
-        // Obtener todas las variantes restantes del producto (después de posibles eliminaciones)
-        const remainingVariants = await ProductVariant.find({ product: product._id }, null, { session });
+        // Obtener todas las variantes activas del producto (excluir las eliminadas con soft delete)
+        const remainingVariants = await ProductVariant.find({ product: product._id, deleted: false }, null, {
+          session,
+        });
 
         return {
           id: product._id.toString(),
@@ -1345,13 +1372,14 @@ export class ProductService {
     try {
       const query: FilterQuery<IProductDocument> = {
         $or: [{ productModel: { $regex: q, $options: 'i' } }, { sku: { $regex: q, $options: 'i' } }],
+        deleted: { $ne: true },
       };
 
       // Si se solicita filtrar por stock, obtener productos que tienen variantes con stock
       let filteredProductIds: Types.ObjectId[] | undefined;
       if (inStock === true) {
         const productsWithStock = await ProductVariant.aggregate([
-          { $match: { stock: { $gt: 0 } } },
+          { $match: { stock: { $gt: 0 }, deleted: { $ne: true } } },
           { $group: { _id: '$product' } },
           { $project: { _id: 1 } },
         ]);
@@ -1375,6 +1403,7 @@ export class ProductService {
 
       const variantsByProduct = await ProductVariant.find({
         product: { $in: productIds },
+        deleted: { $ne: true },
       })
         .select('color stock averageCostUSD priceUSD thumbnail images product')
         .lean();
@@ -1435,6 +1464,7 @@ export class ProductService {
         // 1. Construir query para encontrar productos afectados
         const productQuery: FilterQuery<IProductDocument> = {
           category: { $in: dto.categoryIds },
+          deleted: { $ne: true },
         };
 
         // Si se especifican subcategorías, agregar al filtro
@@ -1457,6 +1487,7 @@ export class ProductService {
         // 3. Encontrar todas las variantes de estos productos
         const variants = await ProductVariant.find({
           product: { $in: productIds },
+          deleted: { $ne: true },
         })
           .select('_id product color priceUSD')
           .session(session)
@@ -1668,6 +1699,103 @@ export class ProductService {
 
     logger.info('Precios en ARS de todas las variantes de productos actualizados con el valor del dólar actual.', {
       dollarValue,
+    });
+  }
+
+  /**
+   * Realiza un soft delete del producto y todas sus variantes
+   * Marca el producto y sus variantes como eliminados (deleted: true) y pone el stock en 0
+   * @param productId - ID del producto a eliminar
+   * @returns Promise<void>
+   */
+  public async softDeleteProduct(productId: string): Promise<void> {
+    // Validar que el ID sea válido
+    if (!Types.ObjectId.isValid(productId)) {
+      throw new AppError('ID de producto inválido', 400, 'error', false);
+    }
+
+    await withTransaction(async (session) => {
+      // Buscar el producto
+      const product = await Product.findById(productId).session(session);
+
+      if (!product) {
+        throw new AppError('Producto no encontrado', 404, 'error', false);
+      }
+
+      // Verificar si ya está eliminado
+      if (product.deleted) {
+        throw new AppError('El producto ya está eliminado', 400, 'error', false);
+      }
+
+      // Marcar el producto como eliminado
+      product.deleted = true;
+      await product.save({ session });
+
+      // Buscar todas las variantes del producto
+      const variants = await ProductVariant.find({ product: productId, deleted: false }).session(session);
+
+      if (variants.length === 0) {
+        logger.warn('Producto eliminado pero no tiene variantes activas', { productId });
+      }
+
+      // Marcar todas las variantes como eliminadas y poner stock en 0
+      for (const variant of variants) {
+        variant.deleted = true;
+        variant.stock = 0;
+        await variant.save({ session });
+      }
+
+      logger.info('Producto y sus variantes eliminados correctamente (soft delete)', {
+        productId,
+        productModel: product.productModel,
+        sku: product.sku,
+        variantsCount: variants.length,
+      });
+
+      // Retornar un valor para satisfacer el requisito de withTransaction
+      return true;
+    });
+  }
+
+  /**
+   * Realiza un soft delete de una variante específica del producto
+   * Marca la variante como eliminada (deleted: true) y pone su stock en 0
+   * @param variantId - ID de la variante a eliminar
+   * @returns Promise<void>
+   */
+  public async softDeleteProductVariant(variantId: string): Promise<void> {
+    // Validar que el ID sea válido
+    if (!Types.ObjectId.isValid(variantId)) {
+      throw new AppError('ID de variante inválido', 400, 'error', false);
+    }
+
+    await withTransaction(async (session) => {
+      // Buscar la variante
+      const variant = await ProductVariant.findById(variantId).session(session);
+
+      if (!variant) {
+        throw new AppError('Variante no encontrada', 404, 'error', false);
+      }
+
+      // Verificar si ya está eliminada
+      if (variant.deleted) {
+        throw new AppError('La variante ya está eliminada', 400, 'error', false);
+      }
+
+      // Marcar la variante como eliminada y poner stock en 0
+      variant.deleted = true;
+      variant.stock = 0;
+      await variant.save({ session });
+
+      logger.info('Variante eliminada correctamente (soft delete)', {
+        variantId,
+        productId: variant.product.toString(),
+        color: variant.color.name,
+        previousStock: variant.stock,
+      });
+
+      // Retornar un valor para satisfacer el requisito de withTransaction
+      return true;
     });
   }
 }

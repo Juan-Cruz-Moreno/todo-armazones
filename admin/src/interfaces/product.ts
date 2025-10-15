@@ -201,4 +201,6 @@ export interface LowStockFilters {
   stockThreshold: number;
   page?: number;
   limit?: number;
+  minStock?: number;
+  maxStock?: number;
 }

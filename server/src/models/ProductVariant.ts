@@ -29,6 +29,7 @@ const productVariantSchema = new Schema<IProductVariantDocument>(
     priceARS: { type: Number, required: false, min: 0 }, // Precio en ARS, calculado en backend
     thumbnail: { type: String, required: true },
     images: [{ type: String }],
+    deleted: { type: Boolean, default: false, required: true },
   },
   { timestamps: true },
 );
@@ -41,6 +42,8 @@ productVariantSchema.index({ stock: 1 }); // Para filtrar por stock
 productVariantSchema.index({ product: 1, stock: 1 }); // Compuesto para filtros frecuentes
 
 productVariantSchema.index({ 'color.name': 1 }); // Para buscar por color
+
+productVariantSchema.index({ deleted: 1 }); // Para filtrar variantes eliminadas
 
 const ProductVariant = model<IProductVariantDocument>('ProductVariant', productVariantSchema);
 

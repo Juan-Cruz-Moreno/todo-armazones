@@ -10,4 +10,5 @@ export interface IProduct {
   sku: string;
   size: string;
   description?: string;
+  deleted?: boolean;
 }

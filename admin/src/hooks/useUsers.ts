@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch, updateUserAsAdmin, UpdateUserByAdminPayload, resetUpdateUser } from "@/redux/slices/userSlice";
+import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch, updateUserAsAdmin, UpdateUserByAdminPayload, resetUpdateUser, fetchMostRecentAddress, resetRecentAddress } from "@/redux/slices/userSlice";
 
 export const useUsers = () => {
   const dispatch = useAppDispatch();
@@ -20,6 +20,10 @@ export const useUsers = () => {
     // Campos para actualización
     updatingUser,
     updateUserError,
+    // Campos para dirección reciente
+    recentAddress,
+    loadingRecentAddress,
+    errorRecentAddress,
   } = useAppSelector((state) => state.users);
 
   const findUserByEmail = useCallback(
@@ -78,6 +82,18 @@ export const useUsers = () => {
     dispatch(resetUpdateUser());
   }, [dispatch]);
 
+  // Nuevo método para obtener la dirección más reciente
+  const getMostRecentAddress = useCallback(
+    (userId: string) => {
+      dispatch(fetchMostRecentAddress(userId));
+    },
+    [dispatch]
+  );
+
+  const clearRecentAddress = useCallback(() => {
+    dispatch(resetRecentAddress());
+  }, [dispatch]);
+
   return {
     users,
     nextCursor,
@@ -102,5 +118,11 @@ export const useUsers = () => {
     updatingUser,
     updateUserError,
     clearUpdateUserError,
+    // Nuevos para dirección reciente
+    getMostRecentAddress,
+    recentAddress,
+    loadingRecentAddress,
+    errorRecentAddress,
+    clearRecentAddress,
   };
 };

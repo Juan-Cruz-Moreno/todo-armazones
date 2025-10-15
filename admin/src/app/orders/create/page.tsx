@@ -44,6 +44,10 @@ function CreateOrderPage() {
     searchError: errorUserSearch,
     searchUsersByQuery,
     clearSearch,
+    getMostRecentAddress,
+    recentAddress,
+    loadingRecentAddress,
+    clearRecentAddress,
   } = useUsers();
 
   // Ref para el último elemento de la lista (para paginación por scroll)
@@ -94,6 +98,8 @@ function CreateOrderPage() {
       cuit: user.cuit || "",
       phoneNumber: user.phone || "",
     }));
+    // Cargar dirección más reciente del usuario
+    getMostRecentAddress(user.id);
     // Limpiar búsqueda
     clearSearch();
     setUserQuery("");
@@ -186,6 +192,41 @@ function CreateOrderPage() {
     }
   }, [paymentMethod, shippingMethod]);
 
+  // Auto-completar campos de dirección cuando se cargue la dirección más reciente
+  useEffect(() => {
+    if (recentAddress) {
+      setAddress({
+        firstName: recentAddress.firstName || "",
+        lastName: recentAddress.lastName || "",
+        companyName: recentAddress.companyName || "",
+        email: recentAddress.email || "",
+        phoneNumber: recentAddress.phoneNumber || "",
+        dni: recentAddress.dni || "",
+        cuit: recentAddress.cuit || "",
+        streetAddress: recentAddress.streetAddress || "",
+        city: recentAddress.city || "",
+        state: recentAddress.state || "",
+        postalCode: recentAddress.postalCode || "",
+        deliveryWindow: recentAddress.deliveryWindow || "",
+        declaredShippingAmount: recentAddress.declaredShippingAmount || "",
+        shippingCompany: recentAddress.shippingCompany || "",
+        pickupPointAddress: recentAddress.pickupPointAddress || "",
+      });
+      
+      // Establecer el tipo de entrega si está disponible
+      if (recentAddress.deliveryType) {
+        setDeliveryType(recentAddress.deliveryType);
+      }
+    }
+  }, [recentAddress]);
+
+  // Limpiar dirección reciente al desmontar el componente
+  useEffect(() => {
+    return () => {
+      clearRecentAddress();
+    };
+  }, [clearRecentAddress]);
+
   const handleCreateOrder = (e: React.FormEvent) => {
     e.preventDefault();
     setSuccessMsg("");
@@ -236,6 +277,7 @@ function CreateOrderPage() {
         setDeliveryType(DeliveryType.HomeDelivery);
         setUserQuery("");
         setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
+        clearRecentAddress();
       },
       (err) => {
         setSuccessMsg("");
@@ -368,15 +410,37 @@ function CreateOrderPage() {
               </div>
             )}
             {selectedUser && (
-              <div className="mt-2 p-2 border rounded bg-[#e8f5e9] flex items-center justify-between">
-                <span className="text-[#222222]">Seleccionado: {selectedUser.displayName} ({selectedUser.email})</span>
-                <button
-                  type="button"
-                  className="btn btn-sm bg-red-500 text-white rounded-none"
-                  onClick={() => setSelectedUser(null)}
-                >
-                  Cambiar
-                </button>
+              <div className="mt-2 p-2 border rounded bg-[#e8f5e9]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[#222222]">Seleccionado: {selectedUser.displayName} ({selectedUser.email})</span>
+                  <button
+                    type="button"
+                    className="btn btn-sm bg-red-500 text-white rounded-none"
+                    onClick={() => {
+                      setSelectedUser(null);
+                      clearRecentAddress();
+                      setAddress(initialAddress);
+                    }}
+                  >
+                    Cambiar
+                  </button>
+                </div>
+                {loadingRecentAddress && (
+                  <div className="text-sm text-[#666666] flex items-center gap-2">
+                    <span className="loading loading-spinner loading-xs"></span>
+                    Cargando dirección más reciente...
+                  </div>
+                )}
+                {!loadingRecentAddress && recentAddress && (
+                  <div className="text-sm text-[#666666]">
+                    ✓ Dirección más reciente cargada: {recentAddress.city}, {recentAddress.state}
+                  </div>
+                )}
+                {!loadingRecentAddress && !recentAddress && selectedUser && (
+                  <div className="text-sm text-[#999999]">
+                    ℹ Este usuario no tiene direcciones previas
+                  </div>
+                )}
               </div>
             )}
           </div>
