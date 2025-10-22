@@ -25,8 +25,10 @@ import EditItemPricesModal from "@/components/EditItemPricesModal";
 import { AnalyticsPeriod } from "@/enums/analytics.enum";
 import StockConflictAlert from "@/components/StockConflictAlert";
 import PendingPaymentInfo from "@/components/PendingPaymentInfo";
+import CancelledOrderInfo from "@/components/CancelledOrderInfo";
 import { downloadOrderPDF } from "@/utils/downloadOrderPDF";
 import LoadingSpinner from "@/components/atoms/LoadingSpinner";
+import Pagination from "@/components/molecules/Pagination";
 
 const EditOrderPage = () => {
   // All hooks at the top, always called in the same order
@@ -112,14 +114,24 @@ const EditOrderPage = () => {
     isOpen: boolean;
     productQuery: string;
     quantities: Record<string, number>; // variantId -> quantity
+    page: number; // Para paginación de búsqueda
   }>({
     isOpen: false,
     productQuery: "",
     quantities: {},
+    page: 1,
   });
 
-  const { searchProducts, searchResults, searchLoading, clearSearchResults } =
-    useProducts();
+  const { 
+    searchProducts, 
+    searchResults, 
+    searchLoading, 
+    clearSearchResults,
+    searchProductsByPage,
+    searchPagination,
+    searchTotalPages,
+    searchCurrentPage,
+  } = useProducts();
 
   // Users analytics hook for customer history
   const {
@@ -167,15 +179,18 @@ const EditOrderPage = () => {
     }
   }, [form?.user?.id, loadUserDetailedAnalytics]);
 
-  // Check stock availability when order is PENDING_PAYMENT
+  // Check stock availability when order is PENDING_PAYMENT or CANCELLED
   useEffect(() => {
-    if (form?.id && form.orderStatus === OrderStatus.PendingPayment) {
+    if (
+      form?.id && 
+      (form.orderStatus === OrderStatus.PendingPayment || form.orderStatus === OrderStatus.Cancelled)
+    ) {
       // Limpiar información anterior de stock
       clearStockInfo();
       // Verificar disponibilidad de stock
       checkStockAvailability(form.id);
     } else {
-      // Si no es PENDING_PAYMENT, limpiar información de stock
+      // Si no es PENDING_PAYMENT ni CANCELLED, limpiar información de stock
       clearStockInfo();
     }
   }, [form?.id, form?.orderStatus, checkStockAvailability, clearStockInfo]);
@@ -204,7 +219,9 @@ const EditOrderPage = () => {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (addItemsModal.productQuery.trim()) {
-        searchProducts({ q: addItemsModal.productQuery.trim(), inStock: true });
+        searchProducts({ q: addItemsModal.productQuery.trim(), page: 1, limit: 20, inStock: true });
+        // Resetear página a 1 cuando cambia el query
+        setAddItemsModal((prev) => ({ ...prev, page: 1 }));
       } else {
         clearSearchResults();
       }
@@ -212,6 +229,18 @@ const EditOrderPage = () => {
 
     return () => clearTimeout(timeoutId);
   }, [addItemsModal.productQuery, clearSearchResults, searchProducts]); // Incluir dependencias para evitar stale closures
+
+  // Callback para manejar cambio de página en búsqueda de productos
+  const handleSearchPageChange = (pageNumber: number) => {
+    if (addItemsModal.productQuery.trim()) {
+      setAddItemsModal((prev) => ({ ...prev, page: pageNumber }));
+      searchProductsByPage(
+        addItemsModal.productQuery.trim(), 
+        pageNumber, 
+        { limit: 20, inStock: true }
+      );
+    }
+  };
 
   // Funciones helper para manejar errores
   const addError = (
@@ -286,19 +315,17 @@ const EditOrderPage = () => {
     );
   };
 
-  // Handler para cambios en campos específicos de entrega
-  const handleDeliveryFieldChange = (
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
+  // Handler para cambios en el campo comments
+  const handleCommentsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     // Prevenir cambios si no está en modo edición
     if (!isEditMode) return;
-    
-    const { name, value } = e.target;
+
+    const { value } = e.target;
     setForm((prev) =>
       prev
         ? {
             ...prev,
-            shippingAddress: { ...prev.shippingAddress, [name]: value },
+            comments: value,
           }
         : prev
     );
@@ -331,6 +358,16 @@ const EditOrderPage = () => {
 
     // Actualizar estado local inmediatamente
     setForm((prev) => (prev ? { ...prev, [name]: value } : prev));
+
+    // Si es orderStatus y se cambia a PendingPayment o Cancelled, verificar stock inmediatamente
+    if (
+      name === "orderStatus" && 
+      (value === OrderStatus.PendingPayment || value === OrderStatus.Cancelled) && 
+      form
+    ) {
+      clearStockInfo(); // Limpiar info anterior
+      checkStockAvailability(form.id); // Verificar stock de inmediato
+    }
 
     // Si es paymentMethod, enviar automáticamente al backend
     if (name === "paymentMethod" && form) {
@@ -749,12 +786,16 @@ const EditOrderPage = () => {
       form.shippingAddress.pickupPointAddress !==
         originalForm.shippingAddress.pickupPointAddress;
 
+    // Verificar cambios en comments
+    const hasCommentsChanges = form.comments !== originalForm.comments;
+
     return (
       hasCreatedAtChanges ||
       hasShippingMethodChanges ||
       hasDeliveryTypeChanges ||
       hasDeliveryChanges ||
-      hasAddressChanges
+      hasAddressChanges ||
+      hasCommentsChanges
     );
   };
 
@@ -911,6 +952,12 @@ const EditOrderPage = () => {
         hasChanges = true;
       }
 
+      // Verificar cambios en comments
+      if (form.comments !== originalForm.comments) {
+        updatePayload.comments = form.comments || undefined;
+        hasChanges = true;
+      }
+
       // Solo enviar si hay cambios
       if (hasChanges) {
         const result = await updateOrderData(updatePayload).unwrap();
@@ -1030,11 +1077,11 @@ const EditOrderPage = () => {
 
   // Funciones para manejar el modal de añadir items
   const handleOpenAddItemsModal = () => {
-    setAddItemsModal({ isOpen: true, productQuery: "", quantities: {} });
+    setAddItemsModal({ isOpen: true, productQuery: "", quantities: {}, page: 1 });
   };
 
   const handleCloseAddItemsModal = () => {
-    setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
+    setAddItemsModal({ isOpen: false, productQuery: "", quantities: {}, page: 1 });
     clearSearchResults();
   };
 
@@ -1192,20 +1239,21 @@ const EditOrderPage = () => {
                 </div>
               )}
 
-              {/* Alerta de conflictos de stock para órdenes PENDING_PAYMENT */}
-              {form.orderStatus === OrderStatus.PendingPayment &&
+              {/* Alerta de conflictos de stock para órdenes PENDING_PAYMENT o CANCELLED */}
+              {(form.orderStatus === OrderStatus.PendingPayment || form.orderStatus === OrderStatus.Cancelled) &&
                 stockAvailability &&
                 stockAvailability.hasConflicts && (
                   <StockConflictAlert
                     conflicts={stockAvailability.conflicts}
                     onRefreshStock={handleRefreshStock}
                     isRefreshing={stockCheckLoading}
+                    orderStatus={form.orderStatus}
                     className="mb-6"
                   />
                 )}
 
               {/* Indicador de verificación de stock */}
-              {form.orderStatus === OrderStatus.PendingPayment &&
+              {(form.orderStatus === OrderStatus.PendingPayment || form.orderStatus === OrderStatus.Cancelled) &&
                 stockCheckLoading &&
                 !stockAvailability && (
                   <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
@@ -1219,7 +1267,7 @@ const EditOrderPage = () => {
                 )}
 
               {/* Error de verificación de stock */}
-              {form.orderStatus === OrderStatus.PendingPayment &&
+              {(form.orderStatus === OrderStatus.PendingPayment || form.orderStatus === OrderStatus.Cancelled) &&
                 stockCheckError && (
                   <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
                     <div className="flex items-center gap-2">
@@ -1237,8 +1285,8 @@ const EditOrderPage = () => {
                   </div>
                 )}
 
-              {/* Indicador de stock OK para órdenes PENDING_PAYMENT */}
-              {form.orderStatus === OrderStatus.PendingPayment &&
+              {/* Indicador de stock OK para órdenes PENDING_PAYMENT o CANCELLED */}
+              {(form.orderStatus === OrderStatus.PendingPayment || form.orderStatus === OrderStatus.Cancelled) &&
                 stockAvailability &&
                 !stockAvailability.hasConflicts &&
                 !stockCheckLoading && (
@@ -1267,6 +1315,13 @@ const EditOrderPage = () => {
                 orderStatus={form.orderStatus}
                 className="mb-6"
               />
+
+              {/* Información sobre estado CANCELLED */}
+              <CancelledOrderInfo
+                orderStatus={form.orderStatus}
+                className="mb-6"
+              />
+
               <form className="space-y-4" onSubmit={handleSubmit}>
                 {/* Fecha de creación */}
                 <div className="mb-4">
@@ -1656,6 +1711,34 @@ const EditOrderPage = () => {
                     )
                   )}
                 </div>
+
+                {/* Campo de comentarios */}
+                <div className="mb-4">
+                  <label
+                    htmlFor="comments"
+                    className="block mb-1 text-sm"
+                    style={{ color: "#7A7A7A" }}
+                  >
+                    Comentarios (opcional)
+                  </label>
+                  <textarea
+                    id="comments"
+                    value={form.comments || ""}
+                    onChange={handleCommentsChange}
+                    readOnly={!isEditMode}
+                    className={`textarea w-full border rounded-none bg-[#FFFFFF] text-[#222222] resize-none ${
+                      !isEditMode ? "cursor-not-allowed opacity-60" : ""
+                    }`}
+                    style={{ borderColor: "#e1e1e1" }}
+                    rows={3}
+                    placeholder="Comentarios adicionales sobre la orden..."
+                    maxLength={500}
+                  />
+                  <div className="text-xs text-[#7A7A7A] mt-1">
+                    Máximo 500 caracteres
+                  </div>
+                </div>
+
                 {/* Lista de variantes seleccionadas */}
                 {form.items.length > 0 && (
                   <div className="mb-2">
@@ -2208,7 +2291,7 @@ const EditOrderPage = () => {
       {/* Modal de Añadir Items */}
       {addItemsModal.isOpen && (
         <dialog className="modal modal-open">
-          <div className="modal-box w-full max-w-4xl rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] p-0 max-h-[90vh] overflow-y-auto">
+          <div className="modal-box w-full max-w-4xl rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] p-0 h-screen md:max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-[#FFFFFF] border-b border-[#e1e1e1] flex justify-between items-center h-12 z-30">
               <h3 className="font-bold text-lg text-[#111111] m-0 px-4">
                 Añadir Items a la Orden
@@ -2229,7 +2312,7 @@ const EditOrderPage = () => {
                 </label>
                 <div className="flex gap-2">
                   <input
-                    type="text"
+                    type="search"
                     placeholder="Buscar producto o SKU"
                     value={addItemsModal.productQuery}
                     onChange={(e) =>
@@ -2490,6 +2573,18 @@ const EditOrderPage = () => {
                       </div>
                     ))}
                   </div>
+
+                  {/* Paginación de resultados de búsqueda */}
+                  {searchPagination && searchTotalPages > 1 && (
+                    <div className="mt-6">
+                      <Pagination
+                        currentPage={searchCurrentPage}
+                        totalPages={searchTotalPages}
+                        onPageChange={handleSearchPageChange}
+                        loading={searchLoading}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

@@ -15,34 +15,10 @@
   }
 }
 
-.underline-animate {
-  position: relative;
-  overflow: hidden;
-}
-.underline-animate::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  width: 0%;
-  height: 2px;
-  background: #000;
-  transition: width 0.3s ease;
-}
-.underline-animate:hover::after {
-  width: 100%;
-}
-
-.underline-animate-gray::after {
-  background: #888888;
-}
-
-.underline-animate-active::after {
-  width: 100% !important;
-}
-
-.no-underline {
-  text-decoration: none !important;
+/* sensible default so server and client share an initial navbar height
+   (avoids hydration mismatch when JS updates the real value) */
+:root {
+  --navbar-height: 64px;
 }
 
 /* Personalización de flechas de Swiper */
@@ -57,4 +33,130 @@
 .swiper-button-prev::after {
   color: #666666 !important;
   font-size: 14px !important;
+}
+
+/*Landing*/
+
+.button-sweep {
+  position: relative;
+  overflow: hidden;
+  background: #ffffff;
+  color: #000000;
+  transition: color 0.3s ease;
+}
+
+.button-sweep span {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes arrow-appear {
+  0% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+  50% {
+    transform: translateX(-20px);
+    opacity: 0;
+  }
+  100% {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.button-sweep svg {
+  position: relative;
+  z-index: 1;
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+.button-sweep:hover svg {
+  animation: arrow-appear 0.4s ease;
+}
+
+.button-sweep::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: #69727d;
+  transition: left 0.3s ease;
+}
+
+.button-sweep:hover {
+  color: #ffffff;
+}
+
+.button-sweep:hover::before {
+  left: 0;
+}
+
+/* Dark variant for buttons that should start at #444444 and sweep to a darker shade on hover */
+.button-sweep.button-dark {
+  background: #444444;
+  color: #ffffff;
+}
+
+.button-sweep.button-dark::before {
+  /* slightly darker sweep color */
+  background: #222222;
+}
+
+.underline-animate {
+  position: relative;
+  text-decoration: none;
+}
+
+.underline-animate::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: black;
+  transform: scaleX(0);
+  transform-origin: right;
+  transition: transform 0.3s ease;
+}
+
+.underline-animate:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}
+
+.underline-animate-gray::after {
+  background: #888888;
+}
+
+.underline-animate-active::after {
+  width: 100% !important;
+  transform: scaleX(1) !important; /* Agregar esta línea */
+}
+
+.no-underline {
+  text-decoration: none !important;
+}
+
+/* Hero should fill viewport minus the navbar height (set dynamically via JS) */
+.hero {
+  height: calc(100dvh - var(--navbar-height, 0px));
+  min-height: calc(100dvh - var(--navbar-height, 0px));
+  /* fallback for browsers without dvh support could be handled here if needed */
+}
+
+/* Prevent visual jump on initial load: keep hero hidden until navbar height is known */
+:root:not(.has-navbar-height) .hero {
+  visibility: hidden;
+  opacity: 0;
+}
+
+:root.has-navbar-height .hero {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 280ms ease;
 }

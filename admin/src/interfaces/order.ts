@@ -40,6 +40,7 @@ export interface Order {
   createdAt: string;
   updatedAt: string;
   isVisible: boolean; // Indica si la orden es visible en listados
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 export interface OrderItem {
@@ -118,6 +119,7 @@ export interface UpdateOrderPayload {
   deliveryWindow?: string;
   declaredShippingAmount?: string;
   allowViewInvoice?: boolean;
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 export interface OrdersResponse {

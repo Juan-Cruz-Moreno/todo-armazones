@@ -69,6 +69,7 @@ export const createOrderBodySchema = z.object({
   shippingMethod: z.enum(ShippingMethod),
   shippingAddress: addressSchema,
   paymentMethod: z.enum(PaymentMethod),
+  comments: z.string().max(500, 'Los comentarios no pueden exceder los 500 caracteres').optional(),
 });
 
 export const createOrderAdminBodySchema = z.object({
@@ -101,6 +102,7 @@ export const createOrderAdminBodySchema = z.object({
     )
     .optional(),
   allowViewInvoice: z.boolean().optional(),
+  comments: z.string().max(500, 'Los comentarios no pueden exceder los 500 caracteres').optional(),
 });
 
 export const getAllOrdersParamsSchema = z.object({
@@ -270,6 +272,7 @@ export const updateOrderBodySchema = z.object({
     .max(20, 'El monto declarado de envío no puede exceder los 20 caracteres')
     .optional(),
   allowViewInvoice: z.boolean().optional(),
+  comments: z.string().max(500, 'Los comentarios no pueden exceder los 500 caracteres').optional(),
 });
 
 export const bulkUpdateOrderStatusBodySchema = z.object({

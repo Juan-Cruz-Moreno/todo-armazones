@@ -562,14 +562,51 @@ export class ProductController {
         return;
       }
 
-      // Convertir el parámetro inStock a boolean
+      // Validación de parámetros de paginación
+      const pageParam = req.query.page as string;
+      const limitParam = req.query.limit as string;
       const inStockParam = req.query.inStock as string | undefined;
+      const outOfStockParam = req.query.outOfStock as string | undefined;
+
+      let page = 1;
+      if (pageParam) {
+        const parsedPage = parseInt(pageParam, 10);
+        if (isNaN(parsedPage) || parsedPage < 1) {
+          res.status(400).json({
+            status: 'fail',
+            message: 'El parámetro page debe ser un número entero mayor a 0',
+          } as ApiErrorResponse);
+          return;
+        }
+        page = parsedPage;
+      }
+
+      let limit = 10;
+      if (limitParam) {
+        const parsedLimit = parseInt(limitParam, 10);
+        if (isNaN(parsedLimit) || parsedLimit < 1) {
+          res.status(400).json({
+            status: 'fail',
+            message: 'El parámetro limit debe ser un número entero mayor a 0',
+          } as ApiErrorResponse);
+          return;
+        }
+        limit = parsedLimit;
+      }
+
+      // Convertir el parámetro inStock a boolean
       let inStock: boolean | undefined;
       if (inStockParam !== undefined) {
         inStock = inStockParam.toLowerCase() === 'true';
       }
 
-      const result = await this.productService.searchProducts(q, inStock);
+      // Convertir el parámetro outOfStock a boolean
+      let outOfStock: boolean | undefined;
+      if (outOfStockParam !== undefined) {
+        outOfStock = outOfStockParam.toLowerCase() === 'true';
+      }
+
+      const result = await this.productService.searchProducts(q, page, limit, inStock, outOfStock);
       res.status(200).json({
         status: 'success',
         data: result,
@@ -641,7 +678,6 @@ export class ProductController {
       const pageParam = req.query.page as string;
       const limitParam = req.query.limit as string;
       const minStockParam = req.query.minStock as string | undefined;
-      const maxStockParam = req.query.maxStock as string | undefined;
 
       // Validar y parsear stockThreshold
       if (!stockThresholdParam) {
@@ -683,23 +719,13 @@ export class ProductController {
         }
       }
 
-      // Parsear maxStock (opcional)
-      let maxStock: number | undefined;
-      if (maxStockParam) {
-        maxStock = parseInt(maxStockParam, 10);
-        if (isNaN(maxStock)) {
-          throw new AppError('El parámetro maxStock debe ser un número válido', 400, 'fail', false);
-        }
+      // Validar que minStock no sea mayor que stockThreshold
+      if (minStock !== undefined && minStock > stockThreshold) {
+        throw new AppError('El stock mínimo no puede ser mayor al umbral de stock', 400, 'fail', false);
       }
 
       // Llamada al servicio
-      const result = await this.productService.getLowStockProductVariants(
-        stockThreshold,
-        page,
-        limit,
-        minStock,
-        maxStock,
-      );
+      const result = await this.productService.getLowStockProductVariants(stockThreshold, page, limit, minStock);
 
       res.status(200).json({
         status: 'success',

@@ -22,14 +22,11 @@ const Footer = () => {
       </aside>
       <nav>
         <h6 className="footer-title opacity-100">LA EMPRESA</h6>
-        <Link href="/quienes-somos" className="underline-animate">
+        <Link href="/nosotros" className="underline-animate">
           Quienes somos
         </Link>
-        <Link href="/privacidad" className="underline-animate">
+        <Link href="/politicas-de-privacidad" className="underline-animate">
           Política de privacidad
-        </Link>
-        <Link href="/arrepentimiento" className="underline-animate">
-          Botón de arrepentimiento
         </Link>
       </nav>
       <nav>
@@ -37,17 +34,11 @@ const Footer = () => {
         <Link href="/contacto" className="underline-animate">
           Contacto
         </Link>
-        <Link href="/devolucion" className="underline-animate">
+        <Link href="/politicas-de-devolucion" className="underline-animate">
           Política de devolución
         </Link>
-        <Link href="/envios" className="underline-animate">
+        <Link href="/politicas-de-envio" className="underline-animate">
           Política de envíos
-        </Link>
-        <Link href="/medios-de-pago" className="underline-animate">
-          Medios de pago
-        </Link>
-        <Link href="/faq" className="underline-animate">
-          Preguntas frecuentes
         </Link>
       </nav>
       <nav>
@@ -68,7 +59,7 @@ const Footer = () => {
           className="link link-hover flex items-center gap-2"
         >
           <InstagramIcon />
-          Instagram
+          @todoarmazonesarg
         </a>
         <a
           href="https://wa.me/5491136448293"
@@ -77,7 +68,7 @@ const Footer = () => {
           className="link link-hover flex items-center gap-2"
         >
           <WhatsAppIcon />
-          WhatsApp
+          +54 9 11 3644-8293
         </a>
       </nav>
     </footer>

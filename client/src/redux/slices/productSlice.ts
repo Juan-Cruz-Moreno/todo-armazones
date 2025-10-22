@@ -10,6 +10,7 @@ interface ProductsState {
   error: string | null;
   productDetail: Product | null;
   searchResults: Product[];
+  searchPagination: PaginationMetadata | null; // Nueva metadata para búsqueda
   searchLoading: boolean;
   searchError: string | null;
   paginationInfoLoading: boolean;
@@ -23,6 +24,7 @@ const initialState: ProductsState = {
   error: null,
   productDetail: null,
   searchResults: [],
+  searchPagination: null, // Inicializar metadata de búsqueda
   searchLoading: false,
   searchError: null,
   paginationInfoLoading: false,
@@ -138,23 +140,29 @@ export const fetchProductBySlug = createAsyncThunk<Product, string>(
   }
 );
 
-// Search products
+// Search products with pagination
 export const searchProducts = createAsyncThunk<
-  Product[],
-  { q: string; inStock?: boolean }
+  ProductsResponse,
+  { q: string; page?: number; limit?: number; inStock?: boolean }
 >(
   "products/searchProducts",
-  async ({ q, inStock }, { rejectWithValue }) => {
+  async ({ q, page, limit, inStock }, { rejectWithValue }) => {
     try {
       const query = new URLSearchParams();
       query.append("q", q);
+      if (page !== undefined) {
+        query.append("page", page.toString());
+      }
+      if (limit !== undefined) {
+        query.append("limit", limit.toString());
+      }
       if (inStock !== undefined) {
         query.append("inStock", inStock.toString());
       }
       const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(
         `/products/search?${query.toString()}`
       );
-      return data.data!.products;
+      return data.data!;
     } catch (error: unknown) {
       return rejectWithValue(getErrorMessage(error));
     }
@@ -170,6 +178,7 @@ const productSlice = createSlice({
     },
     clearSearchResults(state) {
       state.searchResults = [];
+      state.searchPagination = null;
       state.searchError = null;
     },
     resetPagination(state) {
@@ -261,7 +270,8 @@ const productSlice = createSlice({
       })
       .addCase(searchProducts.fulfilled, (state, action) => {
         state.searchLoading = false;
-        state.searchResults = action.payload;
+        state.searchResults = action.payload.products;
+        state.searchPagination = action.payload.pagination;
       })
       .addCase(searchProducts.rejected, (state, action) => {
         state.searchLoading = false;

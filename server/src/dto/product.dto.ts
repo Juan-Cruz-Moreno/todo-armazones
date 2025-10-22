@@ -9,6 +9,7 @@ export interface CreateProductRequestDto {
   subcategory: Types.ObjectId;
   productModel: string;
   sku: string;
+  code: string;
   size: string;
   description?: string;
 }
@@ -22,6 +23,7 @@ export interface CreateProductResponseDto {
   subcategory: ProductSubcategoryDto;
   productModel: string;
   sku: string;
+  code: string;
   size: string;
   description?: string;
 }
@@ -34,6 +36,7 @@ export interface UpdateProductRequestDto {
   subcategory?: Types.ObjectId;
   productModel?: string;
   sku?: string;
+  code?: string;
   size?: string;
   description?: string;
 }
@@ -59,13 +62,10 @@ export interface ProductListItemDto {
   subcategory: ProductSubcategoryDto;
   productModel: string;
   sku: string;
+  code: string;
   size?: string;
   description?: string;
   variants: ProductVariantSummaryDto[];
-}
-
-export interface SearchProductsResponseDto {
-  products: ProductListItemDto[];
 }
 
 export interface PaginationMetadata {

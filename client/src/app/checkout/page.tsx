@@ -13,6 +13,9 @@ import {
   createOrder,
 } from "@/redux/slices/orderSlice";
 import type { CreateOrderPayload } from "@/interfaces/order";
+
+// Extendemos AddressFormData para incluir comments
+type CheckoutFormData = AddressFormData;
 import { formatCurrency } from "@/utils/formatCurrency";
 import {
   PaymentMethod,
@@ -27,7 +30,7 @@ import { useRouter } from "next/navigation";
 
 const CheckoutPage = () => {
   const { cart, loading, fetchCart, resetCart } = useCart();
-  const { user } = useAuth();
+  const { user, address, fetchMostRecentAddress } = useAuth();
   const { placeOrder, loading: orderLoading, error, resetError } = useOrders();
 
   const [shippingMethod, setShippingMethod] = useState(
@@ -46,7 +49,7 @@ const CheckoutPage = () => {
     handleSubmit,
     setValue,
     formState: { errors },
-  } = useForm<AddressFormData>({
+  } = useForm<CheckoutFormData>({
     defaultValues: {
       email: user?.email || "",
       firstName: user?.firstName || "",
@@ -54,6 +57,7 @@ const CheckoutPage = () => {
       dni: user?.dni || "",
       cuit: user?.cuit || "",
       phoneNumber: user?.phone || "",
+      comments: "",
     },
     resolver: async (data, context, options) => {
       // Inyecta shippingMethod y deliveryType en los datos antes de validar
@@ -80,9 +84,47 @@ const CheckoutPage = () => {
     }
   }, [user, setValue]);
 
+  // Autocompletar con dirección guardada si existe
+  useEffect(() => {
+    if (address) {
+      // Datos personales
+      if (address.firstName) setValue("firstName", address.firstName);
+      if (address.lastName) setValue("lastName", address.lastName);
+      if (address.email) setValue("email", address.email);
+      if (address.phoneNumber) setValue("phoneNumber", address.phoneNumber);
+      if (address.dni) setValue("dni", address.dni);
+      if (address.cuit) setValue("cuit", address.cuit);
+      
+      // Dirección
+      if (address.streetAddress) setValue("streetAddress", address.streetAddress);
+      if (address.city) setValue("city", address.city);
+      if (address.state) setValue("state", address.state);
+      if (address.postalCode) setValue("postalCode", address.postalCode);
+      if (address.companyName) setValue("companyName", address.companyName);
+      
+      // Información de envío
+      if (address.shippingCompany) setValue("shippingCompany", address.shippingCompany);
+      if (address.declaredShippingAmount) setValue("declaredShippingAmount", address.declaredShippingAmount);
+      if (address.deliveryWindow) setValue("deliveryWindow", address.deliveryWindow);
+      if (address.pickupPointAddress) setValue("pickupPointAddress", address.pickupPointAddress);
+      
+      // Tipo de entrega
+      if (address.deliveryType) {
+        setDeliveryType(address.deliveryType);
+      }
+    }
+  }, [address, setValue]);
+
   useEffect(() => {
     fetchCart();
   }, [fetchCart]);
+
+  // Cargar dirección guardada al montar
+  useEffect(() => {
+    if (user) {
+      fetchMostRecentAddress();
+    }
+  }, [user, fetchMostRecentAddress]);
 
   // Auto-switch to valid payment method when shipping method changes
   useEffect(() => {
@@ -123,19 +165,8 @@ const CheckoutPage = () => {
 
   const router = useRouter();
 
-  const onSubmit = async (data: AddressFormData) => {
+  const onSubmit = async (data: CheckoutFormData) => {
     if (error) resetError();
-
-    // Console.log para verificar qué datos se están enviando
-    console.log("=== DATOS DEL FORMULARIO ENVIADOS ===");
-    console.log("Datos completos del formulario:", data);
-    console.log("CUIT:", data.cuit);
-    console.log("DNI:", data.dni);
-    console.log("Email:", data.email);
-    console.log("Nombre:", data.firstName);
-    console.log("Apellido:", data.lastName);
-    console.log("Teléfono:", data.phoneNumber);
-    console.log("================================");
 
     const payload: CreateOrderPayload = {
       shippingMethod,
@@ -144,13 +175,8 @@ const CheckoutPage = () => {
         deliveryType,
       },
       paymentMethod,
+      comments: data.comments,
     };
-
-    // Console.log del payload final que se envía al servidor
-    console.log("=== PAYLOAD FINAL ENVIADO AL SERVIDOR ===");
-    console.log("Payload completo:", payload);
-    console.log("Dirección de envío:", payload.shippingAddress);
-    console.log("================================");
 
     const result = await placeOrder(payload);
 
@@ -610,6 +636,34 @@ const CheckoutPage = () => {
                 )}
               </div>
             ))}
+
+            {/* Campo de comentarios */}
+            <div className="col-span-2">
+              <label
+                htmlFor="comments"
+                className="block mb-1 text-sm"
+                style={{ color: "#7A7A7A" }}
+              >
+                Comentarios (opcional)
+              </label>
+              <textarea
+                id="comments"
+                {...register("comments")}
+                className="textarea w-full border rounded-none bg-[#FFFFFF] text-[#222222] resize-none"
+                style={{ borderColor: "#e1e1e1" }}
+                rows={3}
+                placeholder="Agregue cualquier comentario adicional sobre su pedido..."
+                maxLength={500}
+              />
+              <div className="text-xs text-[#7A7A7A] mt-1">
+                Máximo 500 caracteres
+              </div>
+              {errors.comments && (
+                <span className="text-red-500 text-sm">
+                  {errors.comments.message}
+                </span>
+              )}
+            </div>
           </div>
         </form>
         {/* Cart Summary */}

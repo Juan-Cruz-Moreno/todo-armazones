@@ -1,5 +1,6 @@
 import { createSlice, createAsyncThunk, PayloadAction } from "@reduxjs/toolkit";
 import { IUser } from "@/interfaces/user";
+import { IAddress, UpdateAddressPayload } from "@/interfaces/address";
 import { AuthResponse, CurrentUserResponse } from "@/interfaces/auth";
 import { ApiResponse, getErrorMessage } from "@/types/api";
 import axiosInstance from "@/utils/axiosInstance";
@@ -10,14 +11,20 @@ import { authEvents } from "@/utils/eventBus";
 
 interface AuthState {
   user: IUser | null;
+  address: IAddress | null;
   loading: boolean;
   error: string | null;
+  addressLoading: boolean;
+  addressError: string | null;
 }
 
 const initialState: AuthState = {
   user: null,
+  address: null,
   loading: false,
   error: null,
+  addressLoading: false,
+  addressError: null,
 };
 
 // 🔐 Login
@@ -147,12 +154,79 @@ const updateUser = createAsyncThunk<
   }
 );
 
+// 📍 Obtener dirección más reciente del usuario
+export const fetchMostRecentAddress = createAsyncThunk<
+  IAddress | null,
+  void,
+  { rejectValue: string; state: RootState }
+>(
+  "auth/fetchMostRecentAddress",
+  async (_, { rejectWithValue, getState }) => {
+    try {
+      const state = getState();
+      const userId = state.auth.user?.id;
+      
+      if (!userId) {
+        return rejectWithValue("Usuario no autenticado");
+      }
+
+      const response = await axiosInstance.get<ApiResponse<IAddress>>(
+        `/users/${userId}/address/recent`
+      );
+      
+      if (!response.data.data) {
+        // Es válido que no tenga dirección
+        return null;
+      }
+
+      return response.data.data;
+    } catch (error: unknown) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
+// 📝 Actualizar o crear dirección favorita
+export const updateDefaultAddress = createAsyncThunk<
+  IAddress,
+  UpdateAddressPayload,
+  { rejectValue: string; state: RootState }
+>(
+  "auth/updateDefaultAddress",
+  async (data, { rejectWithValue, getState }) => {
+    try {
+      const state = getState();
+      const userId = state.auth.user?.id;
+      
+      if (!userId) {
+        return rejectWithValue("Usuario no autenticado");
+      }
+
+      const response = await axiosInstance.patch<ApiResponse<IAddress>>(
+        `/users/${userId}/address/default`,
+        data
+      );
+      
+      if (!response.data.data) {
+        return rejectWithValue("Respuesta inválida del servidor");
+      }
+
+      return response.data.data;
+    } catch (error: unknown) {
+      return rejectWithValue(getErrorMessage(error));
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState,
   reducers: {
     resetAuthError: (state) => {
       state.error = null;
+    },
+    resetAddressError: (state) => {
+      state.addressError = null;
     },
   },
   extraReducers: (builder) => {
@@ -220,10 +294,46 @@ const authSlice = createSlice({
       // Logout
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
+        state.address = null;
+      })
+
+      // Obtener dirección más reciente
+      .addCase(fetchMostRecentAddress.pending, (state) => {
+        state.addressLoading = true;
+        state.addressError = null;
+      })
+      .addCase(
+        fetchMostRecentAddress.fulfilled,
+        (state, action: PayloadAction<IAddress | null>) => {
+          state.addressLoading = false;
+          state.address = action.payload;
+        }
+      )
+      .addCase(fetchMostRecentAddress.rejected, (state, action) => {
+        state.addressLoading = false;
+        state.addressError = action.payload || "Error al obtener dirección";
+      })
+
+      // Actualizar dirección favorita
+      .addCase(updateDefaultAddress.pending, (state) => {
+        state.addressLoading = true;
+        state.addressError = null;
+      })
+      .addCase(
+        updateDefaultAddress.fulfilled,
+        (state, action: PayloadAction<IAddress>) => {
+          state.addressLoading = false;
+          state.address = action.payload;
+        }
+      )
+      .addCase(updateDefaultAddress.rejected, (state, action) => {
+        state.addressLoading = false;
+        state.addressError =
+          action.payload || "Error al actualizar dirección";
       });
   },
 });
 
-export const { resetAuthError } = authSlice.actions;
+export const { resetAuthError, resetAddressError } = authSlice.actions;
 export { updateUser };
 export default authSlice.reducer;

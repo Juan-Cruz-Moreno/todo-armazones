@@ -19,6 +19,7 @@ export interface IAddress {
   deliveryWindow?: string;
   deliveryType?: DeliveryType;
   pickupPointAddress?: string;
+  isDefault?: boolean; // Campo opcional para marcar la dirección como favorita o por defecto
   createdAt: Date;
   updatedAt: Date;
 }

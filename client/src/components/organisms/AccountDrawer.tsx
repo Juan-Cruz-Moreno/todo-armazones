@@ -136,12 +136,8 @@ const AccountDrawer: React.FC = () => {
                   Mis Pedidos
                 </Link>
                 <Link
-                  href="/direcciones"
-                  className="text-black underline-animate inline-block self-start cursor-not-allowed"
-                  tabIndex={-1}
-                  aria-disabled="true"
-                  onClick={e => { e.preventDefault(); }}
-                  style={{ pointerEvents: "auto" }}
+                  href="/perfil/direcciones"
+                  className="text-black underline-animate inline-block self-start"
                 >
                   Direcciones
                 </Link>

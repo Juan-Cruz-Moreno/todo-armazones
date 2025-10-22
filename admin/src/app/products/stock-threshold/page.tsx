@@ -24,7 +24,6 @@ const StockThresholdPage = () => {
 
   const [stockThreshold, setStockThreshold] = useState<string>("5");
   const [minStock, setMinStock] = useState<string>("");
-  const [maxStock, setMaxStock] = useState<string>("");
   const [currentPage, setCurrentPage] = useState(1);
   const [hasSearched, setHasSearched] = useState(false);
 
@@ -45,20 +44,14 @@ const StockThresholdPage = () => {
     }
 
     const min = minStock ? parseInt(minStock, 10) : undefined;
-    const max = maxStock ? parseInt(maxStock, 10) : undefined;
 
     if (min !== undefined && min < 0) {
       alert("El stock mínimo debe ser mayor o igual a 0");
       return;
     }
 
-    if (max !== undefined && max < 0) {
-      alert("El stock máximo debe ser mayor o igual a 0");
-      return;
-    }
-
-    if (min !== undefined && max !== undefined && min > max) {
-      alert("El stock mínimo no puede ser mayor al stock máximo");
+    if (min !== undefined && min > threshold) {
+      alert("El stock mínimo no puede ser mayor al umbral de stock");
       return;
     }
 
@@ -69,7 +62,6 @@ const StockThresholdPage = () => {
       page: 1, 
       limit: 20,
       minStock: min,
-      maxStock: max,
     });
   };
 
@@ -79,15 +71,16 @@ const StockThresholdPage = () => {
       if (isNaN(threshold)) return;
 
       const min = minStock ? parseInt(minStock, 10) : undefined;
-      const max = maxStock ? parseInt(maxStock, 10) : undefined;
+
+      if (min !== undefined && min > threshold) return; // Invalid state, skip
 
       // Scroll hacia arriba inmediatamente cuando cambie de página
       window.scrollTo({ top: 0, behavior: "instant" });
 
       setCurrentPage(pageNumber);
-      loadLowStockPage(threshold, pageNumber, 20, min, max);
+      loadLowStockPage(threshold, pageNumber, 20, min);
     },
-    [stockThreshold, minStock, maxStock, loadLowStockPage]
+    [stockThreshold, minStock, loadLowStockPage]
   );
 
   const handleRefresh = () => {
@@ -95,7 +88,8 @@ const StockThresholdPage = () => {
     if (isNaN(threshold) || threshold < 0 || !hasSearched) return;
     
     const min = minStock ? parseInt(minStock, 10) : undefined;
-    const max = maxStock ? parseInt(maxStock, 10) : undefined;
+
+    if (min !== undefined && min > threshold) return; // Invalid state, skip
     
     setCurrentPage(1);
     fetchLowStockProductVariants({ 
@@ -103,7 +97,6 @@ const StockThresholdPage = () => {
       page: 1, 
       limit: 20,
       minStock: min,
-      maxStock: max,
     });
   };
 
@@ -153,7 +146,7 @@ const StockThresholdPage = () => {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
             <div className="flex-1">
               <label className="text-xs text-[#7A7A7A] mb-1 block font-medium">
-                Umbral de Stock (Máximo)
+                Umbral de Stock
               </label>
               <input
                 type="number"
@@ -185,23 +178,6 @@ const StockThresholdPage = () => {
               />
               <p className="text-xs text-[#999999] mt-1">
                 Excluye variantes con menos de este stock
-              </p>
-            </div>
-
-            <div className="flex-1">
-              <label className="text-xs text-[#7A7A7A] mb-1 block font-medium">
-                Stock Máximo (Opcional)
-              </label>
-              <input
-                type="number"
-                min="0"
-                value={maxStock}
-                onChange={(e) => setMaxStock(e.target.value)}
-                placeholder="Ej: 10"
-                className="input w-full border border-[#e1e1e1] rounded-none bg-[#FFFFFF] text-[#222222] shadow-none focus:border-[#222222] focus:outline-none"
-              />
-              <p className="text-xs text-[#999999] mt-1">
-                Límite superior (tiene prioridad sobre umbral)
               </p>
             </div>
           </div>
@@ -290,7 +266,7 @@ const StockThresholdPage = () => {
               <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
                 {/* Imagen del producto */}
                 <Link
-                  href={`/products/${variant.product.slug}`}
+                  href={`/products/preview/${variant.product.slug}`}
                   className="flex-shrink-0"
                 >
                   <div className="relative w-20 h-20 border border-[#e1e1e1] rounded overflow-hidden bg-white">
@@ -307,7 +283,7 @@ const StockThresholdPage = () => {
                 {/* Información del producto */}
                 <div className="flex-1 min-w-0">
                   <Link
-                    href={`/products/${variant.product.slug}`}
+                    href={`/products/preview/${variant.product.slug}`}
                     className="text-[#222222] font-medium hover:underline block mb-1"
                   >
                     {variant.product.productModel}

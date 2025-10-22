@@ -22,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="es">
       <body>
+        {/* Navbar measures its height on the client (useLayoutEffect) and sets --navbar-height */}
         <ReduxProvider>
           <Navbar />
           {children}

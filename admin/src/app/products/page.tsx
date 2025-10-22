@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useProducts } from "@/hooks/useProducts";
 import Image from "next/image";
 import { formatCurrency } from "@/utils/formatCurrency";
@@ -24,6 +25,8 @@ const SUBCATEGORIES = [
 ];
 
 const ProductsPage = () => {
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const {
     products,
     pagination,
@@ -31,10 +34,12 @@ const ProductsPage = () => {
     error,
     fetchProductsByPage,
     searchResults,
+    searchPagination,
     searchLoading,
     searchProducts,
     clearSearchResults,
     loadPageByNumber,
+    searchProductsByPage,
     resetPagination,
     deleteProduct,
     deleteLoading,
@@ -44,7 +49,7 @@ const ProductsPage = () => {
 
   const [search, setSearch] = useState("");
   const [searching, setSearching] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [searchPage, setSearchPage] = useState(1); // Estado para página de búsqueda
   const [inStock, setInStock] = useState(false);
   const [outOfStock, setOutOfStock] = useState(false);
   const [selectedCategorySlug, setSelectedCategorySlug] = useState<string>("");
@@ -56,46 +61,106 @@ const ProductsPage = () => {
   } | null>(null);
   const [deleteSuccess, setDeleteSuccess] = useState<boolean>(false);
 
-  // Cargar productos al montar o cuando cambien los filtros
+  // Función para obtener la página inicial desde la URL
+  const getInitialPage = useCallback(() => {
+    const pageParam = searchParams.get('page');
+    const page = pageParam ? parseInt(pageParam, 10) : 1;
+    return isNaN(page) || page < 1 ? 1 : page;
+  }, [searchParams]);
+
+  // Reset products on category/subcategory change
   useEffect(() => {
-    if (!searching) {
-      resetPagination();
-      fetchProductsByPage({ 
-        page: 1, 
-        limit: 20, 
-        inStock,
-        outOfStock,
+    resetPagination();
+    const initialPage = getInitialPage();
+    fetchProductsByPage({ 
+      page: initialPage,
+      limit: 20, 
+      inStock,
+      outOfStock,
+      categorySlug: selectedCategorySlug || undefined,
+      subcategorySlug: selectedSubcategorySlug || undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCategorySlug, selectedSubcategorySlug, getInitialPage]);
+
+  // Manejar cambios en la página de la URL (e.g., botones atrás/adelante del navegador)
+  useEffect(() => {
+    const urlPage = getInitialPage();
+    const currentPage = pagination?.currentPage || 1;
+    const totalPages = pagination?.totalPages || 1;
+    
+    // Validar que la página en la URL sea válida (solo si no estamos cargando)
+    if (!loading && urlPage > totalPages) {
+      // Si la página es mayor que el total, redirigir a página 1
+      const newSearchParams = new URLSearchParams(searchParams.toString());
+      newSearchParams.set('page', '1');
+      router.replace(`?${newSearchParams.toString()}`, { scroll: false });
+      return;
+    }
+    
+    // Si la página en la URL es diferente a la actual en el estado, recargar
+    if (urlPage !== currentPage && !loading) {
+      loadPageByNumber(urlPage, {
         categorySlug: selectedCategorySlug || undefined,
         subcategorySlug: selectedSubcategorySlug || undefined,
+        limit: 20,
+        inStock,
+        outOfStock,
       });
-      setCurrentPage(1);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searching, inStock, outOfStock, selectedCategorySlug, selectedSubcategorySlug]);
+  }, [searchParams, selectedCategorySlug, selectedSubcategorySlug, pagination?.totalPages, loading]);
+
+  // Re-ejecutar búsqueda cuando cambian los filtros de stock durante una búsqueda activa
+  useEffect(() => {
+    if (searching && search.trim()) {
+      setSearchPage(1); // Reset a página 1 al cambiar filtros
+      searchProducts({ q: search, page: 1, limit: 20, inStock, outOfStock });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inStock, outOfStock]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!search.trim()) {
       clearSearchResults();
       setSearching(false);
+      setSearchPage(1);
       return;
     }
     setSearching(true);
-    await searchProducts({ q: search, inStock, outOfStock });
+    setSearchPage(1); // Reset a página 1 al hacer nueva búsqueda
+    await searchProducts({ q: search, page: 1, limit: 20, inStock, outOfStock });
   };
 
   const handleClear = () => {
     setSearch("");
     clearSearchResults();
     setSearching(false);
+    setSearchPage(1);
   };
+
+  // Función para manejar cambio de página en búsqueda
+  const handleSearchPageChange = useCallback((pageNumber: number) => {
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    setSearchPage(pageNumber);
+    searchProductsByPage(search, pageNumber, { 
+      limit: 20, 
+      inStock,
+      outOfStock 
+    });
+  }, [search, searchProductsByPage, inStock, outOfStock]);
 
   // Función para manejar cambio de página
   const handlePageChange = useCallback((pageNumber: number) => {
     // Scroll hacia arriba inmediatamente cuando cambie de página
     window.scrollTo({ top: 0, behavior: 'instant' });
     
-    setCurrentPage(pageNumber);
+    // Actualizar la URL con el nuevo parámetro de página
+    const newSearchParams = new URLSearchParams(searchParams.toString());
+    newSearchParams.set('page', pageNumber.toString());
+    router.replace(`?${newSearchParams.toString()}`, { scroll: false });
+    
     loadPageByNumber(pageNumber, { 
       limit: 20, 
       inStock,
@@ -103,7 +168,7 @@ const ProductsPage = () => {
       categorySlug: selectedCategorySlug || undefined,
       subcategorySlug: selectedSubcategorySlug || undefined,
     });
-  }, [loadPageByNumber, inStock, outOfStock, selectedCategorySlug, selectedSubcategorySlug]);
+  }, [loadPageByNumber, inStock, outOfStock, selectedCategorySlug, selectedSubcategorySlug, searchParams, router]);
 
   // Handlers para eliminación de producto
   const handleDeleteProduct = async () => {
@@ -115,11 +180,15 @@ const ProductsPage = () => {
         // Refrescar la lista después de eliminar
         setTimeout(() => {
           if (searching) {
-            // Si está buscando, refrescar búsqueda
-            searchProducts({ q: search, inStock, outOfStock });
+            // Si está buscando, refrescar búsqueda con la página actual
+            searchProductsByPage(search, searchPage, { 
+              limit: 20, 
+              inStock, 
+              outOfStock 
+            });
           } else {
             // Si está en la lista normal, refrescar la página actual
-            loadPageByNumber(currentPage, { 
+            loadPageByNumber(pagination?.currentPage || 1, { 
               limit: 20, 
               inStock,
               outOfStock,
@@ -290,6 +359,28 @@ const ProductsPage = () => {
           <h3 className="text-lg text-[#222222] font-semibold mb-2">
             Resultados de la búsqueda{search && `: "${search}"`}
           </h3>
+          
+          {/* Información de resultados de búsqueda */}
+          {searchPagination && (
+            <div className="mb-4 text-sm text-[#666666]">
+              Mostrando {searchResults.length} de {searchPagination.totalCount} productos
+              {(inStock || outOfStock) && (
+                <span className="ml-2">
+                  {inStock && (
+                    <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full text-xs">
+                      En stock
+                    </span>
+                  )}
+                  {outOfStock && (
+                    <span className="inline-block bg-[#e1e1e1] px-2 py-1 rounded-full text-xs ml-2">
+                      Sin stock
+                    </span>
+                  )}
+                </span>
+              )}
+            </div>
+          )}
+
           <ul className="list bg-[#f8fafc] rounded-none shadow">
             {searchLoading &&
               Array.from({ length: SKELETON_COUNT }).map((_, idx) => (
@@ -388,6 +479,17 @@ const ProductsPage = () => {
               </li>
             ))}
           </ul>
+
+          {/* Paginación para resultados de búsqueda */}
+          {searchPagination && searchPagination.totalPages > 1 && (
+            <Pagination
+              currentPage={searchPagination.currentPage}
+              totalPages={searchPagination.totalPages}
+              onPageChange={handleSearchPageChange}
+              loading={searchLoading}
+              className="mt-6"
+            />
+          )}
         </div>
       )}
       {/* Lista principal con paginación por scroll */}
@@ -494,7 +596,7 @@ const ProductsPage = () => {
       {/* Componente de paginación */}
       {!searching && pagination && pagination.totalPages > 1 && (
         <Pagination
-          currentPage={currentPage}
+          currentPage={pagination?.currentPage || 1}
           totalPages={pagination.totalPages}
           onPageChange={handlePageChange}
           loading={loading}

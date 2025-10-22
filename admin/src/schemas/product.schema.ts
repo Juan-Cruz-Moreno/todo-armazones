@@ -40,6 +40,7 @@ export const createProductSchema = z.object({
   subcategory: z.string().min(1, "La subcategoría es requerida"),
   productModel: z.string().min(1, "El modelo del producto es requerido"),
   sku: z.string().min(1, "El SKU es requerido"),
+  code: z.string().min(1, "El código es requerido"),
   size: z.string().min(1, "El tamaño es requerido"),
   description: z.string().optional(),
   primaryImageOrder: z.array(z.number().int().min(0)).optional(), // Array de índices para ordenar primaryImage
@@ -111,6 +112,7 @@ export const updateProductSchema = z.object({
     .min(1, "El modelo del producto es requerido")
     .optional(),
   sku: z.string().min(1, "El SKU es requerido").optional(),
+  code: z.string().min(1, "El código es requerido").optional(),
   size: z.string().min(1, "El tamaño es requerido").optional(),
   description: z.string().optional(),
   primaryImageOrder: z.array(z.number().int().min(0)).optional(), // Array de índices para ordenar primaryImage

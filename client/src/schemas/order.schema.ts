@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ShippingMethod, DeliveryType } from "@/enums/order.enum";
+import { ShippingMethod, DeliveryType, PaymentMethod } from "@/enums/order.enum";
 
 export const addressSchema = z
   .object({
@@ -21,6 +21,7 @@ export const addressSchema = z
     pickupPointAddress: z.string().max(200, "La dirección del punto de retiro no puede exceder los 200 caracteres").optional(),
     // Agregamos shippingMethod solo para validación contextual
     shippingMethod: z.enum(ShippingMethod),
+    comments: z.string().max(500, "Los comentarios no pueden exceder los 500 caracteres").optional(),
   })
   .superRefine((data, ctx) => {
     // Validación para shippingCompany cuando es ParcelCompany
@@ -68,3 +69,15 @@ export const addressSchema = z
   });
 
 export type AddressFormData = z.infer<typeof addressSchema>;
+
+// Esquema para crear órdenes
+export const createOrderSchema = z.object({
+  shippingMethod: z.enum(ShippingMethod),
+  shippingAddress: addressSchema,
+  paymentMethod: z.enum(Object.values(PaymentMethod) as [string, ...string[]], {
+    message: "Método de pago inválido",
+  }),
+  comments: z.string().max(500, "Los comentarios no pueden exceder los 500 caracteres").optional(),
+});
+
+export type CreateOrderFormData = z.infer<typeof createOrderSchema>;

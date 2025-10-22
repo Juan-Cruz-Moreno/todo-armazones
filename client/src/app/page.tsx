@@ -1,15 +1,17 @@
-import { Suspense } from 'react';
-import ProductList from "@/components/organisms/ProductList";
-import PageTransition from "@/components/atoms/PageTransition";
+import BecomeProviderBanner from "@/components/landing/BecomeProviderBanner";
+import Categories from "@/components/landing/Categories";
+import Hero from "@/components/landing/Hero";
+import HowToOrder from "@/components/landing/HowToOrder";
+import StoreGuarantees from "@/components/landing/StoreGuarantees";
 
 export default function Home() {
   return (
-    <PageTransition>
-      <main>
-        <Suspense fallback={<div className="flex justify-center items-center min-h-screen"><span className="loading loading-spinner loading-lg"></span></div>}>
-          <ProductList />
-        </Suspense>
-      </main>
-    </PageTransition>
+    <main>
+      <Hero />
+      <HowToOrder />
+      <Categories />
+      <BecomeProviderBanner />
+      <StoreGuarantees />
+    </main>
   );
 }

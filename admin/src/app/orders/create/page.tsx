@@ -9,6 +9,7 @@ import type { IUser } from "@/interfaces/user";
 import type { Product, ProductVariant } from "@/interfaces/product";
 import type { CreateOrderAdminPayload } from "@/redux/slices/orderSlice";
 import { debounce } from "@/utils/debounce";
+import Pagination from "@/components/molecules/Pagination";
 
 const initialAddress = {
   firstName: "",
@@ -54,7 +55,16 @@ function CreateOrderPage() {
   const lastUserRef = useRef<HTMLDivElement | null>(null);
 
   // Product search state
-  const { searchProducts, searchResults, searchLoading, clearSearchResults } = useProducts();
+  const { 
+    searchProducts, 
+    searchResults, 
+    searchLoading, 
+    clearSearchResults,
+    searchProductsByPage,
+    searchPagination,
+    searchTotalPages,
+    searchCurrentPage,
+  } = useProducts();
   const [selectedProducts, setSelectedProducts] = useState<
     Array<{ variant: ProductVariant; product: Product; quantity: number }>
   >([]);
@@ -64,10 +74,12 @@ function CreateOrderPage() {
     isOpen: boolean;
     productQuery: string;
     quantities: Record<string, number>; // variantId -> quantity
+    page: number; // Para paginación de búsqueda
   }>({
     isOpen: false,
     productQuery: "",
     quantities: {},
+    page: 1,
   });
 
   // Address and order details
@@ -85,6 +97,7 @@ function CreateOrderPage() {
   );
   const [createdAt, setCreatedAt] = useState("");
   const [allowViewInvoice, setAllowViewInvoice] = useState(false);
+  const [comments, setComments] = useState("");
 
   const handleSelectUser = (user: IUser) => {
     setSelectedUser(user);
@@ -107,11 +120,11 @@ function CreateOrderPage() {
 
   // Funciones para manejar el modal de añadir items
   const handleOpenAddItemsModal = () => {
-    setAddItemsModal({ isOpen: true, productQuery: "", quantities: {} });
+    setAddItemsModal({ isOpen: true, productQuery: "", quantities: {}, page: 1 });
   };
 
   const handleCloseAddItemsModal = () => {
-    setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
+    setAddItemsModal({ isOpen: false, productQuery: "", quantities: {}, page: 1 });
     clearSearchResults();
   };
 
@@ -262,6 +275,7 @@ function CreateOrderPage() {
       }),
       ...(createdAt && { createdAt }),
       allowViewInvoice,
+      ...(comments && { comments }),
     };
     createOrderAsAdmin(
       payload,
@@ -274,9 +288,10 @@ function CreateOrderPage() {
         setAddress(initialAddress);
         setCreatedAt("");
         setAllowViewInvoice(false);
+        setComments("");
         setDeliveryType(DeliveryType.HomeDelivery);
         setUserQuery("");
-        setAddItemsModal({ isOpen: false, productQuery: "", quantities: {} });
+        setAddItemsModal({ isOpen: false, productQuery: "", quantities: {}, page: 1 });
         clearRecentAddress();
       },
       (err) => {
@@ -341,7 +356,9 @@ function CreateOrderPage() {
   useEffect(() => {
     const timeoutId = setTimeout(() => {
       if (addItemsModal.productQuery.trim()) {
-        searchProducts({ q: addItemsModal.productQuery.trim(), inStock: true });
+        searchProducts({ q: addItemsModal.productQuery.trim(), page: 1, limit: 20, inStock: true });
+        // Resetear página a 1 cuando cambia el query
+        setAddItemsModal((prev) => ({ ...prev, page: 1 }));
       } else {
         clearSearchResults();
       }
@@ -356,6 +373,18 @@ function CreateOrderPage() {
       setDeliveryType(DeliveryType.HomeDelivery);
     }
   }, [shippingMethod]);
+
+  // Callback para manejar cambio de página en búsqueda de productos
+  const handleSearchPageChange = useCallback((pageNumber: number) => {
+    if (addItemsModal.productQuery.trim()) {
+      setAddItemsModal((prev) => ({ ...prev, page: pageNumber }));
+      searchProductsByPage(
+        addItemsModal.productQuery.trim(), 
+        pageNumber, 
+        { limit: 20, inStock: true }
+      );
+    }
+  }, [addItemsModal.productQuery, searchProductsByPage]);
 
   return (
     <div className="min-h-screen bg-[#FFFFFF] pt-4 pb-10 px-4">
@@ -433,7 +462,7 @@ function CreateOrderPage() {
                 )}
                 {!loadingRecentAddress && recentAddress && (
                   <div className="text-sm text-[#666666]">
-                    ✓ Dirección más reciente cargada: {recentAddress.city}, {recentAddress.state}
+                    ✓ {recentAddress.isDefault ? 'Dirección por defecto' : 'Dirección más reciente'} cargada: {recentAddress.city}, {recentAddress.state}
                   </div>
                 )}
                 {!loadingRecentAddress && !recentAddress && selectedUser && (
@@ -860,6 +889,27 @@ function CreateOrderPage() {
               </span>
             </label>
           </div>
+          <div>
+            <label
+              htmlFor="comments"
+              className="block mb-1 text-[#222222]"
+            >
+              Comentarios (opcional)
+            </label>
+            <textarea
+              id="comments"
+              value={comments}
+              onChange={(e) => setComments(e.target.value)}
+              className="textarea w-full border rounded-none bg-[#FFFFFF] text-[#222222] resize-none"
+              style={{ borderColor: "#e1e1e1" }}
+              rows={3}
+              placeholder="Comentarios adicionales sobre la orden..."
+              maxLength={500}
+            />
+            <div className="text-xs text-[#7A7A7A] mt-1">
+              Máximo 500 caracteres
+            </div>
+          </div>
           <button
             type="submit"
             className="mt-4 btn rounded-none shadow-none border-none h-12 px-6 w-full transition-colors duration-300 ease-in-out text-white bg-[#388e3c] border-[#388e3c]"
@@ -1134,6 +1184,18 @@ function CreateOrderPage() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Paginación de resultados de búsqueda */}
+                  {searchPagination && searchTotalPages > 1 && (
+                    <div className="mt-6">
+                      <Pagination
+                        currentPage={searchCurrentPage}
+                        totalPages={searchTotalPages}
+                        onPageChange={handleSearchPageChange}
+                        loading={searchLoading}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

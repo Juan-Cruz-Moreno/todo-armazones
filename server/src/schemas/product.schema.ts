@@ -36,6 +36,7 @@ const createProductSchema = z.object({
   subcategory: z.string().min(1, 'Subcategoría es requerida'),
   productModel: z.string().min(1, 'Modelo del producto es requerido'),
   sku: z.string().min(1, 'SKU es requerido'),
+  code: z.string().min(1, 'Código es requerido'),
   size: z.string().min(1, 'Size es requerido'),
   description: z.string().optional(),
 });
@@ -80,6 +81,7 @@ const updateProductSchema = z.object({
   subcategory: z.string().min(1, 'Subcategoría es requerida').optional(),
   productModel: z.string().min(1, 'Modelo del producto es requerido').optional(),
   sku: z.string().min(1, 'SKU es requerido').optional(),
+  code: z.string().min(1, 'Código es requerido').optional(),
   size: z.string().min(1, 'Size es requerido').optional(),
   description: z.string().optional(),
 });

@@ -22,7 +22,7 @@ export class UserService {
   /**
    * Obtiene la dirección más reciente de un usuario
    * @param userId ID del usuario
-   * @returns La dirección más reciente o null si no tiene direcciones
+   * @returns La dirección favorita (isDefault: true), o la más reciente si no hay favorita, o null si no tiene direcciones
    */
   public async getMostRecentAddress(userId: string): Promise<IAddressDocument | null> {
     // Validar que el userId sea válido
@@ -30,12 +30,95 @@ export class UserService {
       throw new AppError('Invalid user ID', 400, 'fail', true);
     }
 
-    // Buscar la dirección más reciente del usuario
-    const address = await Address.findOne({ userId: new Types.ObjectId(userId) })
-      .sort({ createdAt: -1 }) // Ordenar por fecha de creación descendente
+    // Primero, buscar la dirección favorita (isDefault: true), ordenada por createdAt descendente
+    let address = await Address.findOne({ userId: new Types.ObjectId(userId), isDefault: true })
+      .sort({ createdAt: -1 })
       .limit(1);
 
+    // Si no hay favorita, buscar la más reciente
+    if (!address) {
+      address = await Address.findOne({ userId: new Types.ObjectId(userId) })
+        .sort({ createdAt: -1 })
+        .limit(1);
+    }
+
     return address;
+  }
+
+  /**
+   * Actualiza o crea la dirección favorita (isDefault: true) de un usuario
+   * @param userId ID del usuario
+   * @param updateData Los datos a actualizar o crear (parcial o completo)
+   * @returns La dirección actualizada o creada
+   */
+  public async updateDefaultAddress(
+    userId: string,
+    updateData: Partial<Omit<IAddressDocument, '_id' | 'userId' | 'createdAt' | 'updatedAt'>>,
+  ): Promise<IAddressDocument> {
+    // Validar que el userId sea válido
+    if (!Types.ObjectId.isValid(userId)) {
+      throw new AppError('Invalid user ID', 400, 'fail', true);
+    }
+
+    // Verificar que hay campos válidos para actualizar
+    if (Object.keys(updateData).length === 0) {
+      throw new AppError('No valid fields to update', 400, 'fail', true);
+    }
+
+    try {
+      // Intentar actualizar la dirección favorita existente
+      let address = await Address.findOneAndUpdate(
+        { userId: new Types.ObjectId(userId), isDefault: true },
+        { $set: updateData },
+        { new: true, runValidators: true },
+      );
+
+      // Si no existe dirección favorita, crear una nueva
+      if (!address) {
+        // Verificar que los campos requeridos estén presentes para crear una nueva dirección
+        const requiredFields = ['firstName', 'lastName', 'email', 'phoneNumber', 'dni', 'city', 'state', 'postalCode'];
+        const missingFields = requiredFields.filter((field) => !updateData[field as keyof typeof updateData]);
+
+        if (missingFields.length > 0) {
+          throw new AppError(
+            `Missing required fields to create address: ${missingFields.join(', ')}`,
+            400,
+            'fail',
+            true,
+          );
+        }
+
+        // Crear nueva dirección con isDefault: true
+        address = await Address.create({
+          userId: new Types.ObjectId(userId),
+          ...updateData,
+          isDefault: true,
+        });
+
+        logger.info('Default address created', {
+          userId,
+          addressId: address._id.toString(),
+        });
+      } else {
+        logger.info('Default address updated', {
+          userId,
+          updatedFields: Object.keys(updateData),
+        });
+      }
+
+      return address;
+    } catch (_err: unknown) {
+      // If it's an AppError, rethrow it
+      if (_err instanceof AppError) throw _err;
+
+      // Log and wrap unknown errors
+      logger.error('Error updating/creating default address', {
+        error: _err,
+        userId,
+        updateData,
+      });
+      throw new AppError('Failed to update or create default address', 500, 'error', true);
+    }
   }
 
   /**

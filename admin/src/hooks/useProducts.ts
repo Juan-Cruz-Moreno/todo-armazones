@@ -35,6 +35,7 @@ export const useProducts = () => {
     loading,
     error,
     searchResults,
+    searchPagination,
     searchLoading,
     searchError,
     bulkUpdateLoading,
@@ -57,6 +58,7 @@ export const useProducts = () => {
     loading,
     error,
     searchResults,
+    searchPagination, // Nueva metadata de paginación para búsqueda
     searchLoading,
     searchError,
     bulkUpdateLoading,
@@ -78,6 +80,13 @@ export const useProducts = () => {
     totalCount: pagination?.totalCount || 0,
     totalPages: pagination?.totalPages || 0,
     currentPage: pagination?.currentPage || 1,
+    
+    // Derived state for search pagination
+    searchTotalCount: searchPagination?.totalCount || 0,
+    searchTotalPages: searchPagination?.totalPages || 0,
+    searchCurrentPage: searchPagination?.currentPage || 1,
+    searchHasNextPage: searchPagination?.hasNextPage || false,
+    searchHasPreviousPage: searchPagination?.hasPreviousPage || false,
     
     // Low stock derived state
     lowStockTotalCount: lowStockPagination?.totalCount || 0,
@@ -106,7 +115,19 @@ export const useProducts = () => {
     fetchProductsPaginationInfo: (params: Omit<ProductFilters, 'page' | 'cursor'>) => 
       dispatch(fetchProductsPaginationInfo(params)),
     
-    searchProducts: useCallback((params: { q: string } & Pick<ProductFilters, 'inStock' | 'outOfStock'>) => 
+    /**
+     * Busca productos por texto con paginación
+     * @param q - Texto de búsqueda
+     * @param page - Número de página (default: 1)
+     * @param limit - Resultados por página (default: 10)
+     * @param inStock - Filtrar solo productos con stock
+     * @param outOfStock - Filtrar solo productos sin stock
+     */
+    searchProducts: useCallback((params: { 
+      q: string; 
+      page?: number; 
+      limit?: number 
+    } & Pick<ProductFilters, 'inStock' | 'outOfStock'>) => 
       dispatch(searchProducts(params)), [dispatch]),
     clearSearchResults: useCallback(() => dispatch(clearSearchResults()), [dispatch]),
     createProduct: (payload: CreateProductPayload) =>
@@ -182,28 +203,25 @@ export const useProducts = () => {
      * @param pageNumber - Número de página
      * @param limit - Límite de resultados por página
      * @param minStock - Stock mínimo opcional
-     * @param maxStock - Stock máximo opcional (tiene prioridad sobre stockThreshold)
      */
     loadLowStockPage: (
       stockThreshold: number, 
       pageNumber: number, 
       limit?: number,
       minStock?: number,
-      maxStock?: number
     ) => {
       return dispatch(fetchLowStockProductVariants({ 
         stockThreshold, 
         page: pageNumber, 
         limit,
         minStock,
-        maxStock,
       }));
     },
     
     /**
      * Refresca la página actual de variantes con stock bajo
      */
-    refreshLowStockPage: (stockThreshold: number, minStock?: number, maxStock?: number) => {
+    refreshLowStockPage: (stockThreshold: number, minStock?: number) => {
       const currentPageNumber = lowStockPagination?.currentPage || 1;
       const currentLimit = lowStockPagination?.limit || 10;
       return dispatch(fetchLowStockProductVariants({ 
@@ -211,7 +229,6 @@ export const useProducts = () => {
         page: currentPageNumber,
         limit: currentLimit,
         minStock,
-        maxStock,
       }));
     },
 
@@ -236,5 +253,44 @@ export const useProducts = () => {
      * Limpia el error de eliminación
      */
     clearDeleteError: () => dispatch(clearDeleteError()),
+
+    // Search pagination methods
+    /**
+     * Busca en una página específica manteniendo el query anterior
+     */
+    searchProductsByPage: (q: string, pageNumber: number, filters?: {
+      limit?: number;
+      inStock?: boolean;
+      outOfStock?: boolean;
+    }) => {
+      return dispatch(searchProducts({ q, page: pageNumber, ...filters }));
+    },
+
+    /**
+     * Navega a la siguiente página de resultados de búsqueda
+     */
+    loadNextSearchPage: (q: string, filters?: { limit?: number; inStock?: boolean; outOfStock?: boolean }) => {
+      if (searchPagination?.hasNextPage) {
+        const nextPage = (searchPagination.currentPage || 1) + 1;
+        return dispatch(searchProducts({ q, page: nextPage, ...filters }));
+      }
+    },
+
+    /**
+     * Navega a la página anterior de resultados de búsqueda
+     */
+    loadPreviousSearchPage: (q: string, filters?: { limit?: number; inStock?: boolean; outOfStock?: boolean }) => {
+      if (searchPagination?.hasPreviousPage) {
+        const prevPage = Math.max(1, (searchPagination.currentPage || 1) - 1);
+        return dispatch(searchProducts({ q, page: prevPage, ...filters }));
+      }
+    },
+
+    /**
+     * Reinicia la búsqueda a la primera página
+     */
+    resetSearchToFirstPage: (q: string, filters?: { limit?: number; inStock?: boolean; outOfStock?: boolean }) => {
+      return dispatch(searchProducts({ q, page: 1, ...filters }));
+    },
   };
 };

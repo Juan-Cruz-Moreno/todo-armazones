@@ -25,6 +25,7 @@ interface ProductsState {
   loading: boolean;
   error: string | null;
   searchResults: Product[];
+  searchPagination: PaginationMetadata | null; // Nueva metadata para búsqueda
   searchLoading: boolean;
   searchError: string | null;
   bulkUpdateLoading: boolean;
@@ -47,6 +48,7 @@ const initialState: ProductsState = {
   loading: false,
   error: null,
   searchResults: [],
+  searchPagination: null, // Inicializar metadata de búsqueda
   searchLoading: false,
   searchError: null,
   bulkUpdateLoading: false,
@@ -147,16 +149,22 @@ export const fetchProductsPaginationInfo = createAsyncThunk<
   }
 });
 
-// Search products
+// Search products with pagination
 export const searchProducts = createAsyncThunk<
-  Product[], 
-  { q: string } & Pick<ProductFilters, 'inStock' | 'outOfStock'>
+  ProductsResponse,
+  { q: string; page?: number; limit?: number } & Pick<ProductFilters, 'inStock' | 'outOfStock'>
 >(
   "products/searchProducts",
-  async ({ q, inStock, outOfStock }, { rejectWithValue }) => {
+  async ({ q, page, limit, inStock, outOfStock }, { rejectWithValue }) => {
     try {
       const query = new URLSearchParams();
       query.append("q", encodeURIComponent(q));
+      if (page !== undefined) {
+        query.append("page", page.toString());
+      }
+      if (limit !== undefined) {
+        query.append("limit", limit.toString());
+      }
       if (inStock !== undefined) query.append("inStock", inStock.toString());
       if (outOfStock !== undefined) query.append("outOfStock", outOfStock.toString());
 
@@ -164,7 +172,7 @@ export const searchProducts = createAsyncThunk<
       const { data } = await axiosInstance.get<ApiResponse<ProductsResponse>>(
         url
       );
-      return data.data!.products;
+      return data.data!;
     } catch (err: unknown) {
       return rejectWithValue(getErrorMessage(err));
     }
@@ -290,7 +298,6 @@ export const fetchLowStockProductVariants = createAsyncThunk<
     if (params.page) query.append("page", params.page.toString());
     if (params.limit) query.append("limit", params.limit.toString());
     if (params.minStock !== undefined) query.append("minStock", params.minStock.toString());
-    if (params.maxStock !== undefined) query.append("maxStock", params.maxStock.toString());
 
     const url = `/products/low-stock?${query.toString()}`;
     const { data } = await axiosInstance.get<
@@ -338,6 +345,7 @@ const productSlice = createSlice({
   reducers: {
     clearSearchResults(state) {
       state.searchResults = [];
+      state.searchPagination = null;
       state.searchError = null;
     },
     clearBulkUpdateError(state) {
@@ -432,7 +440,8 @@ const productSlice = createSlice({
       })
       .addCase(searchProducts.fulfilled, (state, action) => {
         state.searchLoading = false;
-        state.searchResults = action.payload;
+        state.searchResults = action.payload.products;
+        state.searchPagination = action.payload.pagination;
       })
       .addCase(searchProducts.rejected, (state, action) => {
         state.searchLoading = false;

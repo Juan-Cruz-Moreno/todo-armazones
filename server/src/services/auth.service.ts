@@ -5,6 +5,7 @@ import { RegisterRequestDto, LoginRequestDto, RegisterResponseDto, LoginResponse
 import { capitalizeFirstLetter } from '@utils/stringUtils';
 import { setSessionUser } from '@utils/sessionUtils';
 import User from '@models/User';
+import Address, { IAddressDocument } from '@models/Address';
 import logger from '@config/logger';
 import { AppError } from '@utils/AppError';
 import { UserRole } from '@enums/user.enum';
@@ -19,10 +20,13 @@ import transporter from '@config/nodemailer.config';
 import env from '@config/env';
 import { renderResetPasswordEmail } from '@utils/renderResetPasswordEmail';
 import { isModernWpHash, verifyModernWpPassword } from '@utils/wordpressHashUtils';
+import { withTransaction } from '@helpers/withTransaction';
+import { DeliveryType } from '@enums/order.enum';
 
 export class AuthService {
   /**
    * Crea un usuario sin iniciar sesión (uso exclusivo para administradores)
+   * Opcionalmente puede crear una dirección favorita para el usuario
    */
   public async createUserByAdmin(data: {
     email: string;
@@ -33,10 +37,29 @@ export class AuthService {
     dni?: string;
     cuit?: string;
     phone?: string;
-  }): Promise<RegisterResponseDto> {
+    address?: {
+      firstName?: string;
+      lastName?: string;
+      companyName?: string;
+      email?: string;
+      phoneNumber?: string;
+      dni?: string;
+      cuit?: string;
+      streetAddress?: string;
+      city?: string;
+      state?: string;
+      postalCode?: string;
+      shippingCompany?: string;
+      declaredShippingAmount?: string;
+      deliveryWindow?: string;
+      deliveryType?: DeliveryType;
+      pickupPointAddress?: string;
+    };
+  }): Promise<RegisterResponseDto & { address?: IAddressDocument }> {
     try {
       const normalizedEmail = data.email.toLowerCase();
 
+      // Verificar que el usuario no exista
       const existingUser = await User.findOne({
         email: normalizedEmail,
       }).lean();
@@ -56,22 +79,122 @@ export class AuthService {
         type: argon2.argon2id,
       });
 
-      const newUserDoc = await User.create({
-        email: normalizedEmail,
-        displayName,
-        ...(data.firstName && { firstName: data.firstName }),
-        ...(data.lastName && { lastName: data.lastName }),
-        ...(data.dni && { dni: data.dni }),
-        ...(data.cuit && { cuit: data.cuit }),
-        ...(data.phone && { phone: data.phone }),
-        password: hashedPassword,
-        // role y status usan los defaults del modelo
+      // Usar transacción para garantizar atomicidad
+      const result = await withTransaction(async (session) => {
+        // Crear usuario
+        const newUserDoc = await User.create(
+          [
+            {
+              email: normalizedEmail,
+              displayName,
+              ...(data.firstName && { firstName: data.firstName }),
+              ...(data.lastName && { lastName: data.lastName }),
+              ...(data.dni && { dni: data.dni }),
+              ...(data.cuit && { cuit: data.cuit }),
+              ...(data.phone && { phone: data.phone }),
+              password: hashedPassword,
+            },
+          ],
+          { session },
+        );
+
+        const userId = newUserDoc[0]._id;
+
+        // Crear dirección si se proporcionó
+        let addressDoc: IAddressDocument | undefined;
+        if (data.address) {
+          const addressData = data.address;
+
+          // Validar campos requeridos para dirección
+          const requiredFields = [
+            'firstName',
+            'lastName',
+            'email',
+            'phoneNumber',
+            'dni',
+            'city',
+            'state',
+            'postalCode',
+          ];
+          const missingFields = requiredFields.filter((field) => !addressData[field as keyof typeof addressData]);
+
+          if (missingFields.length > 0) {
+            throw new AppError(
+              `Faltan campos requeridos para la dirección: ${missingFields.join(', ')}`,
+              400,
+              'fail',
+              true,
+              { code: 'MISSING_ADDRESS_FIELDS', missingFields },
+            );
+          }
+
+          // Validar deliveryType específico
+          const deliveryType = addressData.deliveryType || DeliveryType.HomeDelivery;
+          if (deliveryType === DeliveryType.HomeDelivery && !addressData.streetAddress) {
+            throw new AppError(
+              'streetAddress es requerido cuando el tipo de entrega es a domicilio',
+              400,
+              'fail',
+              true,
+              { code: 'MISSING_STREET_ADDRESS' },
+            );
+          }
+
+          if (deliveryType === DeliveryType.PickupPoint && !addressData.pickupPointAddress) {
+            throw new AppError(
+              'pickupPointAddress es requerido cuando el tipo de entrega es punto de retiro',
+              400,
+              'fail',
+              true,
+              { code: 'MISSING_PICKUP_POINT_ADDRESS' },
+            );
+          }
+
+          // Crear dirección con isDefault: true
+          const createdAddress = await Address.create(
+            [
+              {
+                userId,
+                firstName: addressData.firstName,
+                lastName: addressData.lastName,
+                email: addressData.email,
+                phoneNumber: addressData.phoneNumber,
+                dni: addressData.dni,
+                city: addressData.city,
+                state: addressData.state,
+                postalCode: addressData.postalCode,
+                ...(addressData.companyName && { companyName: addressData.companyName }),
+                ...(addressData.cuit && { cuit: addressData.cuit }),
+                ...(addressData.streetAddress && { streetAddress: addressData.streetAddress }),
+                ...(addressData.shippingCompany && { shippingCompany: addressData.shippingCompany }),
+                ...(addressData.declaredShippingAmount && {
+                  declaredShippingAmount: addressData.declaredShippingAmount,
+                }),
+                ...(addressData.deliveryWindow && { deliveryWindow: addressData.deliveryWindow }),
+                deliveryType,
+                ...(addressData.pickupPointAddress && { pickupPointAddress: addressData.pickupPointAddress }),
+                isDefault: true,
+              },
+            ],
+            { session },
+          );
+
+          addressDoc = createdAddress[0];
+
+          logger.info('Dirección creada exitosamente junto con usuario', {
+            userId: userId.toString(),
+            addressId: addressDoc._id.toString(),
+          });
+        }
+
+        return { userId, addressDoc };
       });
 
-      const newUser = await User.findById(newUserDoc._id).select('-password').lean();
+      // Obtener usuario creado sin password
+      const newUser = await User.findById(result.userId).select('-password').lean();
       if (!newUser) {
         logger.error('Usuario no encontrado después de creación por admin', {
-          userId: newUserDoc._id,
+          userId: result.userId,
         });
         throw new AppError('Error interno del servidor', 500, 'error', true);
       }
@@ -80,9 +203,10 @@ export class AuthService {
         userId: newUser._id,
         email: newUser.email,
         displayName: newUser.displayName,
+        withAddress: !!result.addressDoc,
       });
 
-      return {
+      const response: RegisterResponseDto & { address?: IAddressDocument } = {
         id: newUser._id.toString(),
         email: newUser.email,
         displayName: newUser.displayName,
@@ -96,10 +220,17 @@ export class AuthService {
         createdAt: newUser.createdAt,
         updatedAt: newUser.updatedAt,
       };
+
+      // Agregar dirección a la respuesta si se creó
+      if (result.addressDoc) {
+        response.address = result.addressDoc;
+      }
+
+      return response;
     } catch (err) {
       logger.error('Error en AuthService.createUserByAdmin', {
         error: err,
-        input: { email: data.email },
+        input: { email: data.email, hasAddress: !!data.address },
       });
       throw err;
     }

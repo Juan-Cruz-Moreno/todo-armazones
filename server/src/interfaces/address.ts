@@ -19,4 +19,5 @@ export interface IAddress {
   deliveryWindow?: string;
   deliveryType?: DeliveryType; // Nuevo campo para tipo de entrega
   pickupPointAddress?: string; // Dirección del punto de retiro cuando es PICKUP_POINT
+  isDefault?: boolean; // Campo opcional para marcar la dirección como favorita o por defecto
 }

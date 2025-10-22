@@ -19,6 +19,7 @@ export const useProducts = () => {
     error,
     productDetail,
     searchResults,
+    searchPagination,
     searchLoading,
     searchError,
     paginationInfoLoading,
@@ -33,6 +34,7 @@ export const useProducts = () => {
     error,
     productDetail,
     searchResults,
+    searchPagination, // Nueva metadata de paginación para búsqueda
     searchLoading,
     searchError,
     paginationInfoLoading,
@@ -45,6 +47,13 @@ export const useProducts = () => {
     totalCount: pagination?.totalCount || 0,
     totalPages: pagination?.totalPages || 0,
     currentPage: pagination?.currentPage || 1,
+    
+    // Derived state for search pagination
+    searchTotalCount: searchPagination?.totalCount || 0,
+    searchTotalPages: searchPagination?.totalPages || 0,
+    searchCurrentPage: searchPagination?.currentPage || 1,
+    searchHasNextPage: searchPagination?.hasNextPage || false,
+    searchHasPreviousPage: searchPagination?.hasPreviousPage || false,
     
     // Actions
     /**
@@ -84,7 +93,15 @@ export const useProducts = () => {
       inStock?: boolean;
     }) => dispatch(fetchProductsPaginationInfo(params)),
     
-    searchProducts: (q: string, inStock?: boolean) => dispatch(searchProducts({ q, inStock })),
+    /**
+     * Busca productos por texto con paginación
+     * @param q - Texto de búsqueda
+     * @param page - Número de página (default: 1)
+     * @param limit - Resultados por página (default: 10)
+     * @param inStock - Filtrar solo productos con stock
+     */
+    searchProducts: (q: string, page?: number, limit?: number, inStock?: boolean) => 
+      dispatch(searchProducts({ q, page, limit, inStock })),
     
     clearProductDetail: () => dispatch(clearProductDetail()),
     clearSearchResults: () => dispatch(clearSearchResults()),
@@ -151,6 +168,44 @@ export const useProducts = () => {
       inStock?: boolean;
     }) => {
       return dispatch(fetchProductsPaginationInfo(filters));
+    },
+
+    // Search pagination methods
+    /**
+     * Busca en una página específica manteniendo el query anterior
+     */
+    searchProductsByPage: (q: string, pageNumber: number, filters?: {
+      limit?: number;
+      inStock?: boolean;
+    }) => {
+      return dispatch(searchProducts({ q, page: pageNumber, ...filters }));
+    },
+
+    /**
+     * Navega a la siguiente página de resultados de búsqueda
+     */
+    loadNextSearchPage: (q: string, filters?: { limit?: number; inStock?: boolean }) => {
+      if (searchPagination?.hasNextPage) {
+        const nextPage = (searchPagination.currentPage || 1) + 1;
+        return dispatch(searchProducts({ q, page: nextPage, ...filters }));
+      }
+    },
+
+    /**
+     * Navega a la página anterior de resultados de búsqueda
+     */
+    loadPreviousSearchPage: (q: string, filters?: { limit?: number; inStock?: boolean }) => {
+      if (searchPagination?.hasPreviousPage) {
+        const prevPage = Math.max(1, (searchPagination.currentPage || 1) - 1);
+        return dispatch(searchProducts({ q, page: prevPage, ...filters }));
+      }
+    },
+
+    /**
+     * Reinicia la búsqueda a la primera página
+     */
+    resetSearchToFirstPage: (q: string, filters?: { limit?: number; inStock?: boolean }) => {
+      return dispatch(searchProducts({ q, page: 1, ...filters }));
     },
   };
 };

@@ -10,7 +10,6 @@ import {
   ProductCategoryDto,
   ProductListItemDto,
   ProductSubcategoryDto,
-  SearchProductsResponseDto,
   UpdateProductRequestDto,
 } from '@dto/product.dto';
 import {
@@ -65,6 +64,9 @@ export class ProductService {
     }
     if (!productDto.sku?.trim()) {
       throw new AppError('El SKU del producto es requerido', 400, 'error', false);
+    }
+    if (!productDto.code?.trim()) {
+      throw new AppError('El código del producto es requerido', 400, 'error', false);
     }
     if (!productDto.size?.trim()) {
       throw new AppError('El tamaño del producto es requerido', 400, 'error', false);
@@ -130,6 +132,9 @@ export class ProductService {
     }
     if (productDto.sku !== undefined && !productDto.sku?.trim()) {
       throw new AppError('El SKU del producto no puede estar vacío', 400, 'error', false);
+    }
+    if (productDto.code !== undefined && !productDto.code?.trim()) {
+      throw new AppError('El código del producto no puede estar vacío', 400, 'error', false);
     }
     if (productDto.size !== undefined && !productDto.size?.trim()) {
       throw new AppError('El tamaño del producto no puede estar vacío', 400, 'error', false);
@@ -230,8 +235,8 @@ export class ProductService {
     this.validateProduct(productDto);
     this.validateVariants(variantsDto);
 
-    // Generar slug único (unicidad manejada por índices de MongoDB)
-    const slug = await generateProductSlug(productDto.productModel, productDto.sku);
+    // Generar slug único usando code en lugar de sku
+    const slug = await generateProductSlug(productDto.productModel, productDto.code);
 
     try {
       // Usar withTransaction para manejar la transacción
@@ -380,6 +385,7 @@ export class ProductService {
           subcategory: this.mapSubcategory(populatedProduct!.subcategory),
           productModel: populatedProduct!.productModel,
           sku: populatedProduct!.sku,
+          code: populatedProduct!.code,
           size: populatedProduct!.size,
           description: populatedProduct!.description ?? '',
         };
@@ -623,6 +629,7 @@ export class ProductService {
         subcategory: subcategoryInfo,
         productModel: product.productModel,
         sku: product.sku,
+        code: product.code,
         size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
         description: product.description ?? '',
         variants: variantsMap.get(product._id.toString()) ?? [],
@@ -716,7 +723,7 @@ export class ProductService {
         .sort({ _id: 1 })
         .skip(skip)
         .limit(limit + 1) // +1 para determinar si hay siguiente página
-        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
+        .select('slug thumbnail primaryImage category subcategory productModel sku code size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
@@ -837,14 +844,12 @@ export class ProductService {
    * @param page - Número de página
    * @param limit - Límite de resultados por página
    * @param minStock - Stock mínimo opcional (inclusive)
-   * @param maxStock - Stock máximo opcional (inclusive), tiene prioridad sobre stockThreshold si se proporciona
    */
   public async getLowStockProductVariants(
     stockThreshold: number,
     page: number = 1,
     limit: number = 10,
     minStock?: number,
-    maxStock?: number,
   ): Promise<GetLowStockProductVariantsResponseDto> {
     try {
       // Validaciones de entrada
@@ -860,12 +865,8 @@ export class ProductService {
         throw new AppError('El stock mínimo no puede ser negativo', 400, 'fail', false);
       }
 
-      if (maxStock !== undefined && maxStock < 0) {
-        throw new AppError('El stock máximo no puede ser negativo', 400, 'fail', false);
-      }
-
-      if (minStock !== undefined && maxStock !== undefined && minStock > maxStock) {
-        throw new AppError('El stock mínimo no puede ser mayor al stock máximo', 400, 'fail', false);
+      if (minStock !== undefined && minStock > stockThreshold) {
+        throw new AppError('El stock mínimo no puede ser mayor al umbral de stock', 400, 'fail', false);
       }
 
       // Construir query de filtro de stock
@@ -873,9 +874,8 @@ export class ProductService {
         deleted: { $ne: true },
       };
 
-      // Usar maxStock si se proporciona, sino usar stockThreshold
-      const effectiveMaxStock = maxStock !== undefined ? maxStock : stockThreshold;
-      stockQuery.stock = { $lte: effectiveMaxStock };
+      // Usar stockThreshold como límite máximo
+      stockQuery.stock = { $lte: stockThreshold };
 
       // Agregar filtro de stock mínimo si se proporciona
       if (minStock !== undefined) {
@@ -917,10 +917,10 @@ export class ProductService {
         .skip(skip)
         .limit(limit)
         .populate<{
-          product: Pick<IProductDocument, '_id' | 'slug' | 'productModel' | 'sku' | 'thumbnail'>;
+          product: Pick<IProductDocument, '_id' | 'slug' | 'productModel' | 'sku' | 'code' | 'thumbnail'>;
         }>({
           path: 'product',
-          select: '_id slug productModel sku thumbnail',
+          select: '_id slug productModel sku code thumbnail',
         })
         .lean();
 
@@ -945,6 +945,7 @@ export class ProductService {
               slug: variant.product.slug,
               productModel: variant.product.productModel,
               sku: variant.product.sku,
+              code: variant.product.code,
               thumbnail: variant.product.thumbnail,
             },
           };
@@ -970,7 +971,6 @@ export class ProductService {
         page,
         limit,
         minStock,
-        maxStock,
       });
       throw error instanceof AppError
         ? error
@@ -1038,7 +1038,7 @@ export class ProductService {
       const products = await Product.find(query)
         .sort({ _id: 1 })
         .limit(limit + 1) // +1 para determinar si hay siguiente página
-        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
+        .select('slug thumbnail primaryImage category subcategory productModel sku code size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
@@ -1111,7 +1111,7 @@ export class ProductService {
   }> {
     try {
       const product = await Product.findOne({ slug, deleted: { $ne: true } })
-        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
+        .select('slug thumbnail primaryImage category subcategory productModel sku code size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
@@ -1136,6 +1136,7 @@ export class ProductService {
         subcategory: subcategoryInfo,
         productModel: product.productModel,
         sku: product.sku,
+        code: product.code,
         size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
         description: product.description ?? '',
         variants: await this.mapVariants(variants as IProductVariantDocument[]),
@@ -1170,16 +1171,17 @@ export class ProductService {
     this.validateUpdateProduct(productDto);
     this.validateUpdateVariants(variantsDto);
 
-    // Generar nuevo slug si se actualizan productModel o sku
+    // Generar nuevo slug si se actualizan productModel, sku o code
     let newSlug: string | undefined;
-    if (productDto.productModel || productDto.sku) {
-      const existingProduct = await Product.findById(productId).select('productModel sku');
+    if (productDto.productModel || productDto.sku || productDto.code) {
+      const existingProduct = await Product.findById(productId).select('productModel code');
       if (!existingProduct) {
         throw new AppError('Producto no encontrado', 404, 'fail', false);
       }
       const model = productDto.productModel || existingProduct.productModel;
-      const sku = productDto.sku || existingProduct.sku;
-      newSlug = await generateProductSlug(model, sku);
+      const code = productDto.code || existingProduct.code;
+      // Usar code para el slug
+      newSlug = await generateProductSlug(model, code);
     }
 
     try {
@@ -1345,6 +1347,7 @@ export class ProductService {
           subcategory: subcategoryInfo,
           productModel: product.productModel,
           sku: product.sku,
+          code: product.code,
           size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
           description: product.description ?? '',
           variants: await this.mapVariants(remainingVariants),
@@ -1368,82 +1371,157 @@ export class ProductService {
     }
   }
 
-  public async searchProducts(q: string, inStock?: boolean): Promise<SearchProductsResponseDto> {
+  /**
+   * Busca productos por texto (modelo, SKU o código) con paginación
+   * Método optimizado que usa la arquitectura centralizada
+   */
+  public async searchProducts(
+    q: string,
+    page: number = 1,
+    limit: number = 10,
+    inStock?: boolean,
+    outOfStock?: boolean,
+  ): Promise<GetProductsResponseDto> {
     try {
-      const query: FilterQuery<IProductDocument> = {
-        $or: [{ productModel: { $regex: q, $options: 'i' } }, { sku: { $regex: q, $options: 'i' } }],
+      if (page < 1) {
+        throw new AppError('El número de página debe ser mayor a 0', 400, 'fail', false);
+      }
+
+      // Validar que no se envíen ambos filtros al mismo tiempo
+      if (inStock === true && outOfStock === true) {
+        throw new AppError('No se pueden aplicar los filtros inStock y outOfStock simultáneamente', 400, 'fail', false);
+      }
+
+      // Construir query de búsqueda de texto
+      const searchQuery: FilterQuery<IProductDocument> = {
+        $or: [
+          { productModel: { $regex: q, $options: 'i' } },
+          { sku: { $regex: q, $options: 'i' } },
+          { code: { $regex: q, $options: 'i' } },
+        ],
         deleted: { $ne: true },
       };
 
       // Si se solicita filtrar por stock, obtener productos que tienen variantes con stock
-      let filteredProductIds: Types.ObjectId[] | undefined;
       if (inStock === true) {
-        const productsWithStock = await ProductVariant.aggregate([
-          { $match: { stock: { $gt: 0 }, deleted: { $ne: true } } },
-          { $group: { _id: '$product' } },
-          { $project: { _id: 1 } },
-        ]);
-        filteredProductIds = productsWithStock.map((item) => item._id);
+        const stockFilteredIds = await this.getProductsWithStock();
 
         // Si no hay productos con stock, retornar resultado vacío
-        if (filteredProductIds.length === 0) {
-          return { products: [] };
+        if (stockFilteredIds.length === 0) {
+          return {
+            products: [],
+            pagination: {
+              totalCount: 0,
+              totalPages: 0,
+              currentPage: page,
+              hasNextPage: false,
+              hasPreviousPage: false,
+              nextCursor: null,
+              previousCursor: null,
+              limit,
+              itemsInCurrentPage: 0,
+            },
+          };
         }
 
         // Agregar filtro de productos con stock al query principal
-        query._id = { $in: filteredProductIds };
+        searchQuery._id = { $in: stockFilteredIds };
       }
 
-      const products = await Product.find(query)
-        .select('slug thumbnail primaryImage category subcategory productModel sku size description')
+      // Si se solicita filtrar por productos sin stock, obtener productos que NO tienen stock
+      if (outOfStock === true) {
+        const outOfStockIds = await this.getProductsWithoutStock();
+
+        // Si no hay productos sin stock, retornar resultado vacío
+        if (outOfStockIds.length === 0) {
+          return {
+            products: [],
+            pagination: {
+              totalCount: 0,
+              totalPages: 0,
+              currentPage: page,
+              hasNextPage: false,
+              hasPreviousPage: false,
+              nextCursor: null,
+              previousCursor: null,
+              limit,
+              itemsInCurrentPage: 0,
+            },
+          };
+        }
+
+        // Agregar filtro de productos sin stock al query principal
+        searchQuery._id = { $in: outOfStockIds };
+      }
+
+      // Calcular skip para la página específica
+      const skip = (page - 1) * limit;
+
+      // Obtener total count
+      const totalCount = await Product.countDocuments(searchQuery);
+      const totalPages = Math.ceil(totalCount / limit);
+
+      // Validar que la página solicitada existe
+      if (page > totalPages && totalCount > 0) {
+        throw new AppError(`La página ${page} no existe. Máximo: ${totalPages}`, 404, 'fail', false);
+      }
+
+      // Obtener productos con skip y limit
+      const products = await Product.find(searchQuery)
+        .sort({ _id: 1 })
+        .skip(skip)
+        .limit(limit + 1) // +1 para determinar si hay siguiente página
+        .select('slug thumbnail primaryImage category subcategory productModel sku code size description')
         .populate({ path: 'category', select: '_id name slug' })
         .populate({ path: 'subcategory', select: '_id name slug' })
         .lean();
-      const productIds = products.map((p) => p._id);
 
-      const variantsByProduct = await ProductVariant.find({
-        product: { $in: productIds },
-        deleted: { $ne: true },
-      })
-        .select('color stock averageCostUSD priceUSD thumbnail images product')
-        .lean();
+      const hasNextPage = products.length > limit;
+      const actualProducts = hasNextPage ? products.slice(0, limit) : products;
+      const itemsInCurrentPage = actualProducts.length;
 
-      // Agrupa las variantes por producto usando mapVariants
-      const variantsMap = new Map<string, ProductVariantSummaryDto[]>();
-      for (const productId of productIds) {
-        const variants = variantsByProduct.filter((variant) => variant.product.toString() === productId.toString());
-        variantsMap.set(productId.toString(), await this.mapVariants(variants as IProductVariantDocument[]));
+      // Usar método centralizado para construir respuesta
+      const result = await this.buildProductResponse(actualProducts, true);
+
+      // Calcular cursors para compatibilidad con navegación cursor-based
+      const nextCursor =
+        hasNextPage && actualProducts.length > 0 ? actualProducts[actualProducts.length - 1]._id.toString() : null;
+
+      // Para previous cursor, calcular el ID del primer elemento de la página anterior
+      let previousCursor: string | null = null;
+      if (page > 1) {
+        const previousSkip = Math.max(0, (page - 2) * limit);
+        const previousPageProduct = await Product.findOne(searchQuery)
+          .sort({ _id: 1 })
+          .skip(previousSkip)
+          .select('_id')
+          .lean();
+        previousCursor = previousPageProduct?._id.toString() || null;
       }
 
-      let result: ProductListItemDto[] = products.map((product) => {
-        const categoryInfo = this.mapCategories(product.category);
-        const subcategoryInfo = this.mapSubcategory(product.subcategory);
+      const pagination: PaginationMetadata = {
+        totalCount,
+        totalPages,
+        currentPage: page,
+        hasNextPage,
+        hasPreviousPage: page > 1,
+        nextCursor,
+        previousCursor,
+        limit,
+        itemsInCurrentPage,
+      };
 
-        return {
-          id: product._id.toString(),
-          slug: product.slug,
-          thumbnail: product.thumbnail,
-          primaryImage: product.primaryImage,
-          category: categoryInfo,
-          subcategory: subcategoryInfo,
-          productModel: product.productModel,
-          sku: product.sku,
-          size: product.size ?? '', // Asignar "" por defecto para compatibilidad con productos legacy sin size
-          description: product.description ?? '',
-          variants: variantsMap.get(product._id.toString()) ?? [],
-        };
-      });
-
-      // Si se solicita filtrar por stock, hacer un filtro adicional en el resultado
-      // para asegurar que solo se incluyan productos con al menos una variante con stock
-      if (inStock === true) {
-        result = result.filter((product) => product.variants.some((variant) => variant.stock > 0));
-      }
-
-      return { products: result };
+      return {
+        products: result,
+        pagination,
+      };
     } catch (error) {
-      logger.error('Error searching products', { error, q });
-      throw new AppError('Error al buscar productos.', 500, 'error', false);
+      logger.error('Error searching products', { error, q, page, limit, inStock, outOfStock });
+      throw error instanceof AppError
+        ? error
+        : new AppError('Error al buscar productos.', 500, 'error', false, {
+            cause: error instanceof Error ? error.message : String(error),
+          });
     }
   }
 
@@ -1474,7 +1552,7 @@ export class ProductService {
 
         // 2. Encontrar todos los productos que coinciden con los criterios
         const products = await Product.find(productQuery)
-          .select('_id productModel sku category subcategory description')
+          .select('_id productModel sku code category subcategory description')
           .session(session)
           .lean();
 
@@ -1521,6 +1599,7 @@ export class ProductService {
             productId: product._id.toString(),
             productModel: product.productModel,
             sku: product.sku,
+            code: product.code,
             color: variant.color,
             oldPrice,
             newPrice,

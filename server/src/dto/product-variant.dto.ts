@@ -55,6 +55,7 @@ export interface ProductVariantWithProductDto extends ProductVariantSummaryDto {
     slug: string;
     productModel: string;
     sku: string;
+    code: string;
     thumbnail: string;
   };
 }

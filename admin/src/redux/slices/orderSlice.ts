@@ -34,6 +34,7 @@ export interface CreateOrderAdminPayload {
   declaredShippingAmount?: string;
   createdAt?: string;
   allowViewInvoice?: boolean;
+  comments?: string;
 }
 
 // Thunk para crear orden como admin

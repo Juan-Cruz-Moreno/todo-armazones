@@ -27,7 +27,8 @@ app.use(
   cors({
     // Allow all origins
     origin: [
-      'https://tienda.todoarmazonesarg.com',
+      'https://www.todoarmazonesarg.com',
+      'https://todoarmazonesarg.com',
       'https://admin.todoarmazonesarg.com',
       'http://localhost:3000',
       'http://localhost:3001',
@@ -91,7 +92,8 @@ app.use(
 // Servir archivos estáticos de /uploads
 const uploadsPath = path.join(process.cwd(), 'uploads');
 const allowedOrigins = [
-  'https://tienda.todoarmazonesarg.com',
+  'https://www.todoarmazonesarg.com',
+  'https://todoarmazonesarg.com',
   'https://admin.todoarmazonesarg.com',
   'http://localhost:3000',
   'http://localhost:3001',

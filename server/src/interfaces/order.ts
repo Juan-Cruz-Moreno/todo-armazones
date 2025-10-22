@@ -41,6 +41,7 @@ export interface IOrder {
   exchangeRate: number; // Tasa de cambio USD a ARS
   itemsCount: number; // Total de unidades físicas = suma de quantity de todos los items
   isVisible: boolean; // Indica si la orden es visible en listados
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 export interface IRefund {

@@ -301,11 +301,6 @@ const OrdersPage = () => {
     setHideSuccess(false);
   };
 
-  // Verificar si hay órdenes canceladas para mostrar la columna de acciones
-  const hasCancelledOrders = ordersByPage.some(
-    (order) => order.orderStatus === OrderStatus.Cancelled
-  );
-
   // Determinar qué órdenes y paginación mostrar
   const displayOrders = selectedUser ? searchResults : ordersByPage;
   const displayPagination = selectedUser ? searchPagination : pagination;
@@ -317,6 +312,11 @@ const OrdersPage = () => {
   const handleDisplayPageChange = selectedUser
     ? handleSearchOrderPageChange
     : handlePageChange;
+
+  // Verificar si hay órdenes canceladas para mostrar la columna de acciones en desktop
+  const hasCancelledOrders = displayOrders.some(
+    (order) => order.orderStatus === OrderStatus.Cancelled
+  );
 
   return (
     <div className="px-4 py-6">
@@ -605,9 +605,7 @@ const OrdersPage = () => {
               <th className="hidden sm:table-cell text-[#222222]">Total USD</th>
               <th className="hidden sm:table-cell text-[#222222]">Total ARS</th>
               {hasCancelledOrders && (
-                <th className="hidden sm:table-cell text-[#222222]">
-                  Acciones
-                </th>
+                <th className="hidden sm:table-cell text-[#222222]">Acciones</th>
               )}
             </tr>
           </thead>
@@ -685,7 +683,19 @@ const OrdersPage = () => {
                     {new Date(order.createdAt).toLocaleDateString()}
                   </td>
                   <td>
-                    <OrderStatusBadge status={order.orderStatus} />
+                    <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
+                      <OrderStatusBadge status={order.orderStatus} />
+                      {order.orderStatus === OrderStatus.Cancelled && (
+                        <button
+                          className="sm:hidden px-3 py-1.5 rounded-md bg-red-500 hover:bg-red-600 text-white border-none shadow-none flex items-center justify-center gap-1 text-sm"
+                          onClick={() => setOrderToHide(order)}
+                          title="Eliminar orden"
+                        >
+                          <Trash size={14} />
+                          Eliminar
+                        </button>
+                      )}
+                    </div>
                   </td>
                   <td className="hidden sm:table-cell text-[#555555]">
                     {order.refund && order.refund.originalSubTotal ? (

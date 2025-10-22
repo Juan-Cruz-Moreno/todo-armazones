@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { useAppDispatch, useAppSelector } from "@/redux/hooks";
-import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch, updateUserAsAdmin, UpdateUserByAdminPayload, resetUpdateUser, fetchMostRecentAddress, resetRecentAddress } from "@/redux/slices/userSlice";
+import { fetchUsers, resetUsers, fetchUserByEmail, createUserByAdmin, CreateUserByAdminPayload, searchUsers, resetSearch, updateUserAsAdmin, UpdateUserByAdminPayload, resetUpdateUser, fetchMostRecentAddress, resetRecentAddress, updateDefaultAddress, UpdateDefaultAddressPayload, resetUpdateAddress } from "@/redux/slices/userSlice";
 
 export const useUsers = () => {
   const dispatch = useAppDispatch();
@@ -24,6 +24,9 @@ export const useUsers = () => {
     recentAddress,
     loadingRecentAddress,
     errorRecentAddress,
+    // Campos para actualización de dirección
+    updatingAddress,
+    updateAddressError,
   } = useAppSelector((state) => state.users);
 
   const findUserByEmail = useCallback(
@@ -94,6 +97,19 @@ export const useUsers = () => {
     dispatch(resetRecentAddress());
   }, [dispatch]);
 
+  // Nuevo método para actualizar la dirección por defecto
+  const updateAddress = useCallback(
+    async (payload: UpdateDefaultAddressPayload) => {
+      const action = await dispatch(updateDefaultAddress(payload));
+      return action;
+    },
+    [dispatch]
+  );
+
+  const clearUpdateAddressError = useCallback(() => {
+    dispatch(resetUpdateAddress());
+  }, [dispatch]);
+
   return {
     users,
     nextCursor,
@@ -124,5 +140,10 @@ export const useUsers = () => {
     loadingRecentAddress,
     errorRecentAddress,
     clearRecentAddress,
+    // Nuevos para actualización de dirección
+    updateAddress,
+    updatingAddress,
+    updateAddressError,
+    clearUpdateAddressError,
   };
 };

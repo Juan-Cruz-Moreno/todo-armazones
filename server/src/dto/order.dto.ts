@@ -20,6 +20,7 @@ export interface CreateOrderDto {
   declaredShippingAmount?: string;
   shippingAddress: IAddress; // Solo objeto, no ObjectId
   paymentMethod: PaymentMethod;
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 // DTO para que el admin cree órdenes directamente con ProductVariants
@@ -38,6 +39,7 @@ export interface CreateOrderAdminDto {
   paymentMethod: PaymentMethod;
   createdAt?: Date; // Fecha personalizada para la orden
   allowViewInvoice?: boolean; // Permitir ver factura al crear
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 // DTOs para actualización completa de órdenes
@@ -62,6 +64,7 @@ export interface UpdateOrderDto {
   deliveryWindow?: string;
   declaredShippingAmount?: string;
   allowViewInvoice?: boolean;
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 // DTO para actualización masiva de estados de órdenes
@@ -77,6 +80,7 @@ export interface ProductBaseResponse {
   thumbnail: string;
   productModel: string;
   sku: string;
+  code: string;
   size?: string | undefined;
 }
 export interface ProductVariantResponse {
@@ -154,6 +158,7 @@ export interface OrderResponseDto {
   exchangeRate: number; // Tasa de cambio USD a ARS
   itemsCount: number; // Total de unidades físicas
   isVisible: boolean; // Indica si la orden es visible en listados
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 // Versiones para usuario usando Omit

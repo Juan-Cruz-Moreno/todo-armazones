@@ -3,11 +3,13 @@
 import React from "react";
 import { AlertTriangle, Package, RefreshCw } from "lucide-react";
 import { StockConflictItem } from "@/interfaces/order";
+import { OrderStatus } from "@/enums/order.enum";
 
 interface StockConflictAlertProps {
   conflicts: StockConflictItem[];
   onRefreshStock: () => void;
   isRefreshing?: boolean;
+  orderStatus?: OrderStatus;
   className?: string;
 }
 
@@ -15,6 +17,7 @@ const StockConflictAlert: React.FC<StockConflictAlertProps> = ({
   conflicts,
   onRefreshStock,
   isRefreshing = false,
+  orderStatus,
   className = "",
 }) => {
   if (!conflicts || conflicts.length === 0) {
@@ -30,8 +33,11 @@ const StockConflictAlert: React.FC<StockConflictAlertProps> = ({
             ⚠️ Conflictos de Stock Detectados
           </h3>
           <p className="text-sm text-amber-700 mb-3">
-            Esta orden está en estado <span className="font-semibold">PENDING_PAYMENT</span> y 
-            algunos productos no tienen stock suficiente para volver al estado ON_HOLD:
+            {orderStatus === OrderStatus.PendingPayment
+              ? "Esta orden está en estado PENDING_PAYMENT y algunos productos no tienen stock suficiente para volver al estado ON_HOLD:"
+              : orderStatus === OrderStatus.Cancelled
+              ? "Esta orden está cancelada y algunos productos no tienen stock suficiente para reactivarla al estado ON_HOLD:"
+              : "Algunos productos no tienen stock suficiente para cambiar esta orden a ON_HOLD:"}
           </p>
           
           <div className="space-y-2 mb-4">
@@ -90,7 +96,7 @@ const StockConflictAlert: React.FC<StockConflictAlertProps> = ({
               <ul className="mt-1 list-disc list-inside space-y-1">
                 <li>Agregar stock para los productos faltantes</li>
                 <li>Reducir la cantidad en la orden</li>
-                <li>Mantener la orden en PENDING_PAYMENT hasta que haya stock</li>
+                <li>Mantener la orden en su estado actual hasta que haya stock disponible</li>
               </ul>
             </div>
             

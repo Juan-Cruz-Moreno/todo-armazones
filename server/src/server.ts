@@ -25,7 +25,8 @@ const startServer = async (): Promise<void> => {
     const io = new Server(server, {
       cors: {
         origin: [
-          'https://tienda.todoarmazonesarg.com',
+          'https://www.todoarmazonesarg.com',
+          'https://todoarmazonesarg.com',
           'https://admin.todoarmazonesarg.com',
           'http://localhost:3000',
           'http://localhost:3001',
@@ -43,19 +44,33 @@ const startServer = async (): Promise<void> => {
 
     // Manejar conexiones Socket.IO generales
     io.on('connection', (socket) => {
-      logger.info('Socket connected', { socketId: socket.id, timestamp: Date.now() });
+      logger.info('Socket connected', {
+        socketId: socket.id,
+        timestamp: Date.now(),
+      });
 
       socket.on('disconnect', (reason) => {
-        logger.info('Socket disconnected', { socketId: socket.id, reason, timestamp: Date.now() });
+        logger.info('Socket disconnected', {
+          socketId: socket.id,
+          reason,
+          timestamp: Date.now(),
+        });
       });
     });
 
     // Manejar conexiones al namespace de catálogo
     catalogNamespace.on('connection', (socket) => {
-      logger.info('Catalog socket connected', { socketId: socket.id, timestamp: Date.now() });
+      logger.info('Catalog socket connected', {
+        socketId: socket.id,
+        timestamp: Date.now(),
+      });
 
       socket.on('join-room', (roomId: string, ack?: (response: { success: boolean; message?: string }) => void) => {
-        logger.info('Join room attempt', { socketId: socket.id, roomId, timestamp: Date.now() });
+        logger.info('Join room attempt', {
+          socketId: socket.id,
+          roomId,
+          timestamp: Date.now(),
+        });
         // Validar roomId como UUID
         const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
         if (!uuidRegex.test(roomId)) {
@@ -66,16 +81,27 @@ const startServer = async (): Promise<void> => {
         const success = joinRoom(socket.id, roomId);
         if (success) {
           socket.join(roomId);
-          logger.info('Room joined successfully', { socketId: socket.id, roomId });
+          logger.info('Room joined successfully', {
+            socketId: socket.id,
+            roomId,
+          });
           ack?.({ success: true });
         } else {
-          logger.warn('Failed to join room', { socketId: socket.id, roomId, reason: 'limit reached or error' });
+          logger.warn('Failed to join room', {
+            socketId: socket.id,
+            roomId,
+            reason: 'limit reached or error',
+          });
           ack?.({ success: false, message: 'Room limit reached' });
         }
       });
 
       socket.on('disconnect', (reason) => {
-        logger.info('Catalog socket disconnected', { socketId: socket.id, reason, timestamp: Date.now() });
+        logger.info('Catalog socket disconnected', {
+          socketId: socket.id,
+          reason,
+          timestamp: Date.now(),
+        });
         // Cleanup: Salir de todas las rooms
         leaveRoom(socket.id);
       });
@@ -85,7 +111,11 @@ const startServer = async (): Promise<void> => {
           socketId: socket.id,
           error: error.message,
         });
-        logger.error('Socket error handled', { error: appError.message, stack: appError.stack, socketId: socket.id });
+        logger.error('Socket error handled', {
+          error: appError.message,
+          stack: appError.stack,
+          socketId: socket.id,
+        });
       });
     });
 

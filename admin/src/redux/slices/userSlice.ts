@@ -31,6 +31,9 @@ interface UserState {
   recentAddress: IAddress | null;
   loadingRecentAddress: boolean;
   errorRecentAddress: string | null;
+  // Campos para actualización de dirección
+  updatingAddress: boolean;
+  updateAddressError: string | null;
 }
 
 const initialState: UserState = {
@@ -53,6 +56,9 @@ const initialState: UserState = {
   recentAddress: null,
   loadingRecentAddress: false,
   errorRecentAddress: null,
+  // Inicializar campos para actualización de dirección
+  updatingAddress: false,
+  updateAddressError: null,
 };
 
 export const fetchUsers = createAsyncThunk<
@@ -125,6 +131,24 @@ export interface CreateUserByAdminPayload {
   dni?: string;
   cuit?: string;
   phone?: string;
+  address?: {
+    firstName?: string;
+    lastName?: string;
+    companyName?: string;
+    email?: string;
+    phoneNumber?: string;
+    dni?: string;
+    cuit?: string;
+    streetAddress?: string;
+    city?: string;
+    state?: string;
+    postalCode?: string;
+    shippingCompany?: string;
+    declaredShippingAmount?: string;
+    deliveryWindow?: string;
+    deliveryType?: string;
+    pickupPointAddress?: string;
+  };
 }
 
 // Payload para actualizar usuario por admin
@@ -144,20 +168,32 @@ export interface UpdateUserByAdminPayload {
 
 // Crear usuario por admin
 export const createUserByAdmin = createAsyncThunk<
-  IUser,
+  { user: IUser; address?: IAddress },
   CreateUserByAdminPayload,
   { rejectValue: string }
 >("users/createUserByAdmin", async (payload, { rejectWithValue }) => {
   try {
     const res = await axiosInstance.post<
-      ApiResponse<{ user: IUser }>
+      ApiResponse<{ user: IUser; address?: IAddress } | IUser>
     >("/auth/create-user-admin", payload);
-    if (res.data.status !== "success" || !res.data.data?.user) {
+    if (res.data.status !== "success" || !res.data.data) {
       return rejectWithValue(
-        res.data.message || "No se pudo crear el usuario"
+        res.data.message || "Error al crear usuario"
       );
     }
-    return res.data.data.user;
+    
+    // Manejar respuesta que puede venir en dos formatos:
+    // 1. { user: IUser } (formato anterior)
+    // 2. { user: IUser, address?: IAddress } (nuevo formato)
+    // 3. IUser directamente (formato legacy)
+    const data = res.data.data;
+    if ('user' in data && typeof data === 'object') {
+      // Formato con { user, address }
+      return data as { user: IUser; address?: IAddress };
+    } else {
+      // Formato legacy: IUser directamente
+      return { user: data as IUser };
+    }
   } catch (err) {
     return rejectWithValue(getErrorMessage(err));
   }
@@ -205,6 +241,50 @@ export const fetchMostRecentAddress = createAsyncThunk<
   }
 });
 
+// Payload para actualizar dirección por defecto
+export interface UpdateDefaultAddressPayload {
+  userId: string;
+  firstName?: string;
+  lastName?: string;
+  companyName?: string;
+  email?: string;
+  phoneNumber?: string;
+  dni?: string;
+  cuit?: string;
+  streetAddress?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  shippingCompany?: string;
+  declaredShippingAmount?: string;
+  deliveryWindow?: string;
+  deliveryType?: string;
+  pickupPointAddress?: string;
+  isDefault?: boolean;
+}
+
+// Actualizar dirección por defecto de un usuario
+export const updateDefaultAddress = createAsyncThunk<
+  IAddress,
+  UpdateDefaultAddressPayload,
+  { rejectValue: string }
+>("users/updateDefaultAddress", async ({ userId, ...updateData }, { rejectWithValue }) => {
+  try {
+    const res = await axiosInstance.patch<ApiResponse<IAddress>>(
+      `/users/${userId}/address/default`,
+      updateData
+    );
+    if (res.data.status !== "success" || !res.data.data) {
+      return rejectWithValue(
+        res.data.message || "No se pudo actualizar la dirección"
+      );
+    }
+    return res.data.data;
+  } catch (err) {
+    return rejectWithValue(getErrorMessage(err));
+  }
+});
+
 const userSlice = createSlice({
   name: "users",
   initialState,
@@ -232,6 +312,10 @@ const userSlice = createSlice({
       state.recentAddress = null;
       state.loadingRecentAddress = false;
       state.errorRecentAddress = null;
+    },
+    resetUpdateAddress: (state) => {
+      state.updatingAddress = false;
+      state.updateAddressError = null;
     },
   },
   extraReducers: (builder) => {
@@ -358,9 +442,24 @@ const userSlice = createSlice({
         state.loadingRecentAddress = false;
         state.errorRecentAddress = action.payload || "No se pudo obtener la dirección";
         state.recentAddress = null;
+      })
+      // updateDefaultAddress
+      .addCase(updateDefaultAddress.pending, (state) => {
+        state.updatingAddress = true;
+        state.updateAddressError = null;
+      })
+      .addCase(updateDefaultAddress.fulfilled, (state, action) => {
+        state.updatingAddress = false;
+        state.updateAddressError = null;
+        // Actualizar la dirección reciente con los nuevos datos
+        state.recentAddress = action.payload;
+      })
+      .addCase(updateDefaultAddress.rejected, (state, action) => {
+        state.updatingAddress = false;
+        state.updateAddressError = action.payload || "No se pudo actualizar la dirección";
       });
   },
 });
 
-export const { resetUsers, resetSearch, resetUpdateUser, resetRecentAddress } = userSlice.actions;
+export const { resetUsers, resetSearch, resetUpdateUser, resetRecentAddress, resetUpdateAddress } = userSlice.actions;
 export default userSlice.reducer;

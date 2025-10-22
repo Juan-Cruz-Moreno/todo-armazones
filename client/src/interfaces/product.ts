@@ -35,6 +35,7 @@ export interface Product {
   subcategory: ProductSubcategory;
   productModel: string;
   sku: string;
+  code: string;
   size?: string;
   description?: string;
   variants: ProductVariant[];

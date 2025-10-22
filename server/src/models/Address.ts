@@ -32,6 +32,7 @@ const addressSchema = new Schema<IAddressDocument>(
       default: DeliveryType.HomeDelivery,
     },
     pickupPointAddress: { type: String, required: false },
+    isDefault: { type: Boolean, required: false, default: false }, // Campo opcional para marcar la dirección como favorita o por defecto
   },
   {
     timestamps: true, // Agrega campos createdAt y updatedAt automáticamente
@@ -51,6 +52,18 @@ addressSchema.pre('validate', function (next) {
     );
   }
 
+  next();
+});
+
+// Hook pre-save para asegurar que solo una dirección por usuario sea favorita (isDefault: true)
+addressSchema.pre('save', async function (next) {
+  if (this.isDefault && this.isModified('isDefault')) {
+    // Desmarcar otras direcciones favoritas del mismo usuario
+    await Address.updateMany(
+      { userId: this.userId, _id: { $ne: this._id }, isDefault: true },
+      { $set: { isDefault: false } },
+    );
+  }
   next();
 });
 

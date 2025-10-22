@@ -207,7 +207,7 @@ const Sidebar = () => {
                                 <li key={sub.slug}>
                                   <Link
                                     href={`/categorias/${category.slug}/${sub.slug}`}
-                                    className={`underline-animate underline-animate-gray pb-1 ${
+                                    className={`underline-animate underline-animate-gray pb-0 ${
                                       isSubActive ? "text-[#222222]" : ""
                                     }`}
                                   >

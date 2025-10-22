@@ -20,8 +20,8 @@ export const updateUserAsAdminSchema = z.object({
   cuit: z.string().min(1).max(50).optional(),
   phone: z.string().min(1).max(50).optional(),
   password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').optional(),
-  role: z.nativeEnum(UserRole).optional(),
-  status: z.nativeEnum(UserStatus).optional(),
+  role: z.enum(UserRole).optional(),
+  status: z.enum(UserStatus).optional(),
 });
 
 export const findUserByEmailSchema = z.object({

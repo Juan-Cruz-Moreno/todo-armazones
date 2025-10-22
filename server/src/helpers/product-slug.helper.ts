@@ -5,13 +5,13 @@ import Product from '@models/Product';
  * Genera un slug único para el producto verificando unicidad en la base de datos
  * Optimizado para reducir colisiones agregando timestamp
  * @param productModel - Modelo del producto
- * @param sku - SKU del producto
+ * @param identifier - Identificador del producto (código o SKU)
  * @returns Slug generado único
  */
-export const generateProductSlug = async (productModel: string, sku: string): Promise<string> => {
+export const generateProductSlug = async (productModel: string, identifier: string): Promise<string> => {
   // Agregar timestamp para reducir colisiones iniciales
   const timestamp = Date.now();
-  const baseSlug = `${limax(productModel)}-${limax(sku)}-${timestamp}`;
+  const baseSlug = `${limax(productModel)}-${limax(identifier)}-${timestamp}`;
   let slug = baseSlug;
   let counter = 1;
 

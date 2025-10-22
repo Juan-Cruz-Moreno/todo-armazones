@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Link from "next/link";
 import SearchIcon from "../atoms/Icon/SearchIcon";
 import { useProducts } from "@/hooks/useProducts";
 import ProductCard from "../molecules/ProductCard";
@@ -31,8 +32,13 @@ const SearchDrawer: React.FC = () => {
 
   const pathname = usePathname();
 
-  const { searchResults, searchLoading, searchProducts, clearSearchResults } =
-    useProducts();
+  const { 
+    searchResults, 
+    searchPagination,
+    searchLoading, 
+    searchProducts, 
+    clearSearchResults 
+  } = useProducts();
 
   // Función debounced para búsqueda automática
   const debouncedSearch = useMemo(
@@ -40,7 +46,8 @@ const SearchDrawer: React.FC = () => {
       debounce((q: string) => {
         if (q.trim()) {
           setSearching(true);
-          searchProducts(q, true);
+          // Buscar solo primera página con límite de 6 resultados
+          searchProducts(q, 1, 6, true); // page=1, limit=6, inStock=true
         } else {
           clearSearchResults();
           setSearching(false);
@@ -161,20 +168,36 @@ const SearchDrawer: React.FC = () => {
                         }}
                         autoFocus
                       />
-                      <button
-                        type="submit"
-                        className="absolute inset-y-0 right-3 flex items-center text-black"
-                        aria-label="Buscar"
-                        tabIndex={0}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          padding: 0,
-                          cursor: "pointer",
-                        }}
-                      >
-                        <SearchIcon />
-                      </button>
+                      {searching ? (
+                        <Link
+                          href={`/tienda/search?q=${encodeURIComponent(query)}`}
+                          className="absolute inset-y-0 right-3 flex items-center text-black"
+                          onClick={() => searchEvents.closeDrawer()}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <SearchIcon />
+                        </Link>
+                      ) : (
+                        <button
+                          type="submit"
+                          className="absolute inset-y-0 right-3 flex items-center text-black"
+                          aria-label="Buscar"
+                          tabIndex={0}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            padding: 0,
+                            cursor: "pointer",
+                          }}
+                        >
+                          <SearchIcon />
+                        </button>
+                      )}
                       <style>{`
                         input::placeholder {
                           color: #888888 !important;
@@ -214,6 +237,22 @@ const SearchDrawer: React.FC = () => {
                         <ProductCard key={product.id} {...product} />
                       ))}
                     </div>
+                    
+                    {/* Link para ver todos los resultados */}
+                    {!searchLoading && searchResults.length > 0 && searchPagination && (
+                      <div className="mt-6 mb-8 text-center">
+                        <Link
+                          href={`/tienda/search?q=${encodeURIComponent(query)}`}
+                          className="inline-block px-6 py-3 bg-black text-white font-medium hover:bg-gray-800 transition-colors"
+                          onClick={() => searchEvents.closeDrawer()}
+                        >
+                          Ver todos los resultados
+                          {searchPagination.totalCount > searchResults.length && 
+                            ` (${searchPagination.totalCount} productos)`
+                          }
+                        </Link>
+                      </div>
+                    )}
                   </motion.div>
                 )}
               </div>

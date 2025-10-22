@@ -135,6 +135,7 @@ const orderSchema = new Schema<IOrderDocument>(
     exchangeRate: { type: Number, required: true, default: 1 }, // Tasa de cambio USD a ARS
     itemsCount: { type: Number, required: true, default: 0 }, // Total de unidades físicas
     isVisible: { type: Boolean, required: true, default: true }, // Indica si la orden es visible en listados
+    comments: { type: String, required: false }, // Comentarios opcionales sobre la orden
   },
   {
     timestamps: true,

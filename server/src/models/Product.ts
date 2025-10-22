@@ -21,6 +21,7 @@ const productSchema = new Schema<IProductDocument>(
     },
     productModel: { type: String, required: true },
     sku: { type: String, required: true, unique: true },
+    code: { type: String, required: true, unique: true },
     size: { type: String, required: true },
     description: { type: String, required: false },
     deleted: { type: Boolean, default: false, required: true },
@@ -29,7 +30,7 @@ const productSchema = new Schema<IProductDocument>(
 );
 
 // Índices para mejorar la búsqueda
-productSchema.index({ productModel: 'text', sku: 'text' }); // Índice de texto para búsqueda por modelo de producto y SKU
+productSchema.index({ productModel: 'text', sku: 'text', code: 'text' }); // Índice de texto para búsqueda por modelo de producto, SKU y código
 
 productSchema.index({ category: 1 }); // Índice para categoría
 

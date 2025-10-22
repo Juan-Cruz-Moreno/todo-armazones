@@ -35,6 +35,7 @@ export interface Product {
   subcategory: ProductSubcategory;
   productModel: string;
   sku: string;
+  code: string;
   size?: string; // Mantenido como opcional para compatibilidad legacy
   description?: string;
   variants: ProductVariant[];
@@ -83,6 +84,7 @@ export interface CreateProductPayload {
     subcategory: string; // ID de subcategoría
     productModel: string;
     sku: string;
+    code: string;
     size: string; // Ahora requerido para creación
     description?: string;
     primaryImageOrder?: number[]; // Índices para ordenar las primaryImage
@@ -111,6 +113,7 @@ export interface UpdateProductPayload {
     subcategory?: string;
     productModel?: string;
     sku?: string;
+    code?: string;
     size?: string;
     description?: string;
     primaryImageOrder?: number[]; // Índices para ordenar las primaryImage
@@ -152,6 +155,7 @@ export interface ProductVariantPriceUpdate {
   productId: string;
   productModel: string;
   sku: string;
+  code: string;
   color: { name: string; hex: string };
   oldPrice: number;
   newPrice: number;
@@ -178,6 +182,7 @@ export interface ProductVariantWithProduct extends ProductVariant {
     slug: string;
     productModel: string;
     sku: string;
+    code: string;
     thumbnail: string;
   };
 }
@@ -202,5 +207,4 @@ export interface LowStockFilters {
   page?: number;
   limit?: number;
   minStock?: number;
-  maxStock?: number;
 }

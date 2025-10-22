@@ -36,6 +36,7 @@ export interface Order {
   itemsCount: number;
   createdAt: string;
   updatedAt: string;
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 export interface OrderItem {
@@ -114,6 +115,7 @@ export interface CreateOrderPayload {
     pickupPointAddress?: string; // Nuevo campo
   };
   paymentMethod: PaymentMethod;
+  comments?: string; // Comentarios opcionales sobre la orden
 }
 
 export interface OrdersResponse {

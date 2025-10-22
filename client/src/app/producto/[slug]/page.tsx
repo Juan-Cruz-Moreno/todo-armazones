@@ -189,19 +189,16 @@ const ProductPage = () => {
                 Inicio
               </Link>
             </li>
-            <li>
-              {productDetail.category.map((cat, idx, arr) => (
-                <span key={cat.slug}>
-                  <Link
-                    href={`/categorias/${cat.slug}`}
-                    className="underline-animate no-underline"
-                  >
-                    {cat.name}
-                  </Link>
-                  {idx < arr.length - 1 && "\u00A0"}
-                </span>
-              ))}
-            </li>
+            {productDetail.category.map((cat) => (
+              <li key={cat.slug}>
+                <Link
+                  href={`/categorias/${cat.slug}`}
+                  className="underline-animate no-underline"
+                >
+                  {cat.name}
+                </Link>
+              </li>
+            ))}
             {productDetail.category.map((cat) => (
               <li key={`subcat-${cat.slug}`}>
                 <Link

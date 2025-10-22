@@ -20,6 +20,7 @@ export interface ProductVariantPriceUpdateDto {
   productId: string;
   productModel: string;
   sku: string;
+  code: string;
   color: { name: string; hex: string };
   oldPrice: number;
   newPrice: number;

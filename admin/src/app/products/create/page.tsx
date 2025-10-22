@@ -78,6 +78,7 @@ export default function CreateProductPage() {
         subcategory: "",
         productModel: "",
         sku: "",
+        code: "",
         size: "",
         description: "",
       },
@@ -426,6 +427,16 @@ export default function CreateProductPage() {
           {errors.product?.sku && (
             <p className="text-red-500 text-sm">{errors.product.sku.message}</p>
           )}
+          <label className="text-[#7A7A7A]">Código</label>
+          <input
+            className="input input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
+            placeholder="Código"
+            {...register("product.code")}
+            required
+          />
+          {errors.product?.code && (
+            <p className="text-red-500 text-sm">{errors.product.code.message}</p>
+          )}
           <label className="text-[#7A7A7A]">Calibre</label>
           <input
             className="input input-bordered bg-[#FFFFFF] border border-[#e1e1e1]"
@@ -647,6 +658,10 @@ export default function CreateProductPage() {
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">SKU:</span>
           <span className="ml-2">{watchedProduct.sku || ""}</span>
+        </div>
+        <div className="mb-2 w-full">
+          <span className="font-semibold text-[#7A7A7A]">Código:</span>
+          <span className="ml-2">{watchedProduct.code || ""}</span>
         </div>
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Tamaño:</span>

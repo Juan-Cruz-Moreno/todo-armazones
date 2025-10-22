@@ -330,6 +330,7 @@ export class OrderService {
       exchangeRate,
       itemsCount: this.calculateItemsCount(items),
       isVisible: true,
+      ...(orderData.comments && { comments: orderData.comments }),
     };
   }
 
@@ -406,6 +407,7 @@ export class OrderService {
       thumbnail: product.thumbnail,
       productModel: product.productModel,
       sku: product.sku,
+      code: product.code,
       size: product.size,
     };
   }
@@ -477,6 +479,7 @@ export class OrderService {
       exchangeRate: order.exchangeRate,
       itemsCount: order.itemsCount,
       isVisible: order.isVisible,
+      ...(order.comments && { comments: order.comments }),
     };
   }
 
@@ -511,6 +514,7 @@ export class OrderService {
       exchangeRate: order.exchangeRate,
       itemsCount: order.itemsCount,
       isVisible: order.isVisible,
+      ...(order.comments && { comments: order.comments }),
     };
   }
 
@@ -559,6 +563,12 @@ export class OrderService {
 
       // Crear dirección de envío
       const shippingAddressId = await this.createShippingAddress(orderData.shippingAddress, userId, session);
+
+      // Si el usuario no tiene dirección favorita, marcar esta como favorita
+      const hasDefaultAddress = await Address.countDocuments({ userId, isDefault: true }).session(session);
+      if (hasDefaultAddress === 0) {
+        await Address.findByIdAndUpdate(shippingAddressId, { isDefault: true }, { session });
+      }
 
       // Verificar y actualizar el usuario si falta dni, cuit o phone
       const user = await User.findById(userId).session(session);
@@ -717,6 +727,14 @@ export class OrderService {
 
       // Crear dirección de envío
       const shippingAddressId = await this.createShippingAddress(orderData.shippingAddress, orderData.userId, session);
+
+      // Si el usuario no tiene dirección favorita, marcar esta como favorita
+      const hasDefaultAddress = await Address.countDocuments({ userId: orderData.userId, isDefault: true }).session(
+        session,
+      );
+      if (hasDefaultAddress === 0) {
+        await Address.findByIdAndUpdate(shippingAddressId, { isDefault: true }, { session });
+      }
 
       // Obtener número de orden
       const orderNumber = await this.getNextOrderNumber(session);
@@ -932,7 +950,7 @@ export class OrderService {
         throw new AppError('No se puede cancelar un pedido que ya ha sido reembolsado.', 400, 'fail');
       }
 
-      // Restaurar stock de cada item registrando el movimiento de inventario
+      // Liberar stock de cada item registrando el movimiento de inventario
       for (const item of order.items) {
         // Crear entrada de stock usando el InventoryService para registrar el movimiento
         await this.inventoryService.createStockEntryWithSession(
@@ -942,7 +960,7 @@ export class OrderService {
           item.costUSDAtPurchase, // Usar el costo que se registró al momento de la compra
           StockMovementReason.RETURN,
           `Orden-${order.orderNumber}`, // Referencia a la orden cancelada
-          `Cancelación de orden ${order.orderNumber} - Devolución de stock`,
+          `Cancelación de orden ${order.orderNumber} - Liberación de stock`,
           userId, // Pasar el userId para trazabilidad
         );
 
@@ -958,7 +976,7 @@ export class OrderService {
       order.orderStatus = OrderStatus.Cancelled;
       await order.save({ session });
 
-      logger.info('Pedido cancelado y stock restaurado con movimientos de inventario', {
+      logger.info('Pedido cancelado y stock liberado con movimientos de inventario', {
         orderId: order._id,
         orderNumber: order.orderNumber,
         cancelledBy: userId?.toString(),
@@ -1532,7 +1550,7 @@ export class OrderService {
   /**
    * Método privado para actualizar el estado de una orden
    * Puede ser usado dentro de transacciones y por otros métodos
-   * Maneja lógica especial de stock para PENDING_PAYMENT y ON_HOLD
+   * Maneja lógica especial de stock para PENDING_PAYMENT, CANCELLED y ON_HOLD
    */
   private async updateOrderStatus(
     order: IOrderDocument,
@@ -1540,27 +1558,8 @@ export class OrderService {
     userId?: Types.ObjectId,
     session?: mongoose.ClientSession,
   ): Promise<OrderResponseDto> {
-    const validTransitions: Record<OrderStatus, OrderStatus[]> = {
-      [OrderStatus.Processing]: [
-        OrderStatus.PendingPayment,
-        OrderStatus.OnHold,
-        OrderStatus.Completed,
-        OrderStatus.Cancelled,
-      ],
-      [OrderStatus.PendingPayment]: [OrderStatus.OnHold, OrderStatus.Completed, OrderStatus.Cancelled],
-      [OrderStatus.OnHold]: [OrderStatus.PendingPayment, OrderStatus.Completed, OrderStatus.Cancelled],
-      [OrderStatus.Completed]: [OrderStatus.Refunded],
-      [OrderStatus.Cancelled]: [],
-      [OrderStatus.Refunded]: [],
-    };
-
     if (order.orderStatus === newStatus) {
       throw new AppError('El estado del pedido ya es el mismo.', 400, 'fail');
-    }
-
-    const allowed = validTransitions[order.orderStatus];
-    if (!allowed.includes(newStatus)) {
-      throw new AppError(`No se puede cambiar el estado de ${order.orderStatus} a ${newStatus}.`, 400, 'fail');
     }
 
     // Si el nuevo estado es Cancelled, usar cancelOrder
@@ -1574,9 +1573,16 @@ export class OrderService {
       await this.releaseOrderStock(order, session, userId);
     }
 
-    // Lógica especial para ON_HOLD: verificar y reservar stock
-    if (newStatus === OrderStatus.OnHold && order.orderStatus === OrderStatus.PendingPayment) {
+    // Lógica especial para ON_HOLD: verificar y reservar stock si viene de PENDING_PAYMENT o CANCELLED
+    if (
+      newStatus === OrderStatus.OnHold &&
+      (order.orderStatus === OrderStatus.PendingPayment || order.orderStatus === OrderStatus.Cancelled)
+    ) {
       await this.reserveOrderStock(order, session, userId);
+      // Si viene de CANCELLED, restaurar los valores financieros de cada item
+      if (order.orderStatus === OrderStatus.Cancelled) {
+        await this.restoreOrderItemsFinancialValues(order);
+      }
     }
 
     // Actualizar el estado
@@ -1600,7 +1606,8 @@ export class OrderService {
   }
 
   /**
-   * Libera el stock de todos los items de una orden (para PENDING_PAYMENT)
+   * Libera el stock de todos los items de una orden
+   * Se usa cuando se cambia a PENDING_PAYMENT o CANCELLED
    * Devuelve los productos al inventario
    */
   private async releaseOrderStock(
@@ -1644,7 +1651,33 @@ export class OrderService {
   }
 
   /**
-   * Reserva el stock para todos los items de una orden (para ON_HOLD desde PENDING_PAYMENT)
+   * Restaura los valores financieros de cada item de una orden cancelada
+   * Recalcula contributionMarginUSD y cogsUSD basándose en los precios y costos registrados
+   * y luego recalcula los totales de la orden
+   */
+  private async restoreOrderItemsFinancialValues(order: IOrderDocument): Promise<void> {
+    // Restaurar valores financieros de cada item
+    for (const item of order.items) {
+      // Recalcular contributionMarginUSD: (precio - costo) * cantidad
+      item.contributionMarginUSD = (item.priceUSDAtPurchase - item.costUSDAtPurchase) * item.quantity;
+
+      // Recalcular cogsUSD: costo * cantidad
+      item.cogsUSD = item.costUSDAtPurchase * item.quantity;
+    }
+
+    // Recalcular los totales de la orden basándose en los items restaurados
+    await this.recalculateOrderTotals(order);
+
+    logger.info('Valores financieros de items restaurados en orden', {
+      orderId: order._id.toString(),
+      orderNumber: order.orderNumber,
+      itemsCount: order.items.length,
+    });
+  }
+
+  /**
+   * Reserva el stock para todos los items de una orden
+   * Funciona para reactivar órdenes desde PENDING_PAYMENT o CANCELLED
    * Verifica disponibilidad antes de reservar
    */
   private async reserveOrderStock(
@@ -1681,7 +1714,7 @@ export class OrderService {
           session!,
           StockMovementReason.SALE,
           `Orden-${order.orderNumber}`,
-          `Reserva de stock - reactivación desde PENDING_PAYMENT`,
+          `Reserva de stock - reactivación desde ${order.orderStatus}`,
           userId,
         );
 
@@ -1690,7 +1723,8 @@ export class OrderService {
           orderNumber: order.orderNumber,
           productVariantId: item.productVariant,
           quantity: item.quantity,
-          reason: 'ON_HOLD_RESERVE',
+          reason: 'REACTIVATION_RESERVE',
+          fromStatus: order.orderStatus,
         });
       } catch (error) {
         logger.error('Error al reservar stock para item de orden', {
@@ -1800,8 +1834,11 @@ export class OrderService {
           throw new AppError('Orden no encontrada', 404, 'fail');
         }
 
-        // Si es cambio de PENDING_PAYMENT a ON_HOLD, verificar stock primero
-        if (newStatus === OrderStatus.OnHold && order.orderStatus === OrderStatus.PendingPayment) {
+        // Si es cambio de PENDING_PAYMENT o CANCELLED a ON_HOLD, verificar stock primero
+        if (
+          newStatus === OrderStatus.OnHold &&
+          (order.orderStatus === OrderStatus.PendingPayment || order.orderStatus === OrderStatus.Cancelled)
+        ) {
           const conflicts = await this.checkStockAvailability(order.items, session);
 
           if (conflicts.length > 0) {
@@ -1914,6 +1951,11 @@ export class OrderService {
       // Actualizar allowViewInvoice si se proporciona
       if (updateData.allowViewInvoice !== undefined) {
         order.allowViewInvoice = updateData.allowViewInvoice;
+      }
+
+      // Actualizar comments si se proporciona
+      if (updateData.comments !== undefined) {
+        order.comments = updateData.comments;
       }
 
       // Actualizar dirección de envío si se proporciona

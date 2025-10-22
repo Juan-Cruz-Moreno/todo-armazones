@@ -197,4 +197,34 @@ export class UserController {
       res.status(500).json(response);
     }
   };
+
+  /**
+   * Actualiza la dirección favorita (isDefault: true) de un usuario (solo admin)
+   */
+  public updateDefaultAddress = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const { userId } = req.params;
+      const updateData = req.body;
+
+      const updatedAddress = await this.userService.updateDefaultAddress(userId, updateData);
+      const response: ApiResponse<typeof updatedAddress> = {
+        status: 'success',
+        data: updatedAddress,
+      };
+      res.status(200).json(response);
+    } catch (error) {
+      const response: ApiResponse =
+        error instanceof Error && 'stack' in error
+          ? {
+              status: 'error',
+              message: 'Failed to update default address',
+              details: { message: error.message, stack: error.stack },
+            }
+          : {
+              status: 'error',
+              message: 'Failed to update default address',
+            };
+      res.status(500).json(response);
+    }
+  };
 }

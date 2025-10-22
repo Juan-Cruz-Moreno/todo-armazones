@@ -74,8 +74,70 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
   const shippingMethodLabel = translateShippingMethod(orderData.shippingMethod as ShippingMethod);
   const paymentMethodLabel = translatePaymentMethod(orderData.paymentMethod as PaymentMethod);
 
+  // Función para determinar la prioridad de un code
+  function getCodePriority(code: string): number {
+    // Remover guiones y espacios para análisis
+    const cleanCode = code.replace(/[-\s]/g, '');
+
+    if (cleanCode.length === 0) return 4; // Codes vacíos al final
+
+    const firstChar = cleanCode[0];
+
+    // Prioridad 1: Inicia con letra
+    if (/[A-Za-z]/.test(firstChar)) {
+      // Si tiene números después de la letra, es prioridad 2
+      if (cleanCode.length > 1 && /\d/.test(cleanCode.slice(1))) {
+        return 2; // Prioridad 2: letra + número
+      }
+      return 1; // Prioridad 1: solo letras
+    }
+
+    // Prioridad 3: Inicia con número
+    if (/\d/.test(firstChar)) {
+      return 3;
+    }
+
+    return 4; // Otros caracteres al final
+  }
+
+  // Función de comparación para ordenar codes
+  function compareCodes(codeA: string, codeB: string): number {
+    const priorityA = getCodePriority(codeA);
+    const priorityB = getCodePriority(codeB);
+
+    // Primero ordenar por prioridad
+    if (priorityA !== priorityB) {
+      return priorityA - priorityB;
+    }
+
+    // Dentro de la misma prioridad, ordenar alfabéticamente/numéricamente
+    // Convertir a mayúsculas para comparación case-insensitive
+    const cleanCodeA = codeA.toUpperCase();
+    const cleanCodeB = codeB.toUpperCase();
+
+    // Para prioridad 3 (números), ordenar numéricamente de menor a mayor
+    if (priorityA === 3) {
+      const numA = parseInt(cleanCodeA.replace(/\D/g, ''), 10);
+      const numB = parseInt(cleanCodeB.replace(/\D/g, ''), 10);
+
+      if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {
+        return numA - numB;
+      }
+    }
+
+    // Ordenamiento alfabético estándar
+    return cleanCodeA.localeCompare(cleanCodeB, 'es', { numeric: true, sensitivity: 'base' });
+  }
+
+  // Ordenar items por code antes de formatear
+  const sortedItems = [...orderData.items].sort((a, b) => {
+    const codeA = a.productVariant.product.code;
+    const codeB = b.productVariant.product.code;
+    return compareCodes(codeA, codeB);
+  });
+
   // Formatear montos en USD
-  const itemsFormatted = orderData.items.map((item) => ({
+  const itemsFormatted = sortedItems.map((item) => ({
     ...item,
     priceUSDAtPurchase: formatCurrency(item.priceUSDAtPurchase, 'en-US', 'USD'),
     subTotal: formatCurrency(item.subTotal, 'en-US', 'USD'),
@@ -85,6 +147,20 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
       colorHex: item.productVariant.color.hex, // Extraemos específicamente color.hex
     },
   }));
+
+  // Paginación manual de items (11 items por página)
+  const ITEMS_PER_PAGE = 11;
+  const itemPages: Array<{ items: typeof itemsFormatted; pageItemsCount: number }> = [];
+
+  for (let i = 0; i < itemsFormatted.length; i += ITEMS_PER_PAGE) {
+    const pageItems = itemsFormatted.slice(i, i + ITEMS_PER_PAGE);
+    // Calcular el total de unidades en esta página
+    const pageItemsCount = pageItems.reduce((sum, item) => sum + item.quantity, 0);
+    itemPages.push({
+      items: pageItems,
+      pageItemsCount,
+    });
+  }
 
   const subTotalAmountFormatted = formatCurrency(orderData.subTotal, 'en-US', 'USD');
 
@@ -113,6 +189,7 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
     shippingMethodLabel,
     paymentMethodLabel,
     items: itemsFormatted,
+    itemPages, // Páginas de items con conteo parcial
     subTotal: subTotalAmountFormatted,
     totalAmount: totalAmountFormatted,
     totalAmountARS: totalAmountARSFormatted,

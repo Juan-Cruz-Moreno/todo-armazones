@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { AuthController } from '@controllers/auth.controller';
 import { validateRequest } from '@middlewares/validate-request';
-import { loginSchema, registerSchema } from 'schemas/auth.schema';
+import { loginSchema, registerSchema, createUserByAdminSchema } from 'schemas/auth.schema';
 import { forgotPasswordSchema, resetPasswordBodySchema } from 'schemas/reset-password.schema';
 import { checkAdmin } from '@middlewares/authMiddleware';
 
@@ -14,7 +14,12 @@ router.post('/login-admin', validateRequest({ body: loginSchema }), authControll
 router.post('/logout', authController.logout);
 router.get('/me', authController.currentUser);
 router.get('/me-admin', authController.checkAdminSession);
-router.post('/create-user-admin', checkAdmin, authController.createUserByAdmin);
+router.post(
+  '/create-user-admin',
+  checkAdmin,
+  validateRequest({ body: createUserByAdminSchema }),
+  authController.createUserByAdmin,
+);
 router.post('/forgot-password', validateRequest({ body: forgotPasswordSchema }), authController.forgotPassword);
 router.post('/reset-password', validateRequest({ body: resetPasswordBodySchema }), authController.resetPassword);
 
