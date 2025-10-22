@@ -1767,7 +1767,7 @@ const EditOrderPage = () => {
                             >
                               <td className="py-2 px-2">
                                 <a
-                                  href={`https://tienda.todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
+                                  href={`https://todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="block"

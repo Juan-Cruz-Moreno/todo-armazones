@@ -862,7 +862,7 @@ export default function EditProductPage({
         <div className="mb-2 w-full">
           <span className="font-semibold text-[#7A7A7A]">Modelo:</span>
           <a
-            href={`https://tienda.todoarmazonesarg.com/producto/${
+            href={`https://todoarmazonesarg.com/producto/${
               product.slug || ""
             }`}
             target="_blank"

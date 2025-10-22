@@ -458,7 +458,7 @@ const OrdersPage = () => {
                             >
                               <td>
                                 <a
-                                  href={`https://tienda.todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
+                                  href={`https://todoarmazonesarg.com/producto/${item.productVariant.product.slug}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="block"
