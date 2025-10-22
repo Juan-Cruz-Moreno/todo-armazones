@@ -238,9 +238,11 @@ export interface LowStockAlertDto {
 }
 
 // Interface para analytics por categoría
+// NOTA: Los productos con una sola categoría se agrupan bajo esa categoría específica.
+// Los productos con múltiples categorías se agrupan bajo categoryId: "unisex", categoryName: "Unisex"
 export interface CategoryStockAnalyticsDto {
-  categoryId: string;
-  categoryName: string;
+  categoryId: string; // ID de la categoría o "unisex" para productos con múltiples categorías
+  categoryName: string; // Nombre de la categoría o "Unisex"
   totalStock: number;
   totalValuationAtCost: number;
   totalValuationAtRetail: number;
@@ -260,9 +262,11 @@ export interface SubcategoryStockAnalyticsDto {
 }
 
 // Interface para analytics mixtas de categoría y subcategoría
+// NOTA: Los productos con una sola categoría se agrupan bajo esa categoría específica.
+// Los productos con múltiples categorías se agrupan bajo categoryId: "unisex", categoryName: "Unisex"
 export interface CategorySubcategoryStockAnalyticsDto {
-  categoryId: string;
-  categoryName: string;
+  categoryId: string; // ID de la categoría o "unisex" para productos con múltiples categorías
+  categoryName: string; // Nombre de la categoría o "Unisex"
   subcategories: Array<{
     subcategoryId: string;
     subcategoryName: string;

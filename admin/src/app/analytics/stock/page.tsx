@@ -567,40 +567,57 @@ const StockAnalyticsPage = () => {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {categoryAnalytics?.map((category) => (
-                    <div key={category.categoryId} className="border rounded-lg p-6">
-                      <h3 className="text-lg font-semibold mb-4 text-gray-900">{category.categoryName}</h3>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm text-gray-500">Stock Total</p>
-                          <p className="font-semibold text-gray-900">{formatNumber(category.totalStock)}</p>
+                  {categoryAnalytics?.map((category) => {
+                    const isUnisex = category.categoryId === 'unisex';
+                    return (
+                      <div 
+                        key={category.categoryId} 
+                        className={`border rounded-lg p-6 ${
+                          isUnisex 
+                            ? 'border-purple-300 bg-purple-50' 
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-gray-900">{category.categoryName}</h3>
+                          {isUnisex && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                              Múltiples categorías
+                            </span>
+                          )}
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Productos</p>
-                          <p className="font-semibold text-gray-900">{category.productCount}</p>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <p className="text-sm text-gray-500">Stock Total</p>
+                            <p className="font-semibold text-gray-900">{formatNumber(category.totalStock)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Productos</p>
+                            <p className="font-semibold text-gray-900">{category.productCount}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Valuación Costo</p>
+                            <p className="font-semibold text-gray-900">{formatCurrency(category.totalValuationAtCost)}</p>
+                          </div>
+                          <div>
+                            <p className="text-sm text-gray-500">Valuación Retail</p>
+                            <p className="font-semibold text-gray-900">{formatCurrency(category.totalValuationAtRetail)}</p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Valuación Costo</p>
-                          <p className="font-semibold text-gray-900">{formatCurrency(category.totalValuationAtCost)}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-gray-500">Valuación Retail</p>
-                          <p className="font-semibold text-gray-900">{formatCurrency(category.totalValuationAtRetail)}</p>
+                        <div className="mt-4 pt-4 border-t">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm text-gray-500">Margen de ganancia</span>
+                            <span className="font-semibold text-green-600">
+                              {category.totalValuationAtCost > 0 
+                                ? `${(((category.totalValuationAtRetail - category.totalValuationAtCost) / category.totalValuationAtCost) * 100).toFixed(1)}%`
+                                : '0%'
+                              }
+                            </span>
+                          </div>
                         </div>
                       </div>
-                      <div className="mt-4 pt-4 border-t">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-gray-500">Margen de ganancia</span>
-                          <span className="font-semibold text-green-600">
-                            {category.totalValuationAtCost > 0 
-                              ? `${(((category.totalValuationAtRetail - category.totalValuationAtCost) / category.totalValuationAtCost) * 100).toFixed(1)}%`
-                              : '0%'
-                            }
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -683,24 +700,44 @@ const StockAnalyticsPage = () => {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {categorySubcategoryAnalytics?.map((categoryData) => (
-                    <div key={categoryData.categoryId} className="border border-gray-200 rounded-lg overflow-hidden">
-                      {/* Category Header */}
-                      <div className="bg-blue-50 px-6 py-4 border-b border-gray-200">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-900">{categoryData.categoryName}</h3>
-                            <div className="flex items-center space-x-4 mt-2 text-sm text-gray-600">
-                              <span className="flex items-center space-x-1">
-                                <Package className="h-4 w-4" />
-                                <span>{categoryData.categoryTotals.productCount} productos</span>
-                              </span>
-                              <span className="flex items-center space-x-1">
-                                <Grid3X3 className="h-4 w-4" />
-                                <span>{categoryData.categoryTotals.variantCount} variantes</span>
-                              </span>
+                  {categorySubcategoryAnalytics?.map((categoryData) => {
+                    const isUnisex = categoryData.categoryId === 'unisex';
+                    return (
+                      <div 
+                        key={categoryData.categoryId} 
+                        className={`border rounded-lg overflow-hidden ${
+                          isUnisex 
+                            ? 'border-purple-300' 
+                            : 'border-gray-200'
+                        }`}
+                      >
+                        {/* Category Header */}
+                        <div className={`px-6 py-4 border-b ${
+                          isUnisex 
+                            ? 'bg-purple-50 border-purple-200' 
+                            : 'bg-blue-50 border-gray-200'
+                        }`}>
+                          <div className="flex justify-between items-start">
+                            <div>
+                              <div className="flex items-center space-x-2 mb-2">
+                                <h3 className="text-xl font-bold text-gray-900">{categoryData.categoryName}</h3>
+                                {isUnisex && (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                    Múltiples categorías
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center space-x-4 text-sm text-gray-600">
+                                <span className="flex items-center space-x-1">
+                                  <Package className="h-4 w-4" />
+                                  <span>{categoryData.categoryTotals.productCount} productos</span>
+                                </span>
+                                <span className="flex items-center space-x-1">
+                                  <Grid3X3 className="h-4 w-4" />
+                                  <span>{categoryData.categoryTotals.variantCount} variantes</span>
+                                </span>
+                              </div>
                             </div>
-                          </div>
                           <div className="text-right">
                             <div className="text-2xl font-bold text-gray-900">
                               {formatCurrency(categoryData.categoryTotals.totalValuationAtRetail)}
@@ -782,7 +819,8 @@ const StockAnalyticsPage = () => {
                         </div>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>

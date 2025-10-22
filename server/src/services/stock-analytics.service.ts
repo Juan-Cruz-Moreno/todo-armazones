@@ -303,6 +303,8 @@ export class StockAnalyticsService {
 
   /**
    * Obtiene métricas de stock por categoría
+   * Los productos con una sola categoría se cuentan en esa categoría específica.
+   * Los productos con múltiples categorías se cuentan en "Unisex".
    */
   public async getStockAnalyticsByCategory(): Promise<
     Array<{
@@ -332,35 +334,74 @@ export class StockAnalyticsService {
       {
         $unwind: '$productInfo',
       },
+      // Añadir campo para determinar si es unisex (múltiples categorías)
       {
-        $unwind: '$productInfo.category',
-      },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: 'productInfo.category',
-          foreignField: '_id',
-          as: 'categoryInfo',
+        $addFields: {
+          categoryCount: { $size: '$productInfo.category' },
+          isUnisex: { $gt: [{ $size: '$productInfo.category' }, 1] },
         },
       },
+      // Caso 1: Productos con una sola categoría
       {
-        $unwind: '$categoryInfo',
-      },
-      {
-        $group: {
-          _id: '$productInfo.category',
-          categoryName: { $first: '$categoryInfo.name' },
-          totalStock: { $sum: '$stock' },
-          totalValuationAtCost: {
-            $sum: { $multiply: ['$stock', '$averageCostUSD'] },
-          },
-          totalValuationAtRetail: {
-            $sum: { $multiply: ['$stock', '$priceUSD'] },
-          },
-          products: { $addToSet: '$product' },
-          variantCount: { $sum: 1 },
+        $facet: {
+          singleCategory: [
+            { $match: { isUnisex: false } },
+            { $unwind: '$productInfo.category' },
+            {
+              $lookup: {
+                from: 'categories',
+                localField: 'productInfo.category',
+                foreignField: '_id',
+                as: 'categoryInfo',
+              },
+            },
+            { $unwind: '$categoryInfo' },
+            {
+              $group: {
+                _id: '$productInfo.category',
+                categoryName: { $first: '$categoryInfo.name' },
+                totalStock: { $sum: '$stock' },
+                totalValuationAtCost: {
+                  $sum: { $multiply: ['$stock', '$averageCostUSD'] },
+                },
+                totalValuationAtRetail: {
+                  $sum: { $multiply: ['$stock', '$priceUSD'] },
+                },
+                products: { $addToSet: '$product' },
+                variantCount: { $sum: 1 },
+              },
+            },
+          ],
+          // Caso 2: Productos con múltiples categorías (Unisex)
+          multiCategory: [
+            { $match: { isUnisex: true } },
+            {
+              $group: {
+                _id: 'unisex',
+                categoryName: { $first: 'Unisex' },
+                totalStock: { $sum: '$stock' },
+                totalValuationAtCost: {
+                  $sum: { $multiply: ['$stock', '$averageCostUSD'] },
+                },
+                totalValuationAtRetail: {
+                  $sum: { $multiply: ['$stock', '$priceUSD'] },
+                },
+                products: { $addToSet: '$product' },
+                variantCount: { $sum: 1 },
+              },
+            },
+          ],
         },
       },
+      // Unir ambos resultados
+      {
+        $project: {
+          combined: { $concatArrays: ['$singleCategory', '$multiCategory'] },
+        },
+      },
+      { $unwind: '$combined' },
+      { $replaceRoot: { newRoot: '$combined' } },
+      // Formatear resultado final
       {
         $project: {
           categoryId: { $toString: '$_id' },
@@ -448,6 +489,8 @@ export class StockAnalyticsService {
 
   /**
    * Obtiene métricas de stock con vista jerárquica: categorías con sus subcategorías
+   * Los productos con una sola categoría se cuentan en esa categoría específica.
+   * Los productos con múltiples categorías se cuentan en "Unisex".
    */
   public async getStockAnalyticsByCategoryWithSubcategories(): Promise<ICategorySubcategoryStockAnalytics[]> {
     const pipeline: PipelineStage[] = [
@@ -467,19 +510,12 @@ export class StockAnalyticsService {
       {
         $unwind: '$productInfo',
       },
+      // Añadir campo para determinar si es unisex (múltiples categorías)
       {
-        $unwind: '$productInfo.category',
-      },
-      {
-        $lookup: {
-          from: 'categories',
-          localField: 'productInfo.category',
-          foreignField: '_id',
-          as: 'categoryInfo',
+        $addFields: {
+          categoryCount: { $size: '$productInfo.category' },
+          isUnisex: { $gt: [{ $size: '$productInfo.category' }, 1] },
         },
-      },
-      {
-        $unwind: '$categoryInfo',
       },
       {
         $lookup: {
@@ -492,26 +528,75 @@ export class StockAnalyticsService {
       {
         $unwind: '$subcategoryInfo',
       },
-      // Agrupar por categoría y subcategoría
+      // Dividir en dos flujos: single category y multi category
       {
-        $group: {
-          _id: {
-            categoryId: '$productInfo.category',
-            subcategoryId: '$productInfo.subcategory',
-          },
-          categoryName: { $first: '$categoryInfo.name' },
-          subcategoryName: { $first: '$subcategoryInfo.name' },
-          totalStock: { $sum: '$stock' },
-          totalValuationAtCost: {
-            $sum: { $multiply: ['$stock', '$averageCostUSD'] },
-          },
-          totalValuationAtRetail: {
-            $sum: { $multiply: ['$stock', '$priceUSD'] },
-          },
-          products: { $addToSet: '$product' },
-          variantCount: { $sum: 1 },
+        $facet: {
+          singleCategory: [
+            { $match: { isUnisex: false } },
+            { $unwind: '$productInfo.category' },
+            {
+              $lookup: {
+                from: 'categories',
+                localField: 'productInfo.category',
+                foreignField: '_id',
+                as: 'categoryInfo',
+              },
+            },
+            { $unwind: '$categoryInfo' },
+            // Agrupar por categoría y subcategoría
+            {
+              $group: {
+                _id: {
+                  categoryId: '$productInfo.category',
+                  subcategoryId: '$productInfo.subcategory',
+                },
+                categoryName: { $first: '$categoryInfo.name' },
+                subcategoryName: { $first: '$subcategoryInfo.name' },
+                totalStock: { $sum: '$stock' },
+                totalValuationAtCost: {
+                  $sum: { $multiply: ['$stock', '$averageCostUSD'] },
+                },
+                totalValuationAtRetail: {
+                  $sum: { $multiply: ['$stock', '$priceUSD'] },
+                },
+                products: { $addToSet: '$product' },
+                variantCount: { $sum: 1 },
+              },
+            },
+          ],
+          multiCategory: [
+            { $match: { isUnisex: true } },
+            // Agrupar productos unisex por subcategoría
+            {
+              $group: {
+                _id: {
+                  categoryId: 'unisex',
+                  subcategoryId: '$productInfo.subcategory',
+                },
+                categoryName: { $first: 'Unisex' },
+                subcategoryName: { $first: '$subcategoryInfo.name' },
+                totalStock: { $sum: '$stock' },
+                totalValuationAtCost: {
+                  $sum: { $multiply: ['$stock', '$averageCostUSD'] },
+                },
+                totalValuationAtRetail: {
+                  $sum: { $multiply: ['$stock', '$priceUSD'] },
+                },
+                products: { $addToSet: '$product' },
+                variantCount: { $sum: 1 },
+              },
+            },
+          ],
         },
       },
+      // Unir ambos resultados
+      {
+        $project: {
+          combined: { $concatArrays: ['$singleCategory', '$multiCategory'] },
+        },
+      },
+      { $unwind: '$combined' },
+      { $replaceRoot: { newRoot: '$combined' } },
       // Agrupar por categoría para obtener la estructura jerárquica
       {
         $group: {
