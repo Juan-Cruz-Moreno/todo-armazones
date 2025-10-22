@@ -318,6 +318,29 @@ const OrdersPage = () => {
     (order) => order.orderStatus === OrderStatus.Cancelled
   );
 
+  // Calcular si entre las órdenes seleccionadas hay alguna con estado restringido
+  const selectedOrdersDetails = displayOrders.filter((o) =>
+    selectedOrders.includes(o.id)
+  );
+
+  const hasRestrictedSelected = selectedOrdersDetails.some(
+    (o) =>
+      o.orderStatus === OrderStatus.PendingPayment ||
+      o.orderStatus === OrderStatus.Cancelled
+  );
+
+  // Si la acción seleccionada ya no es válida para la selección actual, limpiarla
+  useEffect(() => {
+    if (
+      hasRestrictedSelected &&
+      batchAction &&
+      batchAction !== OrderStatus.OnHold
+    ) {
+      setBatchAction("");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasRestrictedSelected, selectedOrders.join(",")]);
+
   return (
     <div className="px-4 py-6">
       {/* Header con título y botón */}
@@ -546,20 +569,29 @@ const OrdersPage = () => {
               }
             >
               <option value="">Acciones en lote</option>
-              <option value={OrderStatus.Processing}>
-                Marcar como Processing
-              </option>
-              <option value={OrderStatus.OnHold}>Marcar como On Hold</option>
-              <option value={OrderStatus.PendingPayment}>
-                Marcar como Pending Payment
-              </option>
-              <option value={OrderStatus.Completed}>
-                Marcar como Completed
-              </option>
-              <option value={OrderStatus.Cancelled}>
-                Marcar como Cancelled
-              </option>
-              <option value={OrderStatus.Refunded}>Marcar como Refunded</option>
+              {hasRestrictedSelected ? (
+                // Si hay órdenes seleccionadas con estados restringidos, solo permitir On Hold
+                <>
+                  <option value={OrderStatus.OnHold}>Marcar como On Hold</option>
+                </>
+              ) : (
+                <>
+                  <option value={OrderStatus.Processing}>
+                    Marcar como Processing
+                  </option>
+                  <option value={OrderStatus.OnHold}>Marcar como On Hold</option>
+                  <option value={OrderStatus.PendingPayment}>
+                    Marcar como Pending Payment
+                  </option>
+                  <option value={OrderStatus.Completed}>
+                    Marcar como Completed
+                  </option>
+                  <option value={OrderStatus.Cancelled}>
+                    Marcar como Cancelled
+                  </option>
+                  <option value={OrderStatus.Refunded}>Marcar como Refunded</option>
+                </>
+              )}
             </select>
             {selectedOrders.length > 0 && (
               <span className="text-sm text-[#666666]">

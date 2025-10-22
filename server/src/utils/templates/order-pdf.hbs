@@ -171,7 +171,7 @@
 
     <div class="order-info" style="margin-top: 0; padding-top: 0;">
       {{#each itemPages}}
-        <table style="margin-top: 0;">
+        <table style="margin-top: 0;{{#if @last}} margin-bottom: 0;{{/if}}">
           <thead>
             <tr>
               <th>Producto</th>
@@ -215,7 +215,7 @@
       {{/each}}
 
       <!-- Total general de unidades -->
-      <table>
+      <table style="margin-top: 0;">
         <tbody>
           <tr class="total-row">
             <td><strong>Total de unidades: {{itemsCount}}</strong></td>
@@ -251,11 +251,13 @@
             </tr>
           {{/if}}
 
+          {{#if showSubTotal}}
           <!-- Subtotal general -->
           <tr class="total-row">
             <td colspan="3" style="text-align:right;">Subtotal USD:</td>
             <td>{{subTotal}}</td>
           </tr>
+          {{/if}}
 
           {{#if showBankTransferExpense}}
             <tr class="total-row">
@@ -286,7 +288,7 @@
 
       <!-- Información adicional debajo de los totales -->
       <div
-        style="font-size: 14px; color: #333; text-align: center; border: 2px solid #e0e0e0; padding: 30px 24px; line-height: 1.8; background: #f9f9f9; margin-top: 24px;"
+        style="font-size: 14px; color: #333; text-align: center; border: 2px solid #e0e0e0; padding: 15px 12px; line-height: 1.8; background: #f9f9f9; margin-top: 24px;"
       >
         <div style="font-weight: 500;">• Pagos por transferencia o depósito
           bancario incluyen un 4% de interés sobre el Total</div>

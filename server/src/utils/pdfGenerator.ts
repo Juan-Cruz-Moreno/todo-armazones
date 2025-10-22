@@ -182,6 +182,9 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
     }
   }
 
+  // Determinar si mostrar subtotal (solo si hay refund o gasto bancario)
+  const showSubTotal = orderData.refund || showBankTransferExpense;
+
   const html = template({
     ...orderData,
     logoUrl,
@@ -199,6 +202,7 @@ export async function generateOrderPDF(orderData: OrderResponseDto): Promise<Buf
     bankTransferExpense: bankTransferExpenseFormatted,
     exchangeRate: exchangeRateFormatted,
     refundDescription,
+    showSubTotal,
   });
 
   const browser = await puppeteer.launch({

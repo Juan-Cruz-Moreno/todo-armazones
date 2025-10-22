@@ -1151,6 +1151,26 @@ const EditOrderPage = () => {
     }
   };
 
+  // Calcular estados disponibles para el select
+  const getAvailableStatuses = () => {
+    const allStatuses = [
+      OrderStatus.Processing,
+      OrderStatus.OnHold,
+      OrderStatus.PendingPayment,
+      OrderStatus.Completed,
+      OrderStatus.Cancelled,
+      OrderStatus.Refunded,
+    ];
+
+    // Si la orden está en Pending Payment o Cancelled, solo permitir cambiar a On Hold
+    if (form.orderStatus === OrderStatus.PendingPayment || form.orderStatus === OrderStatus.Cancelled) {
+      return [form.orderStatus, OrderStatus.OnHold];
+    }
+
+    // Para otros estados, mostrar todas las opciones disponibles
+    return allStatuses;
+  };
+
   return (
     <div className="min-h-screen bg-[#FFFFFF] pt-4 pb-10 px-4">
       <div className="max-w-7xl mx-auto">
@@ -1350,14 +1370,16 @@ const EditOrderPage = () => {
                       disabled={isOrderStatusUpdating}
                       className="select rounded-none border border-[#e1e1e1] bg-[#FFFFFF] text-[#222222] px-3 py-2 flex-1"
                     >
-                      <option value={OrderStatus.Processing}>Processing</option>
-                      <option value={OrderStatus.OnHold}>On Hold</option>
-                      <option value={OrderStatus.PendingPayment}>
-                        Pending Payment
-                      </option>
-                      <option value={OrderStatus.Completed}>Completed</option>
-                      <option value={OrderStatus.Cancelled}>Cancelled</option>
-                      <option value={OrderStatus.Refunded}>Refunded</option>
+                      {getAvailableStatuses().map(status => (
+                        <option key={status} value={status}>
+                          {status === OrderStatus.Processing ? "Processing" :
+                           status === OrderStatus.OnHold ? "On Hold" :
+                           status === OrderStatus.PendingPayment ? "Pending Payment" :
+                           status === OrderStatus.Completed ? "Completed" :
+                           status === OrderStatus.Cancelled ? "Cancelled" :
+                           status === OrderStatus.Refunded ? "Refunded" : status}
+                        </option>
+                      ))}
                     </select>
                     {isOrderStatusUpdating && (
                       <span className="loading loading-spinner loading-sm"></span>
