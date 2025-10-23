@@ -73,13 +73,14 @@ const TiendaDropdown: React.FC = () => {
       onMouseLeave={scheduleClose}
       onBlur={scheduleClose}
     >
-      <button
-        className="text-black underline-animate ml-0 px-2 py-1"
+      <Link
+        href="/tienda"
+        className="text-black underline-animate ml-0 px-2 py-1 inline-block"
         aria-haspopup="true"
         aria-expanded={open}
       >
         Tienda
-      </button>
+      </Link>
 
       {/* Primary dropdown */}
       {open && (
