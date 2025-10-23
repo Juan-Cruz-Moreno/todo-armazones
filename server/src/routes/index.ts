@@ -11,6 +11,7 @@ import orderRoutes from './order.routes';
 import expenseRoutes from './expense.routes';
 import analyticsRoutes from './analytics.routes';
 import catalogRoutes from './catalog.routes';
+import maintenanceRoutes from './maintenance.routes';
 
 const router: Router = Router();
 
@@ -26,5 +27,6 @@ router.use('/orders', orderRoutes);
 router.use('/expenses', expenseRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/catalog', catalogRoutes);
+router.use('/maintenance', maintenanceRoutes);
 
 export default router;

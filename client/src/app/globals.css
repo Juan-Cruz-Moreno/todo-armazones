@@ -15,6 +15,22 @@
   }
 }
 
+/* Add your global styles here */
+
+:root {
+  --navbar-height: 64px;
+}
+
+/* Short fade used when MaintenanceGuard triggers a client-side navigation.
+   We apply `html.site-fade-out` briefly before calling router.replace to
+   make the transition feel smoother. The timeout used in the guard matches
+   these transition durations (approx 120-180ms). */
+html.site-fade-out body > * {
+  transition: opacity .18s ease, transform .18s ease;
+  opacity: 0;
+  transform: scale(0.995);
+}
+
 /* sensible default so server and client share an initial navbar height
    (avoids hydration mismatch when JS updates the real value) */
 :root {

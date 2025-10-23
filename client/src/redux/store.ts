@@ -5,6 +5,7 @@ import cartReducer from "./slices/cartSlice";
 import orderReducer from "./slices/orderSlice";
 import pendingActionReducer from "./slices/pendingActionSlice";
 import dollarReducer from "./slices/dollarSlice";
+import maintenanceReducer from "./slices/maintenanceSlice";
 
 const store = configureStore({
   reducer: {
@@ -14,6 +15,7 @@ const store = configureStore({
     orders: orderReducer,
     pendingAction: pendingActionReducer,
     dollar: dollarReducer,
+    maintenance: maintenanceReducer,
   },
 });
 
