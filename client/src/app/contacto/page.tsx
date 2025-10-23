@@ -1,13 +1,30 @@
 "use client";
 
 import React, { useEffect } from "react";
+import { useForm, ValidationError } from "@formspree/react";
 import Image from "next/image";
 import { motion, Variants, useReducedMotion } from "framer-motion";
 
 export default function ContactPage() {
   const shouldReduceMotion = useReducedMotion();
+  const [state, handleSubmit] = useForm("xwprgepq");
 
   const INITIAL_Y = 80;
+
+  // Derived stable boolean to satisfy react-hooks/exhaustive-deps and avoid complex expressions
+  const formSucceeded = !!(state && state.succeeded);
+
+  // Scroll to top when the form is successfully submitted so the success message is visible
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (formSucceeded) {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: "smooth" });
+      } catch {
+        window.scrollTo(0, 0);
+      }
+    }
+  }, [formSucceeded]);
 
   const formVariants: Variants = {
     hidden: { opacity: 0, y: INITIAL_Y },
@@ -45,6 +62,19 @@ export default function ContactPage() {
   const itemVariants: Variants = shouldReduceMotion
     ? { hidden: { opacity: 1, y: 0 }, visible: { opacity: 1, y: 0 } }
     : { hidden: { opacity: 0, y: 20 }, visible: { opacity: 1, y: 0, transition: { duration: 0.5 } } };
+
+  if (state.succeeded) {
+    return (
+      <main className="min-h-screen flex items-center justify-center px-6 py-12">
+        <section className="w-full max-w-3xl bg-white p-8 rounded-lg shadow">
+          <h3 className="text-2xl font-bold text-gray-900 text-center">
+            Gracias — tu mensaje fue enviado
+          </h3>
+          <p className="mt-4 text-center text-gray-700">Te contactaremos pronto.</p>
+        </section>
+      </main>
+    );
+  }
 
   return (
     <main className="container mx-auto px-6 py-12">
@@ -101,7 +131,7 @@ export default function ContactPage() {
 
             <form
               className="mt-6 grid grid-cols-1 gap-4"
-              onSubmit={(e) => e.preventDefault()}
+              onSubmit={handleSubmit}
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
@@ -116,7 +146,12 @@ export default function ContactPage() {
                     name="name"
                     type="text"
                     placeholder="Nombre"
-                    className="w-full px-4 py-2 border rounded-md bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-md bg-white text-black focus:outline-none focus:ring-1 focus:ring-indigo-200"
+                  />
+                  <ValidationError
+                    prefix="Name"
+                    field="name"
+                    errors={state.errors}
                   />
                 </div>
 
@@ -132,7 +167,12 @@ export default function ContactPage() {
                     name="email"
                     type="email"
                     placeholder="Email"
-                    className="w-full px-4 py-2 border rounded-md bg-white"
+                    className="w-full px-4 py-2 border border-gray-200 rounded-md bg-white text-black focus:outline-none focus:ring-1 focus:ring-indigo-200"
+                  />
+                  <ValidationError
+                    prefix="Email"
+                    field="email"
+                    errors={state.errors}
                   />
                 </div>
               </div>
@@ -149,7 +189,12 @@ export default function ContactPage() {
                   name="subject"
                   type="text"
                   placeholder="Asunto"
-                  className="w-full px-4 py-2 border rounded-md bg-white"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-md bg-white text-black focus:outline-none focus:ring-1 focus:ring-indigo-200"
+                />
+                <ValidationError
+                  prefix="Subject"
+                  field="subject"
+                  errors={state.errors}
                 />
               </div>
 
@@ -165,7 +210,12 @@ export default function ContactPage() {
                   name="message"
                   placeholder="Mensaje"
                   rows={6}
-                  className="w-full px-4 py-2 border rounded-md bg-white resize-vertical"
+                  className="w-full px-4 py-2 border border-gray-200 rounded-md bg-white text-black resize-vertical focus:outline-none focus:ring-1 focus:ring-indigo-200"
+                />
+                <ValidationError
+                  prefix="Message"
+                  field="message"
+                  errors={state.errors}
                 />
               </div>
 
@@ -173,9 +223,10 @@ export default function ContactPage() {
                 <div className="flex justify-center">
                   <button
                     type="submit"
-                    className="px-8 py-3 bg-[#444444] text-[#F5FFFA] font-semibold rounded-none hover:opacity-90"
+                    disabled={state.submitting}
+                    className="px-8 py-3 bg-[#444444] text-[#F5FFFA] font-semibold rounded-none hover:opacity-90 disabled:opacity-60"
                   >
-                    ENVIAR
+                    {state.submitting ? "ENVIANDO..." : "ENVIAR"}
                   </button>
                 </div>
               </div>
@@ -186,3 +237,5 @@ export default function ContactPage() {
     </main>
   );
 }
+
+// ContactPage is the default export (Formspree hook is used inside it)
