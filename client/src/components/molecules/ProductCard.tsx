@@ -47,6 +47,9 @@ const ProductCard = ({
   // Estado para el color seleccionado (ninguno al inicio)
   const [selectedColor, setSelectedColor] = useState<string | null>(null);
 
+  // Estado para almacenar aspect-ratio calculado tras carga de la imagen
+  const [aspectRatioString, setAspectRatioString] = useState<string | null>(null);
+
   // Encontrar la variante seleccionada según el color
   const selectedVariant = selectedColor
     ? variants.find((v) => v.color.hex === selectedColor) || null
@@ -105,13 +108,28 @@ const ProductCard = ({
         style={{ transformOrigin: "center" }}
       >
         <Link href={`/producto/${slug}`}>
-          <Image
-            src={`${process.env.NEXT_PUBLIC_API_URL}/${imageToShow}`}
-            alt={productModel}
-            width={300}
-            height={300}
-            className="object-cover h-48 w-full"
-          />
+          <div
+            className="relative w-full mb-2 md:h-48"
+            style={
+              aspectRatioString
+                ? ({ aspectRatio: aspectRatioString } as React.CSSProperties)
+                : undefined
+            }
+          >
+            <Image
+              src={`${process.env.NEXT_PUBLIC_API_URL}/${imageToShow}`}
+              alt={productModel}
+              fill
+              sizes="(max-width: 767px) 100vw, 300px"
+              className="object-contain"
+              onLoadingComplete={({ naturalWidth, naturalHeight }) => {
+                if (naturalWidth && naturalHeight) {
+                  // Guardar como "width/height" para setear directamente en CSS aspect-ratio
+                  setAspectRatioString(`${naturalWidth}/${naturalHeight}`);
+                }
+              }}
+            />
+          </div>
         </Link>
         <div className="flex gap-2 text-xs text-[#888888]">
           {category.map((cat, idx) => (
