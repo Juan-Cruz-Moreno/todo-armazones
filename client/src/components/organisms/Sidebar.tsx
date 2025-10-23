@@ -85,7 +85,10 @@ const Sidebar = () => {
   }, [pathname]);
 
   return (
-    <aside className="w-64 bg-white hidden sm:block sticky top-[4rem] h-[calc(100vh-4rem)] overflow-y-auto z-5">
+    <aside
+      className="w-64 bg-white hidden sm:block overflow-y-auto z-5"
+      style={{ top: 'var(--navbar-height, 4rem)', height: 'calc(100vh - var(--navbar-height, 4rem))', position: 'sticky' }}
+    >
       <div className="flex flex-col h-full px-4 py-6">
         {/* Breadcrumb y título - Solo en desktop */}
         {categoryInfo?.category && (

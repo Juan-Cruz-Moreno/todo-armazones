@@ -109,8 +109,9 @@ const MobileSidebar = () => {
     <>
       {/* Sidebar móvil */}
       <aside
-        className={`fixed top-0 left-0 h-full w-80 bg-white z-40 transform transition-transform duration-300 sm:hidden shadow-xl
+        className={`fixed left-0 w-80 bg-white z-40 transform transition-transform duration-300 sm:hidden shadow-xl
           ${isOpen ? "translate-x-0" : "-translate-x-full"}`}
+        style={{ top: 'var(--navbar-height)', height: 'calc(100% - var(--navbar-height))' }}
       >
         <div className="flex flex-col h-full px-4 py-6">
           {/* Breadcrumb y título - Solo si estamos en una categoría */}
@@ -284,7 +285,8 @@ const MobileSidebar = () => {
       {/* Overlay para cerrar el menú */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black opacity-50 z-30 sm:hidden"
+          className="fixed left-0 right-0 bg-black opacity-50 z-30 sm:hidden"
+          style={{ top: 'var(--navbar-height)', height: 'calc(100% - var(--navbar-height))' }}
           onClick={handleOverlayClick}
         />
       )}
