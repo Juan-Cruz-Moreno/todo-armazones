@@ -75,7 +75,7 @@ export default function PoliticasDeDevolucionPage() {
 						<ul>
 							<li>· Su número de pedido (puede encontrarlo en el correo electrónico de confirmación)</li>
 							<li>· Su nombre (o el nombre de la persona que realizó la compra)</li>
-							<li>· La dirección de correo electrónico que utilizó para completar su pedido.</li>
+							<li>· La dirección de correo electrónico que utilizó para completar su pedido</li>
 							<li>· Número de contacto</li>
 						</ul>
 						<h3 className="text-xl font-bold mt-6 mb-2">Plazo de Cancelación</h3>
