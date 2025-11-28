@@ -12,6 +12,7 @@ import { getSessionUserId } from '@utils/sessionUtils';
 import { ApiResponse, ApiErrorResponse } from '../types/response';
 import fs from 'fs/promises';
 import { Types } from 'mongoose';
+import { processImageFiles } from '@helpers/image-converter.helper';
 
 export class ProductController {
   private productService: ProductService = new ProductService();
@@ -37,8 +38,11 @@ export class ProductController {
     const files = req.files as Express.Multer.File[];
     const generatedFiles: string[] = [];
     try {
+      // Convertir archivos HEIF/HEIC a JPEG si es necesario
+      const processedFiles = await processImageFiles(files, 90);
+
       // Primary images (multiple allowed)
-      const primaryImageFiles = files.filter((file) => file.fieldname === 'primaryImage');
+      const primaryImageFiles = processedFiles.filter((file) => file.fieldname === 'primaryImage');
       if (primaryImageFiles.length === 0)
         throw new AppError('At least one primary image is required', 400, 'fail', false);
       primaryImageFiles.forEach((file) => generatedFiles.push(file.path));
@@ -74,7 +78,7 @@ export class ProductController {
       const variantsDto: CreateProductVariantRequestDto[] = await Promise.all(
         variantsData.map(async (variant: CreateProductVariantRequestDto) => {
           const colorKey = `images_${normalizeColorName(variant.color.name)}`;
-          const imagesForVariant = files.filter((img) => img.fieldname === colorKey).map((img) => img);
+          const imagesForVariant = processedFiles.filter((img) => img.fieldname === colorKey).map((img) => img);
           if (!imagesForVariant.length) {
             throw new AppError(
               `La variante de color '${variant.color.name}' debe tener al menos una imagen.`,
@@ -426,12 +430,15 @@ export class ProductController {
     const files = (req.files as Express.Multer.File[]) || [];
     const generatedFiles: string[] = [];
     try {
+      // Convertir archivos HEIF/HEIC a JPEG si es necesario
+      const processedFiles = await processImageFiles(files, 90);
+
       // Procesar imágenes principales si se envían (múltiples)
       let productDto = req.body.product as UpdateProductRequestDto;
 
       let thumbnailFilename: string | undefined;
 
-      const primaryImageFiles = files.filter((file) => file.fieldname === 'primaryImage');
+      const primaryImageFiles = processedFiles.filter((file) => file.fieldname === 'primaryImage');
       if (primaryImageFiles.length > 0) {
         primaryImageFiles.forEach((file) => generatedFiles.push(file.path));
         // Crear thumbnail solo para la primera imagen (después de ordenar si aplica)
@@ -487,7 +494,7 @@ export class ProductController {
         variantsRaw.map(async (variant) => {
           if (variant.data && variant.data.color && variant.data.color.name) {
             const colorKey = `images_${normalizeColorName(variant.data.color.name)}`;
-            const imagesForVariant = files.filter((img) => img.fieldname === colorKey).map((img) => img);
+            const imagesForVariant = processedFiles.filter((img) => img.fieldname === colorKey).map((img) => img);
             // Validación: Nueva variante requiere al menos una imagen
             if (!variant.id && imagesForVariant.length === 0) {
               throw new AppError(

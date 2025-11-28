@@ -20,7 +20,20 @@ const storage = multer.diskStorage({
 
 // Filtro de archivos para validar tipos MIME
 const fileFilter = (_req: Request, file: Express.Multer.File, cb: multer.FileFilterCallback) => {
-  if (file.mimetype.startsWith('image/')) {
+  // Permitir todos los formatos de imagen incluyendo HEIF/HEIC
+  const allowedMimeTypes = [
+    'image/jpeg',
+    'image/jpg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'image/heif',
+    'image/heic',
+    'image/heif-sequence',
+    'image/heic-sequence',
+  ];
+
+  if (file.mimetype.startsWith('image/') || allowedMimeTypes.includes(file.mimetype.toLowerCase())) {
     cb(null, true);
   } else {
     cb(new Error('Solo se permiten archivos de imagen'));
